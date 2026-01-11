@@ -1,0 +1,10 @@
+/* Add any custom CSS here that is not covered by Tailwind CSS */
+body {
+    font-family: 'Inter', sans-serif;
+}
+.text-navy {
+    color: #0d1b2a;
+}
+.bg-navy {
+    background-color: #0d1b2a;
+}

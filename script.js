@@ -1,0 +1,1 @@
+// No custom JavaScript required for the current static UI.

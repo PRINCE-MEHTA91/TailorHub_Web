@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>STITCH</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@2.5.0/fonts/remixicon.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .text-navy {
+            color: #0d1b2a;
+        }
+        .bg-navy {
+            background-color: #0d1b2a;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+
+    <!-- Top Header -->
+    <header class="p-4 bg-indigo-600 shadow-lg text-white">
+        <div class="flex justify-between items-center">
+            <h1 class="text-2xl font-bold">STITCH</h1>
+            <div class="flex items-center space-x-4">
+                <div class="text-sm text-right">
+                    <p class="text-indigo-200">Location</p>
+                    <p class="font-semibold">Bhopal, MP <i class="ri-arrow-down-s-line"></i></p>
+                </div>
+                <i class="ri-user-line text-2xl"></i>
+            </div>
+        </div>
+        <div class="mt-4">
+            <div class="relative">
+                <i class="ri-search-line absolute top-1/2 left-3 -translate-y-1/2 text-gray-400"></i>
+                <input type="text" placeholder="Search for tailors, fabrics, and more" class="w-full bg-white bg-opacity-20 text-white placeholder-indigo-200 rounded-full pl-10 pr-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300">
+            </div>
+        </div>
+    </header>
+
+    <!-- Horizontal Navigation -->
+    <nav class="p-4 bg-white">
+        <div class="flex justify-around">
+            <a href="#" class="text-center text-gray-600">
+                <div class="p-3 rounded-full inline-block bg-gradient-to-r from-sky-200 to-blue-200">
+                    <i class="ri-file-list-3-line text-xl text-sky-800"></i>
+                </div>
+                <p class="text-xs mt-1">Categories</p>
+            </a>
+            <a href="#" class="text-center text-gray-600">
+                <div class="p-3 rounded-full inline-block bg-gradient-to-r from-teal-200 to-green-200">
+                    <i class="ri-price-tag-3-line text-xl text-teal-800"></i>
+                </div>
+                <p class="text-xs mt-1">Deals</p>
+            </a>
+            <a href="#" class="text-center text-gray-600">
+                <div class="p-3 rounded-full inline-block bg-gradient-to-r from-purple-200 to-indigo-200">
+                    <i class="ri-t-shirt-air-line text-xl text-purple-800"></i>
+                </div>
+                <p class="text-xs mt-1">New Arrivals</p>
+            </a>
+            <a href="#" class="text-center text-gray-600">
+                <div class="p-3 rounded-full inline-block bg-gradient-to-r from-orange-200 to-red-200">
+                    <i class="ri-fire-line text-xl text-orange-800"></i>
+                </div>
+                <p class="text-xs mt-1">Trending</p>
+            </a>
+        </div>
+    </nav>
+
+    <main class="p-4">
+        <!-- Product Preview -->
+        <section class="mb-6">
+            <div class="grid grid-cols-2 gap-4">
+                <div class="bg-white p-4 rounded-lg shadow">
+                    <img src="https://via.placeholder.com/150" alt="Shirt" class="rounded-lg mb-2">
+                    <p class="font-semibold text-navy">Shirts</p>
+                </div>
+                <div class="bg-white p-4 rounded-lg shadow">
+                    <img src="https://via.placeholder.com/150" alt="Shoes" class="rounded-lg mb-2">
+                    <p class="font-semibold text-navy">Shoes</p>
+                </div>
+                <div class="bg-white p-4 rounded-lg shadow">
+                    <img src="https://via.placeholder.com/150" alt="Watch" class="rounded-lg mb-2">
+                    <p class="font-semibold text-navy">Watches</p>
+                </div>
+                <div class="bg-white p-4 rounded-lg shadow">
+                    <img src="https://via.placeholder.com/150" alt="Bag" class="rounded-lg mb-2">
+                    <p class="font-semibold text-navy">Bags</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Clothing Service Categories -->
+        <section class="mb-6">
+            <h2 class="text-lg font-bold text-navy mb-4">Services</h2>
+            <div class="grid grid-cols-3 gap-4">
+                 <div class="bg-white p-4 rounded-lg shadow text-center">
+                    <i class="ri-shirt-line text-3xl text-navy"></i>
+                    <p class="mt-2 font-semibold text-sm">Shirts</p>
+                </div>
+                <div class="bg-white p-4 rounded-lg shadow text-center">
+                    <i class="ri-user-2-line text-3xl text-navy"></i>
+                    <p class="mt-2 font-semibold text-sm">Pants</p>
+                </div>
+                 <div class="bg-white p-4 rounded-lg shadow text-center">
+                    <i class="ri-t-shirt-2-line text-3xl text-navy"></i>
+                    <p class="mt-2 font-semibold text-sm">Kurtas</p>
+                </div>
+                <div class="bg-white p-4 rounded-lg shadow text-center">
+                    <i class="ri-briefcase-line text-3xl text-navy"></i>
+                    <p class="mt-2 font-semibold text-sm">Suits</p>
+                </div>
+                 <div class="bg-white p-4 rounded-lg shadow text-center">
+                    <i class="ri-women-line text-3xl text-navy"></i>
+                    <p class="mt-2 font-semibold text-sm">Dresses</p>
+                </div>
+                <div class="bg-white p-4 rounded-lg shadow text-center">
+                    <i class="ri-shopping-bag-line text-3xl text-navy"></i>
+                    <p class="mt-2 font-semibold text-sm">Accessories</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Tailor Connect -->
+        <section class="mb-6">
+            <div class="bg-white p-4 rounded-lg shadow-lg">
+                <h2 class="text-lg font-bold text-navy mb-4">Tailor Connect</h2>
+                <div class="flex items-start space-x-4">
+                    <img src="https://via.placeholder.com/80" alt="Tailor" class="rounded-full">
+                    <div>
+                        <h3 class="font-bold text-lg text-navy">Masterjee Tailors</h3>
+                        <p class="text-gray-600 text-sm">Expert in men's and women's fashion. 20+ years of experience.</p>
+                        <p class="text-sm text-gray-500 mt-2"><i class="ri-phone-line"></i> +91 98765 43210</p>
+                        <p class="text-sm text-gray-500"><i class="ri-map-pin-line"></i> 123, AB Road, Bhopal</p>
+                    </div>
+                </div>
+                <button class="mt-4 w-full bg-navy text-white font-bold py-3 rounded-lg shadow-md hover:bg-opacity-90">Book Appointment</button>
+            </div>
+        </section>
+    </main>
+
+    <!-- Bottom Navigation -->
+    <footer class="fixed bottom-0 left-0 right-0 bg-white shadow-t">
+        <div class="flex justify-around p-2">
+            <a href="#" class="text-center text-navy">
+                <i class="ri-home-line text-2xl"></i>
+                <p class="text-xs">Home</p>
+            </a>
+            <a href="#" class="text-center text-gray-600">
+                <i class="ri-t-shirt-line text-2xl"></i>
+                <p class="text-xs">Clothing</p>
+            </a>
+            <a href="#" class="text-center text-gray-600">
+                <i class="ri-cut-line text-2xl"></i>
+                <p class="text-xs">Tailors</p>
+            </a>
+            <a href="#" class="text-center text-gray-600">
+                <i class="ri-user-line text-2xl"></i>
+                <p class="text-xs">Account</p>
+            </a>
+        </div>
+    </footer>
+
+</body>
+</html>
