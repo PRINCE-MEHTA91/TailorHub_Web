@@ -68,5 +68,36 @@ This RBAC system ensures that the platform is not only functional but also secur
 
 ## How to run the project
 
-1.  Clone the repository.
-2.  Open the `index.html` file in your web browser.
+### Prerequisites
+
+*   [Node.js](https://nodejs.org/) installed on your machine.
+
+### Installation
+
+1.  Clone the repository or download the source code.
+2.  Open a terminal in the project directory.
+3.  Install the backend dependencies by running the following command:
+
+    ```bash
+    npm install express cors
+    ```
+
+### Running the Application
+
+1.  **Start the backend server:**
+
+    Open a terminal in the project directory and run the following command:
+
+    ```bash
+    npm start
+    ```
+
+    The server will start on `http://localhost:3000`. You will see the message "Server is running on http://localhost:3000" in the console.
+
+2.  **Open the frontend:**
+
+    Open the `index.html` file in your web browser.
+
+### How it Works
+
+When you click on any of the buttons in the application, a request is sent to the backend server. The server logs the button click to the console. You can see these logs in the terminal where the server is running. You can also see a confirmation message in the browser's developer console.
