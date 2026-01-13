@@ -9,7 +9,7 @@
     body {
       margin: 0;
       font-family: 'Segoe UI', sans-serif;
-      background-color: #f9f9f9;
+      background-color: #588089;
     }
     header {
       background-color: #073946;
@@ -30,6 +30,10 @@
     .header-icons ion-icon {
       font-size: 28px;
       margin-left: 15px;
+    }
+    
+    .header-icons ion-icon:hover {
+      color: #ff6600;
     }
     
     .search-bar-container {
@@ -57,26 +61,43 @@
       font-size: 16px;
     }
     .location-bar {
-      background-color: #eee;
+      background-color: #073946;
       padding: 10px;
       text-align: center;
       font-weight: bold;
+      color: white;
     }
     .categories {
       display: flex;
       justify-content: space-around;
       padding: 10px;
-      background-color: #fff;
+      background-color: #073946;
+      color:#eee
     }
     .categories div {
       text-align: center;
-      font-size: 14px;
+      font-size: 18px;
+    }
+    .categories div ion-icon {
+      font-size: 24px;
+      margin-bottom: 5px;
+    }
+    .categories div:hover,
+    .categories div:hover ion-icon {
+      color: #ff6600;
     }
     .hero img {
       width: 100%;
       height: auto;
     }
-    .featured-products, .services, .tailor-connect {
+    .featured-products, .services {
+      background-color: #f0f0f0;
+      color: #333;
+      padding: 20px;
+    }
+    .tailor-connect {
+      background-color: #073946;
+      color: white;
       padding: 20px;
     }
     .product-grid, .service-grid {
@@ -90,6 +111,7 @@
       border-radius: 8px;
       text-align: center;
       box-shadow: 0 0 5px rgba(0,0,0,0.1);
+      color: black;
     }
     .product-card img, .service-card img {
       width: 100%;
@@ -103,6 +125,7 @@
       display: flex;
       gap: 15px;
       align-items: center;
+      color: black;
     }
     .tailor-profile img {
       width: 80px;
@@ -153,7 +176,8 @@
       display: block;
       margin: 0 auto 4px;
     }
-        .bottom-nav div:hover {
+    .bottom-nav div:hover,
+    .bottom-nav div:hover ion-icon {
       color: #ff6600;
     }
   </style>
@@ -164,8 +188,18 @@
 
   <header>
     <div class="logo"><h1>TailorHub</h1></div>
-    
-   
+    <div class="header-icons">
+      <div class="user-auth">
+        <button id="login-btn">Login</button>
+        <button id="signup-btn">Sign Up</button>
+      </div>
+      <div class="user-welcome" style="display: none;">
+        <span>Welcome, User!</span>
+        <button id="logout-btn">Logout</button>
+      </div>
+      <ion-icon name="notifications-outline"></ion-icon>
+      <ion-icon name="cart-outline"></ion-icon>
+    </div>
 </header>
 
   <div class="search-bar-container">
@@ -178,10 +212,10 @@
   <div class="location-bar">Bhopal, MP</div>
 
   <section class="categories">
-    <div>Categories</div>
-    <div>Deals</div>
-    <div>New Arrivals</div>
-    <div>Trending</div>
+    <div><ion-icon name="grid-outline"></ion-icon><br>Categories</div>
+    <div><ion-icon name="pricetag-outline"></ion-icon><br>Deals</div>
+    <div><ion-icon name="gift-outline"></ion-icon><br>New Arrivals</div>
+    <div><ion-icon name="flame-outline"></ion-icon><br>Trending</div>
   </section>
 
   <section class="hero">
