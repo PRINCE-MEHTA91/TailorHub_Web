@@ -1,16 +1,22 @@
 {
   "name": "tailorhub-web",
   "version": "1.0.0",
-  "description": "",
-  "main": "script.js",
+  "description": "Monorepo for TailorHub Web",
+  "main": "index.js",
+  "private": true,
+  "workspaces": [
+    "client",
+    "server"
+  ],
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node server.js"
+    "install:client": "npm install --workspace=client",
+    "install:server": "npm install --workspace=server",
+    "dev": "npm run start --workspace=client & npm run dev --workspace=server"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "mysql": "^2.18.1"
+    "react-router-dom": "^7.13.0"
   }
 }
