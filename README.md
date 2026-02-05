@@ -23,7 +23,7 @@ TailorHub simplifies the entire tailoring experience.
 
 TailorHub defines two primary user roles, each with a distinct set of permissions designed to create a secure and efficient experience. Authentication is designed to be seamless, encouraging user registration while providing clear pathways for both new and returning users.
 
-### Authentication: Flipkart-Style Modal
+### Authentication: 
 
 To ensure a smooth user experience for first-time visitors, TailorHub employs a Flipkart-style authentication model:
 *   **Initial Visit:** When a user first arrives on the Home Page, the main content is visible, but a modal popup will appear, prompting them to either **Login** or **Sign-Up**. This encourages registration while still allowing users to browse the site's offerings by simply closing the modal.
