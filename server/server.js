@@ -13,7 +13,7 @@ const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET;
 const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:3001';
 
-app.use(cors({ origin: CLIENT_URL, credentials: true }));
+app.use(cors({ origin: 'http://localhost:3000', credentials: true }));
 app.use(express.json());
 app.use(cookieParser());
 app.use(express.static(__dirname));
@@ -40,6 +40,16 @@ const transporter = nodemailer.createTransport({
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS,
     },
+});
+
+transporter.verify((err) => {
+    if (err) {
+        console.error('❌ Gmail SMTP config error:', err.message);
+        console.error('   → Make sure EMAIL_USER and EMAIL_PASS are set correctly in .env');
+        console.error('   → EMAIL_PASS must be a 16-character Gmail App Password (not your account password)');
+    } else {
+        console.log('✅ Gmail SMTP is ready to send emails');
+    }
 });
 
 const verifyToken = (req, res, next) => {
@@ -133,17 +143,32 @@ app.post('/api/auth/forgot-password', (req, res) => {
         const updateSql = 'UPDATE users SET reset_token = ?, reset_token_expiry = ? WHERE id = ?';
         db.query(updateSql, [tokenHash, expiry, user.id], (updateErr) => {
             if (updateErr) return res.status(500).json({ message: 'Server error' });
-            const resetLink = `${CLIENT_URL}/reset-password/${rawToken}`;
-            console.log('Password reset link:', resetLink);
+            const resetLink = `http://localhost:3000/reset-password/${rawToken}`;
+            console.log('📧 Attempting to send password reset email to:', email);
+            console.log('🔗 Reset link:', resetLink);
             transporter.sendMail({
-                from: process.env.EMAIL_USER,
+                from: `"TailorHub" <${process.env.EMAIL_USER}>`,
                 to: email,
-                subject: 'TailorHub - Password Reset',
-                html: `<p>You requested a password reset.</p><p>Click <a href="${resetLink}">here</a> to reset your password. This link expires in 15 minutes.</p><p>If you did not request this, ignore this email.</p>`,
-            }, (mailErr) => {
-                if (mailErr) console.error('Email send error:', mailErr.message);
+                subject: 'TailorHub – Password Reset Request',
+                html: `
+                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 24px; border: 1px solid #e5e7eb; border-radius: 8px;">
+                        <h2 style="color: #1f2937;">🔐 Reset Your Password</h2>
+                        <p style="color: #374151;">You requested a password reset for your TailorHub account.</p>
+                        <p style="color: #374151;">Click the button below to reset your password. This link expires in <strong>15 minutes</strong>.</p>
+                        <a href="${resetLink}" style="display: inline-block; margin: 16px 0; padding: 12px 24px; background: #1f2937; color: white; text-decoration: none; border-radius: 6px; font-weight: bold;">Reset Password</a>
+                        <p style="color: #6b7280; font-size: 13px;">If you did not request this, you can safely ignore this email. Your password will not change.</p>
+                        <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
+                        <p style="color: #9ca3af; font-size: 12px;">TailorHub – Custom Tailoring Platform</p>
+                    </div>
+                `,
+            }, (mailErr, info) => {
+                if (mailErr) {
+                    console.error('❌ Email send error:', mailErr.message);
+                    return res.status(500).json({ message: 'Failed to send reset email. Please try again later.' });
+                }
+                console.log('✅ Password reset email sent to:', email, '| Message ID:', info.messageId);
+                res.json({ message: 'If this email exists, a reset link has been sent' });
             });
-            res.json({ message: 'If this email exists, a reset link has been sent' });
         });
     });
 });
