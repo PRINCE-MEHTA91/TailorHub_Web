@@ -13,7 +13,7 @@ const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET;
 const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:3001';
 
-app.use(cors({ origin: 'http://localhost:3000', credentials: true }));
+app.use(cors({ origin: CLIENT_URL, credentials: true }));
 app.use(express.json());
 app.use(cookieParser());
 app.use(express.static(__dirname));
@@ -59,6 +59,23 @@ const verifyToken = (req, res, next) => {
         if (err) return res.status(401).json({ message: 'Invalid or expired token' });
         req.userId = decoded.id;
         next();
+    });
+};
+
+// Role-guard middleware — usage: requireRole('tailor') or requireRole('customer')
+const requireRole = (role) => (req, res, next) => {
+    const token = req.cookies.token;
+    if (!token) return res.status(401).json({ message: 'Not authenticated' });
+    jwt.verify(token, JWT_SECRET, (err, decoded) => {
+        if (err) return res.status(401).json({ message: 'Invalid or expired token' });
+        const sql = 'SELECT id, role FROM users WHERE id = ?';
+        db.query(sql, [decoded.id], (dbErr, results) => {
+            if (dbErr || results.length === 0) return res.status(500).json({ message: 'Server error' });
+            if (results[0].role !== role) return res.status(403).json({ message: `Access denied. ${role} role required.` });
+            req.userId = decoded.id;
+            req.userRole = results[0].role;
+            next();
+        });
     });
 };
 
