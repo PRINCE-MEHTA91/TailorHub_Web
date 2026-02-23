@@ -19,41 +19,36 @@ function App() {
     <AuthProvider>
       <Router>
         <Routes>
+          {/* Public Routes */}
           <Route path="/login" element={<LoginPage />} />
           <Route path="/signup" element={<SignupPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
 
-          {/* Role-aware redirect hub */}
-          <Route
-            path="/dashboard"
-            element={
-              <PrivateRoute>
-                <DashboardPage />
-              </PrivateRoute>
-            }
-          />
+          {/* Smart role-redirect hub — redirects to /dashboard/customer or /dashboard/tailor */}
+          <Route path="/dashboard" element={<PrivateRoute><DashboardPage /></PrivateRoute>} />
 
-          {/* Customer Dashboard */}
+          {/* Role-protected Customer Dashboard */}
           <Route
             path="/dashboard/customer"
             element={
-              <PrivateRoute>
+              <PrivateRoute role="customer">
                 <CustomerDashboardPage />
               </PrivateRoute>
             }
           />
 
-          {/* Tailor Dashboard */}
+          {/* Role-protected Tailor Dashboard */}
           <Route
             path="/dashboard/tailor"
             element={
-              <PrivateRoute>
+              <PrivateRoute role="tailor">
                 <TailorDashboardPage />
               </PrivateRoute>
             }
           />
 
+          {/* Home Page */}
           <Route
             path="/"
             element={
