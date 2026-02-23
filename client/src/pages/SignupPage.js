@@ -12,12 +12,12 @@ const passwordRules = [
 const SignupPage = () => {
     const navigate = useNavigate();
     const [form, setForm] = useState({ full_name: '', email: '', password: '', confirm: '' });
+    const [role, setRole] = useState('customer');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const [showRules, setShowRules] = useState(false);
 
     const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-
     const allRulesPassed = passwordRules.every((r) => r.test(form.password));
 
     const handleChange = (e) => {
@@ -37,7 +37,7 @@ const SignupPage = () => {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
-                body: JSON.stringify({ full_name: form.full_name, email: form.email, password: form.password }),
+                body: JSON.stringify({ full_name: form.full_name, email: form.email, password: form.password, role }),
             });
             const data = await res.json();
             if (!res.ok) return setError(data.message || 'Signup failed');
@@ -61,6 +61,31 @@ const SignupPage = () => {
                     <div className="text-4xl mb-3">✂️</div>
                     <h1 className="text-2xl font-bold text-gray-800">Create your account</h1>
                     <p className="text-gray-500 text-sm mt-1">Join TailorHub today</p>
+                </div>
+
+                {/* Role Selector */}
+                <div className="mb-5">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">I am a...</label>
+                    <div className="grid grid-cols-2 gap-3">
+                        {[
+                            { value: 'customer', label: '🛍️ Customer', desc: 'Looking for tailoring' },
+                            { value: 'tailor', label: '🧵 Tailor', desc: 'Offering my services' },
+                        ].map((opt) => (
+                            <button
+                                key={opt.value}
+                                type="button"
+                                onClick={() => setRole(opt.value)}
+                                className={`flex flex-col items-center justify-center rounded-xl border-2 py-3 px-2 transition-all cursor-pointer text-sm font-medium ${role === opt.value
+                                        ? 'border-gray-800 bg-gray-800 text-white shadow-md'
+                                        : 'border-gray-200 bg-gray-50 text-gray-600 hover:border-gray-400'
+                                    }`}
+                            >
+                                <span className="text-xl mb-1">{opt.label.split(' ')[0]}</span>
+                                <span>{opt.label.split(' ')[1]}</span>
+                                <span className={`text-xs mt-0.5 ${role === opt.value ? 'text-gray-300' : 'text-gray-400'}`}>{opt.desc}</span>
+                            </button>
+                        ))}
+                    </div>
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-5">
@@ -102,7 +127,6 @@ const SignupPage = () => {
                             required
                             className="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-gray-700 transition"
                         />
-
                         {showRules && (
                             <motion.div
                                 initial={{ opacity: 0, height: 0 }}
@@ -137,10 +161,10 @@ const SignupPage = () => {
                             placeholder="Repeat your password"
                             required
                             className={`w-full border rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 transition ${form.confirm && form.confirm !== form.password
-                                ? 'border-red-400 focus:ring-red-300'
-                                : form.confirm && form.confirm === form.password
-                                    ? 'border-green-400 focus:ring-green-300'
-                                    : 'border-gray-300 focus:ring-gray-700'
+                                    ? 'border-red-400 focus:ring-red-300'
+                                    : form.confirm && form.confirm === form.password
+                                        ? 'border-green-400 focus:ring-green-300'
+                                        : 'border-gray-300 focus:ring-gray-700'
                                 }`}
                         />
                         {form.confirm && form.confirm !== form.password && (
@@ -163,7 +187,7 @@ const SignupPage = () => {
                         className="w-full bg-gray-800 text-white py-3 rounded-xl font-semibold hover:bg-gray-700 transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
                     >
                         {loading && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
-                        {loading ? 'Creating account...' : 'Create Account'}
+                        {loading ? 'Creating account...' : `Create Account as ${role === 'customer' ? 'Customer' : 'Tailor'}`}
                     </button>
                 </form>
 

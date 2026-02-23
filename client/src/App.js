@@ -11,6 +11,8 @@ import SignupPage from './pages/SignupPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import DashboardPage from './pages/DashboardPage';
+import CustomerDashboardPage from './pages/CustomerDashboardPage';
+import TailorDashboardPage from './pages/TailorDashboardPage';
 
 function App() {
   return (
@@ -21,6 +23,8 @@ function App() {
           <Route path="/signup" element={<SignupPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
+
+          {/* Role-aware redirect hub */}
           <Route
             path="/dashboard"
             element={
@@ -29,6 +33,27 @@ function App() {
               </PrivateRoute>
             }
           />
+
+          {/* Customer Dashboard */}
+          <Route
+            path="/dashboard/customer"
+            element={
+              <PrivateRoute>
+                <CustomerDashboardPage />
+              </PrivateRoute>
+            }
+          />
+
+          {/* Tailor Dashboard */}
+          <Route
+            path="/dashboard/tailor"
+            element={
+              <PrivateRoute>
+                <TailorDashboardPage />
+              </PrivateRoute>
+            }
+          />
+
           <Route
             path="/"
             element={
