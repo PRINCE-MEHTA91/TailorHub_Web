@@ -6,11 +6,12 @@ import { useAuth } from '../context/AuthContext';
 /* ─── Tab Content Components ─────────────────────────────────── */
 
 const HomeTab = ({ user }) => {
+    const navigate = useNavigate();
     const stats = [
-        { label: 'Pending Jobs', value: '3', icon: '⏳', color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-100' },
-        { label: 'Completed', value: '28', icon: '✅', color: 'text-green-600', bg: 'bg-green-50', border: 'border-green-100' },
-        { label: 'Earnings', value: '₹14,200', icon: '💰', color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-100' },
-        { label: 'Rating', value: '4.8 ⭐', icon: '🏆', color: 'text-yellow-600', bg: 'bg-yellow-50', border: 'border-yellow-100' },
+        { label: 'Pending Jobs', value: '3', icon: '⏳', color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-100', path: '/tailor/pending-jobs' },
+        { label: 'Completed', value: '28', icon: '✅', color: 'text-green-600', bg: 'bg-green-50', border: 'border-green-100', path: '/tailor/completed' },
+        { label: 'Earnings', value: '₹14,200', icon: '💰', color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-100', path: '/tailor/earnings' },
+        { label: 'Rating', value: '4.8 ⭐', icon: '🏆', color: 'text-yellow-600', bg: 'bg-yellow-50', border: 'border-yellow-100', path: null },
     ];
     const recentOrders = [
         { id: '#1042', customer: 'Riya Sharma', item: 'Lehenga (Bridal)', status: 'In Progress', due: 'Feb 28' },
@@ -31,13 +32,15 @@ const HomeTab = ({ user }) => {
             {/* Stats Grid */}
             <div className="grid grid-cols-2 gap-3">
                 {stats.map((s) => (
-                    <motion.div key={s.label} whileHover={{ y: -2 }}
-                        className={`${s.bg} border ${s.border} rounded-2xl p-4 flex items-center gap-3`}>
+                    <motion.div key={s.label} whileHover={{ y: -2, scale: 1.02 }} whileTap={{ scale: 0.97 }}
+                        onClick={() => s.path && navigate(s.path)}
+                        className={`${s.bg} border ${s.border} rounded-2xl p-4 flex items-center gap-3 ${s.path ? 'cursor-pointer hover:ring-2 hover:ring-offset-1 hover:ring-amber-300 transition-shadow' : ''}`}>
                         <span className="text-2xl">{s.icon}</span>
-                        <div>
+                        <div className="flex-1">
                             <p className={`text-lg font-bold ${s.color}`}>{s.value}</p>
                             <p className="text-xs text-gray-500">{s.label}</p>
                         </div>
+                        {s.path && <span className="text-gray-400 text-base">›</span>}
                     </motion.div>
                 ))}
             </div>
