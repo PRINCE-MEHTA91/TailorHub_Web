@@ -13,6 +13,9 @@ import ResetPasswordPage from './pages/ResetPasswordPage';
 import DashboardPage from './pages/DashboardPage';
 import CustomerDashboardPage from './pages/CustomerDashboardPage';
 import TailorDashboardPage from './pages/TailorDashboardPage';
+import PendingJobsPage from './pages/PendingJobsPage';
+import CompletedOrdersPage from './pages/CompletedOrdersPage';
+import EarningsPage from './pages/EarningsPage';
 
 function App() {
   return (
@@ -47,6 +50,11 @@ function App() {
               </PrivateRoute>
             }
           />
+
+          {/* Tailor Detail Pages */}
+          <Route path="/tailor/pending-jobs" element={<PrivateRoute role="tailor"><PendingJobsPage /></PrivateRoute>} />
+          <Route path="/tailor/completed" element={<PrivateRoute role="tailor"><CompletedOrdersPage /></PrivateRoute>} />
+          <Route path="/tailor/earnings" element={<PrivateRoute role="tailor"><EarningsPage /></PrivateRoute>} />
 
           {/* Home Page */}
           <Route
