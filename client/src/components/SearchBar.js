@@ -1,19 +1,49 @@
-import React from 'react';
-import { FaSearch } from 'react-icons/fa';
+import React, { useState } from 'react';
+import { motion } from 'framer-motion';
 
 const SearchBar = () => {
+  const [focused, setFocused] = useState(false);
+  const [query, setQuery] = useState('');
+
   return (
-    <div className="bg-gray-800 p-4">
-      <div className="relative">
+    <div className="sb-wrap">
+      <motion.div
+        animate={{ scale: focused ? 1.01 : 1 }}
+        transition={{ duration: 0.15 }}
+        className="sb-inner"
+      >
+        {/* Search Icon */}
+        <span className="sb-search-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="sb-icon-svg">
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+          </svg>
+        </span>
+
         <input
           type="text"
-          placeholder="Search for tailors, fabrics, and more"
-          className="w-full py-3 pl-4 pr-16 rounded-full text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          placeholder="Search for tailors, fabrics, and more…"
+          className="sb-input"
         />
-        <button className="absolute inset-y-0 right-0 px-6 bg-blue-500 text-white rounded-r-full flex items-center space-x-2">
-          <FaSearch />
-          <span>Search</span>
+
+        <button className="sb-btn" aria-label="Search">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ width: 16, height: 16, marginRight: 5 }}>
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+          </svg>
+          Search
         </button>
+      </motion.div>
+
+      {/* Quick search chips */}
+      <div className="sb-chips">
+        {['Bridal Wear', 'Men\'s Suit', 'Alterations', 'Kurta'].map((chip) => (
+          <button key={chip} onClick={() => setQuery(chip)} className="sb-chip">
+            {chip}
+          </button>
+        ))}
       </div>
     </div>
   );

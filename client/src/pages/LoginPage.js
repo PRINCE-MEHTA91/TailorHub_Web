@@ -32,12 +32,9 @@ const LoginPage = () => {
             const data = await res.json();
             if (!res.ok) return setError(data.message || 'Login failed');
             login(data.user);
-            // Navigate based on role
-            if (data.user.role === 'tailor') {
-                navigate('/dashboard/tailor');
-            } else {
-                navigate('/dashboard/customer');
-            }
+            const dest = data.user.role === 'tailor' ? '/tailor/dashboard' : '/customer/dashboard';
+            navigate(dest);
+
         } catch {
             setError('Network error. Please try again.');
         } finally {

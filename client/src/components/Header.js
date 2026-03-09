@@ -1,100 +1,87 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { FaShoppingCart, FaBell, FaBars, FaTimes, FaUser } from 'react-icons/fa';
 import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 
 const Header = () => {
-  const [isOpen, setIsOpen] = useState(false);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
   const handleLogout = async () => {
     await logout();
-    setIsOpen(false);
     navigate('/');
   };
 
+  const initials = user?.full_name
+    ? user.full_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+    : 'U';
+
+  const firstName = user?.full_name?.split(' ')[0] || '';
+
   return (
-    <motion.nav
-      initial={{ opacity: 0, y: -20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
-      className="bg-gray-800 text-white shadow-md sticky top-0 z-50"
-    >
-      <div className="container mx-auto px-4">
-        <div className="flex justify-between items-center py-4">
-          <Link to="/" className="text-2xl font-bold tracking-wider">TailorHub</Link>
-          <div className="hidden md:flex items-center space-x-4">
-            <a href="#notifications" className="text-white"><FaBell size={20} /></a>
-            <a href="#cart" className="text-white"><FaShoppingCart size={20} /></a>
-            {user ? (
-              <>
-                <div className="flex items-center gap-2 text-sm text-gray-300">
-                  <FaUser size={14} />
-                  <span>{user.full_name}</span>
-                </div>
-                <Link to="/dashboard" className="border border-white py-2 px-4 rounded-md hover:bg-white hover:text-gray-800 transition-colors duration-300 text-sm">
-                  Dashboard
-                </Link>
-                <button
-                  onClick={handleLogout}
-                  className="bg-white text-gray-800 py-2 px-4 rounded-md hover:bg-gray-200 transition-colors duration-300 text-sm"
-                >
-                  Logout
-                </button>
-              </>
-            ) : (
-              <>
-                <Link to="/login" className="border border-white py-2 px-4 rounded-md hover:bg-white hover:text-gray-800 transition-colors duration-300">
-                  Login
-                </Link>
-                <Link to="/signup" className="bg-white text-gray-800 py-2 px-4 rounded-md hover:bg-gray-200 transition-colors duration-300">
-                  Sign Up
-                </Link>
-              </>
-            )}
-          </div>
-          <div className="md:hidden">
-            <button onClick={() => setIsOpen(!isOpen)}>
-              {isOpen ? <FaTimes size={24} /> : <FaBars size={24} />}
-            </button>
-          </div>
-        </div>
-      </div>
-      {isOpen && (
-        <motion.div
-          initial={{ opacity: 0, height: 0 }}
-          animate={{ opacity: 1, height: 'auto' }}
-          className="md:hidden px-4 pt-2 pb-4 space-y-2"
-        >
-          <a href="#notifications" className="block text-white"><FaBell size={20} /></a>
-          <a href="#cart" className="block text-white"><FaShoppingCart size={20} /></a>
+    <header className="tailorhub-header sticky top-0 z-50">
+      <div className="header-inner">
+        {/* Logo */}
+        <Link to="/" className="header-logo">
+          <span className="header-logo-icon">✂️</span>
+          <span className="header-logo-text">TailorHub</span>
+        </Link>
+
+        {/* Right section */}
+        <div className="header-actions">
           {user ? (
-            <>
-              <Link to="/dashboard" onClick={() => setIsOpen(false)} className="block w-full text-left border border-white py-2 px-3 rounded-md hover:bg-white hover:text-gray-800 transition-colors duration-300">
-                Dashboard
-              </Link>
-              <button
-                onClick={handleLogout}
-                className="block w-full text-left bg-white text-gray-800 py-2 px-3 rounded-md hover:bg-gray-200 transition-colors duration-300 mt-2"
-              >
-                Logout
+            /* ── LOGGED-IN: always-visible profile strip ── */
+            <motion.div
+              initial={{ opacity: 0, scale: 0.92 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.3 }}
+              className="header-profile-strip"
+            >
+              {/* Notification bell */}
+              <button className="header-icon-btn" title="Notifications">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="header-icon-svg">
+                  <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+                  <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+                </svg>
+                <span className="header-icon-badge" />
               </button>
-            </>
+
+              {/* Divider */}
+              <span className="header-profile-divider" />
+
+              {/* Avatar + name (always visible, no dropdown) */}
+              <div className="header-profile-info">
+                <div className="header-avatar-static">{initials}</div>
+                <div className="header-profile-text">
+                  <span className="header-profile-greeting">Hello,</span>
+                  <span className="header-profile-name">{firstName}</span>
+                </div>
+              </div>
+
+              {/* Dashboard shortcut */}
+              <Link to="/dashboard" className="header-dashboard-btn">
+                My Dashboard
+              </Link>
+
+              {/* Logout */}
+              <button onClick={handleLogout} className="header-logout-btn" title="Logout">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 16, height: 16 }}>
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                  <polyline points="16 17 21 12 16 7"/>
+                  <line x1="21" y1="12" x2="9" y2="12"/>
+                </svg>
+              </button>
+            </motion.div>
           ) : (
+            /* ── GUEST: login / sign up buttons ── */
             <>
-              <Link to="/login" onClick={() => setIsOpen(false)} className="block w-full text-left border border-white py-2 px-3 rounded-md hover:bg-white hover:text-gray-800 transition-colors duration-300">
-                Login
-              </Link>
-              <Link to="/signup" onClick={() => setIsOpen(false)} className="block w-full text-left bg-white text-gray-800 py-2 px-3 rounded-md hover:bg-gray-200 transition-colors duration-300 mt-2">
-                Sign Up
-              </Link>
+              <Link to="/login" className="header-btn-outline">Login</Link>
+              <Link to="/signup" className="header-btn-solid">Sign Up</Link>
             </>
           )}
-        </motion.div>
-      )}
-    </motion.nav>
+        </div>
+      </div>
+    </header>
   );
 };
 

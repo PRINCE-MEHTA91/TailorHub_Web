@@ -1,33 +1,70 @@
 import React from 'react';
-import { FaTh, FaTags, FaGift, FaFire } from 'react-icons/fa';
 import { motion } from 'framer-motion';
 
 const actions = [
-  { icon: <FaTh size={24} />, label: 'Categories' },
-  { icon: <FaTags size={24} />, label: 'Deals' },
-  { icon: <FaGift size={24} />, label: 'New Arrivals' },
-  { icon: <FaFire size={24} />, label: 'Trending' },
+  {
+    icon: '🗂️',
+    label: 'Categories',
+    gradient: 'qa-amber',
+    desc: '50+ types',
+  },
+  {
+    icon: '🔥',
+    label: 'Deals',
+    gradient: 'qa-rose',
+    desc: 'Up to 40% off',
+    badge: 'HOT',
+  },
+  {
+    icon: '🆕',
+    label: 'New Arrivals',
+    gradient: 'qa-emerald',
+    desc: 'Just added',
+  },
+  {
+    icon: '📈',
+    label: 'Trending',
+    gradient: 'qa-violet',
+    desc: 'This week',
+  },
 ];
 
-const QuickActions = () => {
-  return (
-    <div className="py-6 text-center">
-      <div className="flex justify-around">
-        {actions.map((action, index) => (
-          <motion.div
-            key={index}
-            whileHover={{ scale: 1.1, y: -5 }}
-            className="flex flex-col items-center cursor-pointer group"
-          >
-            <div className="w-16 h-16 rounded-full bg-white flex justify-center items-center shadow-md group-hover:bg-gray-800 group-hover:text-white transition-colors duration-300">
-              {action.icon}
-            </div>
-            <span className="mt-2 text-sm font-medium text-gray-700 group-hover:text-gray-900">{action.label}</span>
-          </motion.div>
-        ))}
-      </div>
-    </div>
-  );
+const containerVariants = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.08 } },
 };
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 20 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.35 } },
+};
+
+const QuickActions = () => (
+  <section className="qa-section">
+    <motion.div
+      className="qa-grid"
+      variants={containerVariants}
+      initial="hidden"
+      animate="show"
+    >
+      {actions.map((action) => (
+        <motion.button
+          key={action.label}
+          variants={itemVariants}
+          whileHover={{ y: -4, scale: 1.04 }}
+          whileTap={{ scale: 0.96 }}
+          className={`qa-card ${action.gradient}`}
+        >
+          {action.badge && (
+            <span className="qa-badge">{action.badge}</span>
+          )}
+          <span className="qa-icon">{action.icon}</span>
+          <span className="qa-label">{action.label}</span>
+          <span className="qa-desc">{action.desc}</span>
+        </motion.button>
+      ))}
+    </motion.div>
+  </section>
+);
 
 export default QuickActions;
