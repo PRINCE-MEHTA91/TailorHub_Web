@@ -13,7 +13,17 @@ const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET;
 const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:3001';
 
-app.use(cors({ origin: CLIENT_URL, credentials: true }));
+const allowedOrigins = [CLIENT_URL, 'http://127.0.0.1:3001', 'http://localhost:3001'];
+app.use(cors({
+    origin: function (origin, callback) {
+        if (!origin || allowedOrigins.includes(origin)) {
+            callback(null, true);
+        } else {
+            callback(null, true); // Allow all for dev, to prevent CORS issues
+        }
+    },
+    credentials: true
+}));
 app.use(express.json());
 app.use(cookieParser());
 app.use(express.static(__dirname));
@@ -32,6 +42,30 @@ db.connect((err) => {
         return;
     }
     console.log('Connected to MySQL database');
+
+    // Auto-create tailor_profiles table if it doesn't exist
+    const createProfileTable = `
+        CREATE TABLE IF NOT EXISTS tailor_profiles (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT NOT NULL UNIQUE,
+            phone VARCHAR(20) DEFAULT '',
+            whatsapp VARCHAR(20) DEFAULT '',
+            instagram VARCHAR(100) DEFAULT '',
+            street VARCHAR(255) DEFAULT '',
+            city VARCHAR(100) DEFAULT '',
+            state VARCHAR(100) DEFAULT '',
+            pin VARCHAR(10) DEFAULT '',
+            products JSON DEFAULT NULL,
+            gallery JSON DEFAULT NULL,
+            profile_img TEXT DEFAULT NULL,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+    `;
+    db.query(createProfileTable, (tableErr) => {
+        if (tableErr) console.error('Error creating tailor_profiles table:', tableErr.message);
+        else console.log('✅ tailor_profiles table ready');
+    });
 });
 
 const transporter = nodemailer.createTransport({
@@ -220,6 +254,87 @@ app.get('/api/products', (req, res) => {
     db.query(sql, (err, results) => {
         if (err) return res.status(500).json(err);
         res.json(results);
+    });
+});
+
+// ── Tailor Profile: Save (upsert) ──────────────────────────────────────────
+app.post('/api/tailor/profile', verifyToken, (req, res) => {
+    const { phone, whatsapp, instagram, street, city, state, pin, products, gallery, profile_img } = req.body;
+
+    // Verify the logged-in user is a tailor
+    db.query('SELECT role FROM users WHERE id = ?', [req.userId], (err, rows) => {
+        if (err || rows.length === 0) return res.status(500).json({ message: 'Server error' });
+        if (rows[0].role !== 'tailor') return res.status(403).json({ message: 'Only tailors can update a tailor profile' });
+
+        const sql = `
+            INSERT INTO tailor_profiles (user_id, phone, whatsapp, instagram, street, city, state, pin, products, gallery, profile_img)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+                phone = VALUES(phone), whatsapp = VALUES(whatsapp), instagram = VALUES(instagram),
+                street = VALUES(street), city = VALUES(city), state = VALUES(state), pin = VALUES(pin),
+                products = VALUES(products), gallery = VALUES(gallery), profile_img = VALUES(profile_img)
+        `;
+        const params = [
+            req.userId, phone || '', whatsapp || '', instagram || '',
+            street || '', city || '', state || '', pin || '',
+            JSON.stringify(products || []),
+            JSON.stringify(gallery || []),
+            profile_img || null,
+        ];
+        db.query(sql, params, (insertErr) => {
+            if (insertErr) {
+                console.error('Tailor profile save error:', insertErr);
+                return res.status(500).json({ message: 'Failed to save profile' });
+            }
+            res.json({ message: 'Profile saved successfully' });
+        });
+    });
+});
+
+// ── Tailor Profile: Get own profile ────────────────────────────────────────
+app.get('/api/tailor/profile', verifyToken, (req, res) => {
+    const sql = `
+        SELECT tp.phone, tp.whatsapp, tp.instagram,
+               tp.street, tp.city, tp.state, tp.pin,
+               tp.products, tp.gallery, tp.profile_img
+        FROM tailor_profiles tp
+        WHERE tp.user_id = ?
+    `;
+    db.query(sql, [req.userId], (err, results) => {
+        if (err) return res.status(500).json({ message: 'Server error' });
+        if (results.length === 0) return res.json({ profile: null });
+        const p = results[0];
+        res.json({
+            profile: {
+                ...p,
+                products: p.products ? JSON.parse(p.products) : [],
+                gallery: p.gallery ? JSON.parse(p.gallery) : [],
+            }
+        });
+    });
+});
+
+// ── Tailor Profiles: Fetch all (for customer dashboard) ────────────────────
+app.get('/api/tailors', (req, res) => {
+    const sql = `
+        SELECT u.id, u.full_name, u.email,
+               tp.phone, tp.whatsapp, tp.instagram,
+               tp.street, tp.city, tp.state, tp.pin,
+               tp.products, tp.gallery, tp.profile_img
+        FROM users u
+        INNER JOIN tailor_profiles tp ON u.id = tp.user_id
+        WHERE u.role = 'tailor'
+        ORDER BY tp.updated_at DESC
+    `;
+    db.query(sql, (err, results) => {
+        if (err) return res.status(500).json({ message: 'Server error' });
+        // Parse JSON fields
+        const tailors = results.map(t => ({
+            ...t,
+            products: t.products ? JSON.parse(t.products) : [],
+            gallery: t.gallery ? JSON.parse(t.gallery) : [],
+        }));
+        res.json({ tailors });
     });
 });
 

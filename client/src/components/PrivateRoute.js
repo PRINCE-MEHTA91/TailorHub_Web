@@ -23,10 +23,9 @@ const PrivateRoute = ({ children, role }) => {
     // Not logged in → redirect to home/login
     if (!user) return <Navigate to="/login" replace />;
 
-    // Logged in but wrong role → redirect to their correct dashboard
+    // Logged in but wrong role → redirect to their dashboard
     if (role && user.role !== role) {
-        const redirect = user.role === 'tailor' ? '/dashboard/tailor' : '/dashboard/customer';
-        return <Navigate to={redirect} replace />;
+        return <Navigate to="/dashboard" replace />;
     }
 
     return children;

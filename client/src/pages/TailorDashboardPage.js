@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
@@ -30,7 +30,7 @@ const HomeTab = ({ user }) => {
             </div>
 
             {/* Stats Grid */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {stats.map((s) => (
                     <motion.div key={s.label} whileHover={{ y: -2, scale: 1.02 }} whileTap={{ scale: 0.97 }}
                         onClick={() => s.path && navigate(s.path)}
@@ -148,54 +148,229 @@ const ManagementTab = () => {
     );
 };
 
-const ProfileTab = ({ user, onLogout }) => (
-    <div className="space-y-5">
-        {/* Profile Card */}
-        <div className="bg-gradient-to-br from-amber-600 to-orange-500 rounded-2xl p-6 text-white text-center">
-            <div className="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center text-4xl mx-auto mb-3">
-                🧵
+const ProfileTab = ({ user, onLogout }) => {
+    const [profileImg, setProfileImg] = useState(null);
+    const [saved, setSaved] = useState(false);
+    const [address, setAddress] = useState({ street: '', city: '', state: '', pin: '' });
+    const [contact, setContact] = useState({ phone: '', whatsapp: '', instagram: '' });
+    const [products, setProducts] = useState([]);
+    const [newProduct, setNewProduct] = useState({ name: '', price: '' });
+    const [gallery, setGallery] = useState([]);
+    const [loadingProfile, setLoadingProfile] = useState(true);
+
+    // ── Load saved profile from DB on mount ──────────────────────────────────
+    useEffect(() => {
+        fetch('http://127.0.0.1:3000/api/tailor/profile', { credentials: 'include' })
+            .then(res => res.ok ? res.json() : null)
+            .then(data => {
+                if (data?.profile) {
+                    const p = data.profile;
+                    setAddress({ street: p.street || '', city: p.city || '', state: p.state || '', pin: p.pin || '' });
+                    setContact({ phone: p.phone || '', whatsapp: p.whatsapp || '', instagram: p.instagram || '' });
+                    if (p.products && p.products.length > 0) {
+                        setProducts(p.products.map((item, i) => ({ id: i + 1, name: item.name, price: item.price })));
+                    }
+                }
+            })
+            .catch(() => {})
+            .finally(() => setLoadingProfile(false));
+    }, []);
+
+    const handleImgChange = (e) => {
+        const file = e.target.files[0];
+        if (file) setProfileImg(URL.createObjectURL(file));
+    };
+
+    const handleGallery = (e) => {
+        const files = Array.from(e.target.files);
+        const urls = files.map(f => URL.createObjectURL(f));
+        setGallery(prev => [...prev, ...urls].slice(0, 9));
+    };
+
+    const addProduct = () => {
+        if (!newProduct.name.trim() || !newProduct.price.trim()) return;
+        setProducts(prev => [...prev, { id: Date.now(), ...newProduct }]);
+        setNewProduct({ name: '', price: '' });
+    };
+
+    const removeProduct = (id) => setProducts(prev => prev.filter(p => p.id !== id));
+
+    const [saving, setSaving] = useState(false);
+    const [saveError, setSaveError] = useState('');
+
+    const handleSave = async () => {
+        setSaving(true);
+        setSaveError('');
+        try {
+            const res = await fetch('http://127.0.0.1:3000/api/tailor/profile', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({
+                    phone: contact.phone,
+                    whatsapp: contact.whatsapp,
+                    instagram: contact.instagram,
+                    street: address.street,
+                    city: address.city,
+                    state: address.state,
+                    pin: address.pin,
+                    products: products.map(({ name, price }) => ({ name, price })),
+                    // gallery blob URLs are local-preview only; skip for now
+                    gallery: [],
+                    profile_img: null,
+                }),
+            });
+            const data = await res.json();
+            if (!res.ok) { setSaveError(data.message || 'Save failed'); return; }
+            setSaved(true);
+            setTimeout(() => setSaved(false), 2500);
+        } catch {
+            setSaveError('Network error. Please try again.');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const inputCls = "w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 transition bg-gray-50";
+    const sectionHead = (icon, title) => (
+        <div className="flex items-center gap-2 mb-3">
+            <span className="text-lg">{icon}</span>
+            <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide">{title}</h3>
+        </div>
+    );
+
+    return (
+        <div className="space-y-5 pb-4">
+
+            {/* ── Profile Header ── */}
+            <div className="bg-gradient-to-br from-amber-600 to-orange-500 rounded-2xl p-6 text-white text-center relative">
+                <label htmlFor="profile-img-upload" className="cursor-pointer group inline-block">
+                    <div className="w-24 h-24 rounded-full mx-auto mb-3 border-4 border-white/30 overflow-hidden bg-white/20 flex items-center justify-center relative">
+                        {profileImg
+                            ? <img src={profileImg} alt="Profile" className="w-full h-full object-cover" />
+                            : <span className="text-4xl">🧵</span>}
+                        <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-full">
+                            <span className="text-white text-xs font-bold">Change</span>
+                        </div>
+                    </div>
+                    <input id="profile-img-upload" type="file" accept="image/*" className="hidden" onChange={handleImgChange} />
+                </label>
+                <p className="text-xs text-amber-200 mt-1">Tap photo to change</p>
+                <h2 className="text-xl font-bold mt-2">{user?.full_name}</h2>
+                <p className="text-amber-200 text-sm">{user?.email}</p>
+                <span className="mt-2 inline-block bg-white/20 text-xs font-semibold px-3 py-1 rounded-full">Professional Tailor</span>
             </div>
-            <h2 className="text-xl font-bold">{user?.full_name}</h2>
-            <p className="text-amber-200 text-sm mt-1">{user?.email}</p>
-            <span className="mt-2 inline-block bg-white/20 text-white text-xs font-semibold px-3 py-1 rounded-full">
-                Professional Tailor
-            </span>
-        </div>
 
-        {/* Stats Row */}
-        <div className="grid grid-cols-3 gap-3">
-            {[{ label: 'Orders', val: '31' }, { label: 'Clients', val: '18' }, { label: 'Rating', val: '4.8' }].map((s) => (
-                <div key={s.label} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 text-center">
-                    <p className="text-xl font-bold text-amber-600">{s.val}</p>
-                    <p className="text-xs text-gray-500 mt-0.5">{s.label}</p>
+            {/* ── Stats ── */}
+            <div className="grid grid-cols-3 gap-3">
+                {[{ label: 'Orders', val: '31' }, { label: 'Clients', val: '18' }, { label: 'Rating', val: '4.8' }].map(s => (
+                    <div key={s.label} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 text-center">
+                        <p className="text-xl font-bold text-amber-600">{s.val}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">{s.label}</p>
+                    </div>
+                ))}
+            </div>
+
+            {/* ── Address ── */}
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                {sectionHead('📍', 'Address')}
+                <div className="space-y-3">
+                    <input className={inputCls} placeholder="Street / Area" value={address.street}
+                        onChange={e => setAddress({ ...address, street: e.target.value })} />
+                    <div className="grid grid-cols-2 gap-3">
+                        <input className={inputCls} placeholder="City" value={address.city}
+                            onChange={e => setAddress({ ...address, city: e.target.value })} />
+                        <input className={inputCls} placeholder="State" value={address.state}
+                            onChange={e => setAddress({ ...address, state: e.target.value })} />
+                    </div>
+                    <input className={inputCls} placeholder="PIN Code" value={address.pin} maxLength={6}
+                        onChange={e => setAddress({ ...address, pin: e.target.value })} />
                 </div>
-            ))}
-        </div>
+            </div>
 
-        {/* Profile Menu */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-            {[
-                { icon: '👤', label: 'Edit Profile' },
-                { icon: '🔔', label: 'Notifications' },
-                { icon: '🔒', label: 'Change Password' },
-                { icon: '❓', label: 'Help & Support' },
-                { icon: '📄', label: 'Terms & Privacy' },
-            ].map((item, i, arr) => (
-                <button key={item.label}
-                    className={`w-full flex items-center gap-4 px-5 py-4 text-left hover:bg-gray-50 transition-colors ${i < arr.length - 1 ? 'border-b border-gray-50' : ''}`}>
-                    <span className="text-xl">{item.icon}</span>
-                    <span className="text-sm font-medium text-gray-700 flex-1">{item.label}</span>
-                    <span className="text-gray-300">›</span>
-                </button>
-            ))}
-        </div>
+            {/* ── Contact ── */}
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                {sectionHead('📞', 'Contact')}
+                <div className="space-y-3">
+                    <input className={inputCls} placeholder="Phone Number" value={contact.phone} maxLength={10}
+                        onChange={e => setContact({ ...contact, phone: e.target.value })} />
+                    <input className={inputCls} placeholder="WhatsApp Number" value={contact.whatsapp} maxLength={10}
+                        onChange={e => setContact({ ...contact, whatsapp: e.target.value })} />
+                    <input className={inputCls} placeholder="Instagram Handle (optional)" value={contact.instagram}
+                        onChange={e => setContact({ ...contact, instagram: e.target.value })} />
+                </div>
+            </div>
 
-        <button onClick={onLogout}
-            className="w-full bg-red-50 border border-red-100 text-red-600 font-semibold text-sm py-4 rounded-2xl hover:bg-red-100 transition-colors">
-            🚪 Logout
-        </button>
-    </div>
-);
+            {/* ── Products & Pricing ── */}
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                {sectionHead('🏷️', 'Products & Pricing')}
+                <div className="space-y-2 mb-3">
+                    {products.map(p => (
+                        <motion.div key={p.id} layout
+                            className="flex items-center gap-3 bg-amber-50 border border-amber-100 rounded-xl px-4 py-2.5">
+                            <span className="flex-1 text-sm font-medium text-gray-800">{p.name}</span>
+                            <span className="text-sm font-bold text-amber-600">₹{p.price}</span>
+                            <button onClick={() => removeProduct(p.id)}
+                                className="text-red-400 hover:text-red-600 text-lg leading-none ml-1">×</button>
+                        </motion.div>
+                    ))}
+                </div>
+                {/* Add new product row */}
+                <div className="flex gap-2">
+                    <input className={`${inputCls} flex-[2]`} placeholder="Service name" value={newProduct.name}
+                        onChange={e => setNewProduct({ ...newProduct, name: e.target.value })} />
+                    <input className={`${inputCls} flex-1`} placeholder="₹ Price" value={newProduct.price}
+                        onChange={e => setNewProduct({ ...newProduct, price: e.target.value })} />
+                    <button onClick={addProduct}
+                        className="bg-amber-600 text-white px-4 rounded-xl text-sm font-bold hover:bg-amber-700 transition-colors flex-shrink-0">
+                        + Add
+                    </button>
+                </div>
+            </div>
+
+            {/* ── Gallery ── */}
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                {sectionHead('🖼️', 'Gallery')}
+                <div className="grid grid-cols-3 gap-2 mb-3">
+                    {gallery.map((url, i) => (
+                        <div key={i} className="relative aspect-square rounded-xl overflow-hidden group">
+                            <img src={url} alt={`gallery-${i}`} className="w-full h-full object-cover" />
+                            <button onClick={() => setGallery(prev => prev.filter((_, j) => j !== i))}
+                                className="absolute top-1 right-1 bg-black/60 text-white rounded-full w-6 h-6 text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                ×
+                            </button>
+                        </div>
+                    ))}
+                    {gallery.length < 9 && (
+                        <label className="aspect-square rounded-xl border-2 border-dashed border-amber-300 flex flex-col items-center justify-center cursor-pointer hover:bg-amber-50 transition-colors">
+                            <span className="text-2xl text-amber-400">+</span>
+                            <span className="text-xs text-amber-500 mt-1">Add Photo</span>
+                            <input type="file" accept="image/*" multiple className="hidden" onChange={handleGallery} />
+                        </label>
+                    )}
+                </div>
+                <p className="text-xs text-gray-400">Up to 9 photos · Tap × to remove</p>
+            </div>
+
+            {/* ── Save Button ── */}
+            {saveError && (
+                <p className="text-red-500 text-sm bg-red-50 border border-red-200 rounded-xl px-4 py-2 text-center">{saveError}</p>
+            )}
+            <motion.button onClick={handleSave} disabled={saving || saved}
+                whileTap={{ scale: 0.97 }}
+                className="w-full bg-amber-600 text-white font-bold text-sm py-4 rounded-2xl hover:bg-amber-700 transition-colors shadow-md disabled:opacity-70 flex items-center justify-center gap-2">
+                {saving && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+                {saved ? '✅ Profile Saved!' : saving ? 'Saving...' : '💾 Save Profile'}
+            </motion.button>
+
+            {/* ── Logout ── */}
+            <button onClick={onLogout}
+                className="w-full bg-red-50 border border-red-100 text-red-600 font-semibold text-sm py-4 rounded-2xl hover:bg-red-100 transition-colors">
+                🚪 Logout
+            </button>
+        </div>
+    );
+};
 
 /* ─── Bottom Navigation ───────────────────────────────────────── */
 const NAV_TABS = [
@@ -228,7 +403,7 @@ const TailorDashboardPage = () => {
     };
 
     return (
-        <div className="min-h-screen bg-gray-50 flex flex-col">
+        <div className="min-h-screen bg-gray-50 flex flex-col w-full">
             {/* Top Header */}
             <header className="bg-white border-b border-gray-100 px-5 py-4 flex justify-between items-center sticky top-0 z-10 shadow-sm">
                 <div className="flex items-center gap-2">
@@ -249,7 +424,7 @@ const TailorDashboardPage = () => {
 
             {/* Page Content */}
             <main className="flex-1 overflow-y-auto pb-24">
-                <div className="max-w-lg mx-auto px-4 py-5">
+                <div className="w-full px-6 py-5">
                     <AnimatePresence mode="wait">
                         <motion.div
                             key={activeTab}
@@ -266,7 +441,7 @@ const TailorDashboardPage = () => {
 
             {/* Bottom Navigation */}
             <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 shadow-lg z-10">
-                <div className="max-w-lg mx-auto flex">
+                <div className="w-full flex">
                     {NAV_TABS.map((tab) => {
                         const isActive = activeTab === tab.id;
                         return (
