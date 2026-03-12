@@ -160,7 +160,7 @@ const ProfileTab = ({ user, onLogout }) => {
 
     // ── Load saved profile from DB on mount ──────────────────────────────────
     useEffect(() => {
-        fetch('http://127.0.0.1:3000/api/tailor/profile', { credentials: 'include' })
+        fetch('http://localhost:3000/api/tailor/profile', { credentials: 'include' })
             .then(res => res.ok ? res.json() : null)
             .then(data => {
                 if (data?.profile) {
@@ -202,7 +202,7 @@ const ProfileTab = ({ user, onLogout }) => {
         setSaving(true);
         setSaveError('');
         try {
-            const res = await fetch('http://127.0.0.1:3000/api/tailor/profile', {
+            const res = await fetch('http://localhost:3000/api/tailor/profile', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',

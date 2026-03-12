@@ -1,4 +1,13 @@
 require('dotenv').config();
+
+// ── Global crash guards — keep the server alive even on unhandled errors ──
+process.on('uncaughtException', (err) => {
+    console.error('❌ Uncaught Exception (server kept alive):', err.message);
+});
+process.on('unhandledRejection', (reason) => {
+    console.error('❌ Unhandled Rejection (server kept alive):', reason);
+});
+
 const express = require('express');
 const cors = require('cors');
 const mysql = require('mysql2');
@@ -28,20 +37,25 @@ app.use(express.json());
 app.use(cookieParser());
 app.use(express.static(__dirname));
 
-const db = mysql.createConnection({
+const db = mysql.createPool({
     host: process.env.DB_HOST,
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
     database: process.env.DB_NAME,
     port: process.env.DB_PORT || 3306,
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0,
 });
 
-db.connect((err) => {
-    if (err) {
-        console.error('DB connection error:', err.message);
+// Test pool connectivity + auto-create tables on startup
+db.getConnection((connErr, connection) => {
+    if (connErr) {
+        console.error('DB connection error:', connErr.message);
         return;
     }
-    console.log('Connected to MySQL database');
+    console.log('✅ Connected to MySQL database (pool)');
+    connection.release();
 
     // Auto-create tailor_profiles table if it doesn't exist
     const createProfileTable = `
@@ -66,6 +80,26 @@ db.connect((err) => {
         if (tableErr) console.error('Error creating tailor_profiles table:', tableErr.message);
         else console.log('✅ tailor_profiles table ready');
     });
+
+    // Auto-create customer_profiles table if it doesn't exist
+    const createCustomerProfileTable = `
+        CREATE TABLE IF NOT EXISTS customer_profiles (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT NOT NULL UNIQUE,
+            phone VARCHAR(20) DEFAULT '',
+            whatsapp VARCHAR(20) DEFAULT '',
+            street VARCHAR(255) DEFAULT '',
+            city VARCHAR(100) DEFAULT '',
+            state VARCHAR(100) DEFAULT '',
+            pin VARCHAR(10) DEFAULT '',
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+    `;
+    db.query(createCustomerProfileTable, (tableErr) => {
+        if (tableErr) console.error('Error creating customer_profiles table:', tableErr.message);
+        else console.log('✅ customer_profiles table ready');
+    });
 });
 
 const transporter = nodemailer.createTransport({
@@ -85,6 +119,13 @@ transporter.verify((err) => {
         console.log('✅ Gmail SMTP is ready to send emails');
     }
 });
+
+// Safely parse a MySQL JSON field which may already be a parsed object
+const safeParseJSON = (val, fallback = []) => {
+    if (val === null || val === undefined) return fallback;
+    if (typeof val === 'object') return val;
+    try { return JSON.parse(val); } catch { return fallback; }
+};
 
 const verifyToken = (req, res, next) => {
     const token = req.cookies.token;
@@ -307,8 +348,8 @@ app.get('/api/tailor/profile', verifyToken, (req, res) => {
         res.json({
             profile: {
                 ...p,
-                products: p.products ? JSON.parse(p.products) : [],
-                gallery: p.gallery ? JSON.parse(p.gallery) : [],
+                products: safeParseJSON(p.products, []),
+                gallery: safeParseJSON(p.gallery, []),
             }
         });
     });
@@ -331,12 +372,49 @@ app.get('/api/tailors', (req, res) => {
         // Parse JSON fields
         const tailors = results.map(t => ({
             ...t,
-            products: t.products ? JSON.parse(t.products) : [],
-            gallery: t.gallery ? JSON.parse(t.gallery) : [],
+            products: safeParseJSON(t.products, []),
+            gallery: safeParseJSON(t.gallery, []),
         }));
         res.json({ tailors });
     });
 });
+
+// ── Customer Profile: Save (upsert) ──────────────────────────────────────────
+app.post('/api/customer/profile', verifyToken, (req, res) => {
+    const { phone, whatsapp, street, city, state, pin } = req.body;
+
+    db.query('SELECT role FROM users WHERE id = ?', [req.userId], (err, rows) => {
+        if (err || rows.length === 0) return res.status(500).json({ message: 'Server error' });
+        if (rows[0].role !== 'customer') return res.status(403).json({ message: 'Only customers can update a customer profile' });
+
+        const sql = `
+            INSERT INTO customer_profiles (user_id, phone, whatsapp, street, city, state, pin)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+                phone = VALUES(phone), whatsapp = VALUES(whatsapp),
+                street = VALUES(street), city = VALUES(city), state = VALUES(state), pin = VALUES(pin)
+        `;
+        const params = [req.userId, phone || '', whatsapp || '', street || '', city || '', state || '', pin || ''];
+        db.query(sql, params, (insertErr) => {
+            if (insertErr) {
+                console.error('Customer profile save error:', insertErr);
+                return res.status(500).json({ message: 'Failed to save profile' });
+            }
+            res.json({ message: 'Profile saved successfully' });
+        });
+    });
+});
+
+// ── Customer Profile: Get own profile ────────────────────────────────────────
+app.get('/api/customer/profile', verifyToken, (req, res) => {
+    const sql = 'SELECT phone, whatsapp, street, city, state, pin FROM customer_profiles WHERE user_id = ?';
+    db.query(sql, [req.userId], (err, results) => {
+        if (err) return res.status(500).json({ message: 'Server error' });
+        if (results.length === 0) return res.json({ profile: null });
+        res.json({ profile: results[0] });
+    });
+});
+
 
 const buttons = [
     'categories-btn', 'deals-btn', 'new-arrivals-btn', 'trending-btn',
