@@ -1,11 +1,30 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
+import LocationModal from './LocationModal';
 
 const Header = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const [showLocationModal, setShowLocationModal] = useState(false);
+  const [currentProfile, setCurrentProfile] = useState(null);
+
+  useEffect(() => {
+    if (user && user.role === 'customer') {
+      fetch('http://localhost:3000/api/customer/profile', { credentials: 'include' })
+        .then(res => res.ok ? res.json() : null)
+        .then(data => {
+            if (data?.profile) setCurrentProfile(data.profile);
+        })
+        .catch(() => {});
+    }
+  }, [user]);
+
+  const handleSaveLocation = (address) => {
+      setCurrentProfile(prev => ({ ...prev, ...address }));
+      setShowLocationModal(false);
+  };
 
   const handleLogout = async () => {
     await logout();
@@ -21,11 +40,33 @@ const Header = () => {
   return (
     <header className="tailorhub-header sticky top-0 z-50">
       <div className="header-inner">
-        {/* Logo */}
-        <Link to="/" className="header-logo">
-          <span className="header-logo-icon">✂️</span>
-          <span className="header-logo-text">TailorHub</span>
-        </Link>
+        {/* Logo and Location */}
+        <div className="flex items-center gap-4">
+          <Link to="/" className="header-logo">
+            <span className="header-logo-icon">✂️</span>
+            <span className="header-logo-text">TailorHub</span>
+          </Link>
+
+          {user && user.role === 'customer' && (
+            <button 
+              onClick={() => setShowLocationModal(true)}
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full hover:bg-gray-100 transition-colors text-sm font-medium text-gray-700 bg-gray-50 border border-gray-200 shadow-sm"
+              title="Set your delivery location"
+            >
+              <span className="text-red-500">📍</span>
+              <span className="truncate max-w-[150px]">
+                {currentProfile?.city 
+                  ? `${currentProfile.city}${currentProfile.state ? `, ${currentProfile.state}` : ''}` 
+                  : currentProfile?.street 
+                    ? currentProfile.street 
+                    : 'Set Location'}
+              </span>
+              <svg className="w-3.5 h-3.5 text-gray-500 ml-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+          )}
+        </div>
 
         {/* Right section */}
         <div className="header-actions">
@@ -81,6 +122,14 @@ const Header = () => {
           )}
         </div>
       </div>
+
+      {showLocationModal && (
+        <LocationModal 
+            onClose={() => setShowLocationModal(false)}
+            onSave={handleSaveLocation}
+            currentProfile={currentProfile}
+        />
+      )}
     </header>
   );
 };
