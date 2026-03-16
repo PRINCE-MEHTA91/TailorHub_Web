@@ -150,6 +150,7 @@ const ManagementTab = () => {
 
 const ProfileTab = ({ user, onLogout }) => {
     const [profileImg, setProfileImg] = useState(null);
+    const [profileImgFile, setProfileImgFile] = useState(null);
     const [saved, setSaved] = useState(false);
     const [address, setAddress] = useState({ street: '', city: '', state: '', pin: '' });
     const [contact, setContact] = useState({ phone: '', whatsapp: '', instagram: '' });
@@ -157,6 +158,52 @@ const ProfileTab = ({ user, onLogout }) => {
     const [newProduct, setNewProduct] = useState({ name: '', price: '' });
     const [gallery, setGallery] = useState([]);
     const [loadingProfile, setLoadingProfile] = useState(true);
+    const [detecting, setDetecting] = useState(false);
+    const [locationError, setLocationError] = useState('');
+
+    const handleDetectLocation = () => {
+        if (!navigator.geolocation) {
+            setLocationError('Geolocation is not supported by your browser.');
+            return;
+        }
+
+        setDetecting(true);
+        setLocationError('');
+
+        navigator.geolocation.getCurrentPosition(
+            async (position) => {
+                const { latitude, longitude } = position.coords;
+                try {
+                    const response = await fetch(
+                        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`
+                    );
+                    const data = await response.json();
+                    
+                    if (data && data.address) {
+                        const addr = data.address;
+                        setAddress(prev => ({
+                            ...prev,
+                            street: addr.road || addr.suburb || addr.neighbourhood || '',
+                            city: addr.city || addr.town || addr.village || addr.county || '',
+                            state: addr.state || '',
+                            pin: addr.postcode || ''
+                        }));
+                    } else {
+                        setLocationError('Could not decode location data.');
+                    }
+                } catch (err) {
+                    setLocationError('Error fetching location details from coordinates.');
+                } finally {
+                    setDetecting(false);
+                }
+            },
+            (err) => {
+                setLocationError('Failed to detect location. Please allow location access or map it manually.');
+                setDetecting(false);
+            },
+            { enableHighAccuracy: true, timeout: 10000 }
+        );
+    };
 
     // ── Load saved profile from DB on mount ──────────────────────────────────
     useEffect(() => {
@@ -165,6 +212,9 @@ const ProfileTab = ({ user, onLogout }) => {
             .then(data => {
                 if (data?.profile) {
                     const p = data.profile;
+                    if (p.profile_img) {
+                        setProfileImg(p.profile_img.startsWith('/uploads') ? `http://localhost:3000${p.profile_img}` : p.profile_img);
+                    }
                     setAddress({ street: p.street || '', city: p.city || '', state: p.state || '', pin: p.pin || '' });
                     setContact({ phone: p.phone || '', whatsapp: p.whatsapp || '', instagram: p.instagram || '' });
                     if (p.products && p.products.length > 0) {
@@ -178,7 +228,14 @@ const ProfileTab = ({ user, onLogout }) => {
 
     const handleImgChange = (e) => {
         const file = e.target.files[0];
-        if (file) setProfileImg(URL.createObjectURL(file));
+        if (file) {
+            setProfileImgFile(file);
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setProfileImg(reader.result);
+            };
+            reader.readAsDataURL(file);
+        }
     };
 
     const handleGallery = (e) => {
@@ -202,6 +259,26 @@ const ProfileTab = ({ user, onLogout }) => {
         setSaving(true);
         setSaveError('');
         try {
+            let finalImgUrl = profileImg;
+
+            if (profileImgFile) {
+                const formData = new FormData();
+                formData.append('profile_img', profileImgFile);
+                
+                const uploadRes = await fetch('http://localhost:3000/api/upload/profile-image', {
+                    method: 'POST',
+                    body: formData,
+                    credentials: 'include',
+                });
+                const uploadData = await uploadRes.json();
+                if (!uploadRes.ok) {
+                    setSaveError(uploadData.message || 'Image upload failed');
+                    setSaving(false);
+                    return;
+                }
+                finalImgUrl = uploadData.imageUrl;
+            }
+
             const res = await fetch('http://localhost:3000/api/tailor/profile', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -217,12 +294,14 @@ const ProfileTab = ({ user, onLogout }) => {
                     products: products.map(({ name, price }) => ({ name, price })),
                     // gallery blob URLs are local-preview only; skip for now
                     gallery: [],
-                    profile_img: null,
+                    profile_img: finalImgUrl,
                 }),
             });
             const data = await res.json();
             if (!res.ok) { setSaveError(data.message || 'Save failed'); return; }
             setSaved(true);
+            setProfileImgFile(null);
+            setProfileImg(finalImgUrl.startsWith('/uploads') ? `http://localhost:3000${finalImgUrl}` : finalImgUrl);
             setTimeout(() => setSaved(false), 2500);
         } catch {
             setSaveError('Network error. Please try again.');
@@ -273,7 +352,27 @@ const ProfileTab = ({ user, onLogout }) => {
 
             {/* ── Address ── */}
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-                {sectionHead('📍', 'Address')}
+                <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                        <span className="text-lg">📍</span>
+                        <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide">Address</h3>
+                    </div>
+                    <button 
+                        onClick={handleDetectLocation}
+                        disabled={detecting}
+                        className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full bg-amber-50 text-amber-600 hover:bg-amber-100 transition-colors disabled:opacity-70 border border-amber-100"
+                    >
+                        {detecting ? (
+                            <span className="w-3.5 h-3.5 border-2 border-amber-600 border-t-transparent rounded-full animate-spin" />
+                        ) : '🎯'} 
+                        {detecting ? 'Detecting...' : 'Auto Detect'}
+                    </button>
+                </div>
+                {locationError && (
+                    <div className="mb-3 text-red-600 text-xs bg-red-50 p-2 rounded-lg border border-red-100">
+                        {locationError}
+                    </div>
+                )}
                 <div className="space-y-3">
                     <input className={inputCls} placeholder="Street / Area" value={address.street}
                         onChange={e => setAddress({ ...address, street: e.target.value })} />

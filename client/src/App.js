@@ -18,6 +18,8 @@ import TailorDashboardPage from './pages/TailorDashboardPage';
 import PendingJobsPage from './pages/PendingJobsPage';
 import CompletedOrdersPage from './pages/CompletedOrdersPage';
 import EarningsPage from './pages/EarningsPage';
+import TailorDetailsPage from './pages/TailorDetailsPage';
+import BookingPage from './pages/BookingPage';
 
 /* ── Smart Home Route ──────────────────────────────────────────
    If user is already logged in, redirect to their role dashboard.
@@ -65,6 +67,9 @@ function App() {
           <Route path="/tailor/pending-jobs" element={<PrivateRoute role="tailor"><PendingJobsPage /></PrivateRoute>} />
           <Route path="/tailor/completed" element={<PrivateRoute role="tailor"><CompletedOrdersPage /></PrivateRoute>} />
           <Route path="/tailor/earnings" element={<PrivateRoute role="tailor"><EarningsPage /></PrivateRoute>} />
+
+          <Route path="/tailor-profile/:id" element={<TailorDetailsPage />} />
+          <Route path="/book-appointment/:id" element={<BookingPage />} />
 
           {/* Home Page — auto-redirects logged-in users to their dashboard */}
           <Route path="/" element={<SmartHomeRoute />} />

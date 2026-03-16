@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 
 /* ── Hardcoded fallback tailors (shown if no tailor has saved a profile yet) ── */
 const fallbackTailors = [
@@ -42,6 +43,8 @@ const TailorCard = ({ tailor, index }) => {
     ? `From ₹${Math.min(...tailor.products.map(p => Number(p.price) || 0))}`
     : null;
 
+  const navigate = useNavigate();
+
   return (
     <motion.div
       custom={index}
@@ -50,7 +53,8 @@ const TailorCard = ({ tailor, index }) => {
       whileInView="show"
       viewport={{ once: true, margin: '-30px' }}
       whileHover={{ x: 4 }}
-      className="tc-card"
+      className="tc-card cursor-pointer"
+      onClick={() => navigate(`/tailor-profile/${tailor.id || tailor.user_id}`)}
     >
       {/* Avatar */}
       <div className={`tc-avatar ${avatarGradient}`}>{initials}</div>
@@ -83,7 +87,10 @@ const TailorCard = ({ tailor, index }) => {
 
         <div className="tc-bottom">
           {startingPrice && <span className="tc-price">{startingPrice}</span>}
-          <button className="tc-btn">View Profile</button>
+          <button className="tc-btn" onClick={(e) => {
+            e.stopPropagation();
+            navigate(`/tailor-profile/${tailor.id || tailor.user_id}`);
+          }}>View Profile</button>
         </div>
       </div>
     </motion.div>
