@@ -465,6 +465,101 @@ app.get('/api/customer/profile', verifyToken, (req, res) => {
     });
 });
 
+// ── Bookings: Submit & Send Email Notification ─────────────────────────────
+app.post('/api/bookings', verifyToken, (req, res) => {
+    const { tailor_id, service, date, time, notes, tailor_name } = req.body;
+    
+    // Get the logged-in customer's details (email, name, phone from profile if exists)
+    const sqlCustomer = `
+        SELECT u.email, u.full_name, c.phone 
+        FROM users u 
+        LEFT JOIN customer_profiles c ON u.id = c.user_id 
+        WHERE u.id = ?
+    `;
+    db.query(sqlCustomer, [req.userId], (err, customerResults) => {
+        if (err || customerResults.length === 0) {
+            return res.status(500).json({ message: 'User not found or server error' });
+        }
+        
+        const customer = customerResults[0];
+        
+        // Find tailor email (skip if a fallback 'f1', 'f2' string ID)
+        const sqlTailor = 'SELECT email, full_name FROM users WHERE id = ? AND role = "tailor"';
+        db.query(sqlTailor, [tailor_id], (err2, tailorResults) => {
+            const tailorEmail = !err2 && tailorResults.length > 0 ? tailorResults[0].email : null;
+            
+            // 1. Send confirmation to the Customer
+            const mailOptionsCustomer = {
+                from: `"TailorHub" <${process.env.EMAIL_USER}>`,
+                to: customer.email,
+                subject: 'TailorHub – Appointment Booking Confirmed',
+                html: `
+                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 24px; border: 1px solid #e5e7eb; border-radius: 8px;">
+                        <h2 style="color: #10b981;">✅ Booking Confirmed!</h2>
+                        <p style="color: #374151;">Hi <strong>${customer.full_name}</strong>,</p>
+                        <p style="color: #374151;">Your appointment with <strong>${tailor_name || 'Tailor'}</strong> has been successfully booked.</p>
+                        
+                        <div style="background-color: #f9fafb; padding: 16px; border-radius: 8px; margin: 20px 0;">
+                            <h3 style="margin-top: 0; color: #4b5563;">Booking Details:</h3>
+                            <p style="margin: 4px 0;"><strong>Service:</strong> ${service}</p>
+                            <p style="margin: 4px 0;"><strong>Date:</strong> ${date}</p>
+                            <p style="margin: 4px 0;"><strong>Time:</strong> ${time}</p>
+                            ${notes ? `<p style="margin: 4px 0;"><strong>Notes:</strong> ${notes}</p>` : ''}
+                        </div>
+                        
+                        <p style="color: #6b7280; font-size: 14px;">Please arrive on time. You can contact your tailor through the TailorHub dashboard if you need to reschedule.</p>
+                        <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
+                        <p style="color: #9ca3af; font-size: 12px;">TailorHub – Custom Tailoring Platform</p>
+                    </div>
+                `,
+            };
+            
+            transporter.sendMail(mailOptionsCustomer, (mailErr) => {
+                if (mailErr) console.error('❌ Email send error (Customer):', mailErr.message);
+                else console.log('✅ Booking email sent to customer:', customer.email);
+            });
+
+            // 2. Send notification to the Tailor
+            if (tailorEmail) {
+                const mailOptionsTailor = {
+                    from: `"TailorHub" <${process.env.EMAIL_USER}>`,
+                    to: tailorEmail,
+                    subject: 'TailorHub – New Appointment Booking!',
+                    html: `
+                        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 24px; border: 1px solid #e5e7eb; border-radius: 8px;">
+                            <h2 style="color: #6366f1;">📅 New Booking Received!</h2>
+                            <p style="color: #374151;">Hi <strong>${tailorResults[0].full_name}</strong>,</p>
+                            <p style="color: #374151;">You have a new appointment booking request from <strong>${customer.full_name}</strong>.</p>
+                            
+                            <div style="background-color: #f9fafb; padding: 16px; border-radius: 8px; margin: 20px 0;">
+                                <h3 style="margin-top: 0; color: #4b5563;">Booking Details:</h3>
+                                <p style="margin: 4px 0;"><strong>Customer Name:</strong> ${customer.full_name}</p>
+                                <p style="margin: 4px 0;"><strong>Customer Email:</strong> ${customer.email}</p>
+                                ${customer.phone ? `<p style="margin: 4px 0;"><strong>Customer Phone:</strong> ${customer.phone}</p>` : ''}
+                                <p style="margin: 4px 0;"><strong>Service:</strong> ${service}</p>
+                                <p style="margin: 4px 0;"><strong>Date:</strong> ${date}</p>
+                                <p style="margin: 4px 0;"><strong>Time:</strong> ${time}</p>
+                                ${notes ? `<p style="margin: 4px 0;"><strong>Notes:</strong> ${notes}</p>` : ''}
+                            </div>
+                            
+                            <p style="color: #6b7280; font-size: 14px;">Please review this appointment. You can view more details in your TailorHub dashboard.</p>
+                            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
+                            <p style="color: #9ca3af; font-size: 12px;">TailorHub – Custom Tailoring Platform</p>
+                        </div>
+                    `,
+                };
+                
+                transporter.sendMail(mailOptionsTailor, (mailErr) => {
+                    if (mailErr) console.error('❌ Email send error (Tailor):', mailErr.message);
+                    else console.log('✅ Booking email sent to tailor:', tailorEmail);
+                });
+            }
+
+            res.json({ message: 'Booking confirmed and emails sent successfully!' });
+        });
+    });
+});
+
 
 const buttons = [
     'categories-btn', 'deals-btn', 'new-arrivals-btn', 'trending-btn',

@@ -42,17 +42,42 @@ const BookingPage = () => {
             });
     }, [id]);
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
         setIsSubmitting(true);
-        // Simulate an API call
-        setTimeout(() => {
+        
+        try {
+            const res = await fetch('http://localhost:3000/api/bookings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include', // needed for verifyToken
+                body: JSON.stringify({
+                    tailor_id: id,
+                    tailor_name: tailor?.full_name,
+                    service: selectedService,
+                    date,
+                    time,
+                    notes
+                })
+            });
+
+            const data = await res.json();
+            
+            if (res.ok) {
+                // Keep showing success for 3 seconds before redirecting
+                setIsSuccess(true);
+                setTimeout(() => {
+                    navigate(`/tailor-profile/${id}`);
+                }, 3000);
+            } else {
+                alert(data.message || 'Failed to book appointment. Please make sure you are logged in.');
+            }
+        } catch (err) {
+            console.error(err);
+            alert('An error occurred during booking.');
+        } finally {
             setIsSubmitting(false);
-            setIsSuccess(true);
-            setTimeout(() => {
-                navigate(`/tailor-profile/${id}`);
-            }, 3000);
-        }, 1500);
+        }
     };
 
     if (loading) {
@@ -74,8 +99,11 @@ const BookingPage = () => {
                         <FaCheckCircle />
                     </motion.div>
                     <h2 className="text-2xl font-bold text-gray-800 mb-2">Booking Confirmed!</h2>
-                    <p className="text-gray-600 mb-6 flex-1">Your appointment with <span className="font-semibold">{tailor?.full_name}</span> is set.</p>
-                    <p className="text-sm text-gray-400">Redirecting you back...</p>
+                    <p className="text-gray-600 mb-3 flex-1">Your appointment with <span className="font-semibold">{tailor?.full_name}</span> is set.</p>
+                    <p className="text-sm font-semibold text-indigo-600 bg-indigo-50 px-4 py-2 rounded-xl mb-6">
+                        📧 Confirmation email sent!
+                    </p>
+                    <p className="text-xs text-gray-400">Redirecting you back...</p>
                 </motion.div>
             </div>
         );
