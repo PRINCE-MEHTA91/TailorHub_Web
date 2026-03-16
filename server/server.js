@@ -16,6 +16,9 @@ const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
 const crypto = require('crypto');
 const nodemailer = require('nodemailer');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -33,7 +36,7 @@ app.use(cors({
     },
     credentials: true
 }));
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 app.use(cookieParser());
 app.use(express.static(__dirname));
 
@@ -290,6 +293,27 @@ app.post('/api/auth/reset-password/:token', (req, res) => {
     });
 });
 
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        const dir = path.join(__dirname, 'uploads');
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir);
+        cb(null, dir);
+    },
+    filename: (req, file, cb) => {
+        cb(null, 'tailor_' + req.userId + '_' + Date.now() + path.extname(file.originalname));
+    }
+});
+const upload = multer({ storage });
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+app.post('/api/upload/profile-image', verifyToken, requireRole('tailor'), upload.single('profile_img'), (req, res) => {
+    if (!req.file) {
+        return res.status(400).json({ message: 'No file uploaded' });
+    }
+    const imageUrl = `/uploads/${req.file.filename}`;
+    res.json({ message: 'Image uploaded successfully', imageUrl });
+});
+
 app.get('/api/products', (req, res) => {
     const sql = 'SELECT * FROM products';
     db.query(sql, (err, results) => {
@@ -376,6 +400,32 @@ app.get('/api/tailors', (req, res) => {
             gallery: safeParseJSON(t.gallery, []),
         }));
         res.json({ tailors });
+    });
+});
+
+// ── Tailor Profiles: Get by ID ─────────────────────────────────────────────
+app.get('/api/tailors/:id', (req, res) => {
+    const { id } = req.params;
+    const sql = `
+        SELECT u.id as user_id, u.full_name, u.email,
+               tp.phone, tp.whatsapp, tp.instagram,
+               tp.street, tp.city, tp.state, tp.pin,
+               tp.products, tp.gallery, tp.profile_img
+        FROM users u
+        INNER JOIN tailor_profiles tp ON u.id = tp.user_id
+        WHERE u.role = 'tailor' AND u.id = ?
+    `;
+    db.query(sql, [id], (err, results) => {
+        if (err) return res.status(500).json({ message: 'Server error' });
+        if (results.length === 0) return res.status(404).json({ message: 'Tailor not found' });
+        const t = results[0];
+        res.json({
+            tailor: {
+                ...t,
+                products: safeParseJSON(t.products, []),
+                gallery: safeParseJSON(t.gallery, []),
+            }
+        });
     });
 });
 
