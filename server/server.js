@@ -240,7 +240,7 @@ app.post('/api/auth/forgot-password', (req, res) => {
         const updateSql = 'UPDATE users SET reset_token = ?, reset_token_expiry = ? WHERE id = ?';
         db.query(updateSql, [tokenHash, expiry, user.id], (updateErr) => {
             if (updateErr) return res.status(500).json({ message: 'Server error' });
-            const resetLink = `http://localhost:3000/reset-password/${rawToken}`;
+            const resetLink = `${CLIENT_URL}/reset-password/${rawToken}`;
             console.log('📧 Attempting to send password reset email to:', email);
             console.log('🔗 Reset link:', resetLink);
             transporter.sendMail({
@@ -268,6 +268,11 @@ app.post('/api/auth/forgot-password', (req, res) => {
             });
         });
     });
+});
+
+// ── Redirect browser from backend URL to React frontend for password reset ──
+app.get('/reset-password/:token', (req, res) => {
+    res.redirect(`${CLIENT_URL}/reset-password/${req.params.token}`);
 });
 
 app.post('/api/auth/reset-password/:token', (req, res) => {
