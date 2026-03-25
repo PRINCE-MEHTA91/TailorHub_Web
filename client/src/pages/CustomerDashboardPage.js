@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import Header from '../components/Header';
 import SearchBar from '../components/SearchBar';
+import SearchResults from '../components/SearchResults';
 import IndexPage from './IndexPage';
 
 /* ─── Customer Profile Tab ───────────────────────────────────── */
@@ -181,18 +182,35 @@ const CustomerDashboardPage = () => {
     const { user, logout } = useAuth();
     const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState('home');
+    const [searchQuery, setSearchQuery] = useState('');
 
     const handleLogout = async () => {
         await logout();
         navigate('/');
     };
 
+    // Clear search when switching tabs
+    const handleTabChange = (tabId) => {
+        setActiveTab(tabId);
+        if (tabId !== 'home') setSearchQuery('');
+    };
+
     const renderTab = () => {
         switch (activeTab) {
             case 'home': return (
                 <div>
-                    <SearchBar />
-                    <IndexPage />
+                    <SearchBar
+                        value={searchQuery}
+                        onChange={setSearchQuery}
+                    />
+                    {searchQuery.trim().length > 0 ? (
+                        <SearchResults
+                            query={searchQuery}
+                            onClear={() => setSearchQuery('')}
+                        />
+                    ) : (
+                        <IndexPage />
+                    )}
                 </div>
             );
             case 'orders': return <OrdersTab />;
@@ -230,7 +248,7 @@ const CustomerDashboardPage = () => {
                         return (
                             <button
                                 key={tab.id}
-                                onClick={() => setActiveTab(tab.id)}
+                                onClick={() => handleTabChange(tab.id)}
                                 className="flex-1 flex flex-col items-center justify-center py-3 relative transition-colors"
                             >
                                 {isActive && (

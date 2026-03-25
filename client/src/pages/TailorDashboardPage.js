@@ -206,14 +206,16 @@ const ProfileTab = ({ user, onLogout }) => {
     };
 
     // ── Load saved profile from DB on mount ──────────────────────────────────
+    const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
+
     useEffect(() => {
-        fetch('http://localhost:3000/api/tailor/profile', { credentials: 'include' })
+        fetch(`${API_URL}/api/tailor/profile`, { credentials: 'include' })
             .then(res => res.ok ? res.json() : null)
             .then(data => {
                 if (data?.profile) {
                     const p = data.profile;
                     if (p.profile_img) {
-                        setProfileImg(p.profile_img.startsWith('/uploads') ? `http://localhost:3000${p.profile_img}` : p.profile_img);
+                        setProfileImg(p.profile_img.startsWith('/uploads') ? `${API_URL}${p.profile_img}` : p.profile_img);
                     }
                     setAddress({ street: p.street || '', city: p.city || '', state: p.state || '', pin: p.pin || '' });
                     setContact({ phone: p.phone || '', whatsapp: p.whatsapp || '', instagram: p.instagram || '' });
@@ -224,6 +226,7 @@ const ProfileTab = ({ user, onLogout }) => {
             })
             .catch(() => {})
             .finally(() => setLoadingProfile(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const handleImgChange = (e) => {
@@ -259,13 +262,13 @@ const ProfileTab = ({ user, onLogout }) => {
         setSaving(true);
         setSaveError('');
         try {
-            let finalImgUrl = profileImg;
+            let finalImgUrl = profileImg || null;
 
             if (profileImgFile) {
                 const formData = new FormData();
                 formData.append('profile_img', profileImgFile);
-                
-                const uploadRes = await fetch('http://localhost:3000/api/upload/profile-image', {
+
+                const uploadRes = await fetch(`${API_URL}/api/upload/profile-image`, {
                     method: 'POST',
                     body: formData,
                     credentials: 'include',
@@ -279,7 +282,7 @@ const ProfileTab = ({ user, onLogout }) => {
                 finalImgUrl = uploadData.imageUrl;
             }
 
-            const res = await fetch('http://localhost:3000/api/tailor/profile', {
+            const res = await fetch(`${API_URL}/api/tailor/profile`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
@@ -301,9 +304,17 @@ const ProfileTab = ({ user, onLogout }) => {
             if (!res.ok) { setSaveError(data.message || 'Save failed'); return; }
             setSaved(true);
             setProfileImgFile(null);
-            setProfileImg(finalImgUrl.startsWith('/uploads') ? `http://localhost:3000${finalImgUrl}` : finalImgUrl);
+            // Safely update the displayed image URL
+            if (finalImgUrl) {
+                setProfileImg(
+                    finalImgUrl.startsWith('/uploads')
+                        ? `${API_URL}${finalImgUrl}`
+                        : finalImgUrl
+                );
+            }
             setTimeout(() => setSaved(false), 2500);
-        } catch {
+        } catch (err) {
+            console.error('Profile save error:', err);
             setSaveError('Network error. Please try again.');
         } finally {
             setSaving(false);

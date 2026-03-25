@@ -1,9 +1,13 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 
-const SearchBar = () => {
+const SearchBar = ({ value, onChange }) => {
   const [focused, setFocused] = useState(false);
-  const [query, setQuery] = useState('');
+
+  const query = value !== undefined ? value : '';
+  const setQuery = onChange || (() => {});
+
+  const handleChip = (chip) => setQuery(chip);
 
   return (
     <div className="sb-wrap">
@@ -25,9 +29,19 @@ const SearchBar = () => {
           onChange={(e) => setQuery(e.target.value)}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
-          placeholder="Search for tailors, fabrics, and more…"
+          placeholder="Search tailors, products, area…"
           className="sb-input"
         />
+
+        {query && (
+          <button
+            className="sb-clear"
+            onClick={() => setQuery('')}
+            aria-label="Clear search"
+          >
+            ✕
+          </button>
+        )}
 
         <button className="sb-btn" aria-label="Search">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ width: 16, height: 16, marginRight: 5 }}>
@@ -39,8 +53,8 @@ const SearchBar = () => {
 
       {/* Quick search chips */}
       <div className="sb-chips">
-        {['Bridal Wear', 'Men\'s Suit', 'Alterations', 'Kurta'].map((chip) => (
-          <button key={chip} onClick={() => setQuery(chip)} className="sb-chip">
+        {['Bridal Wear', 'Shirt', 'Kurta', 'Suit', 'Alterations'].map((chip) => (
+          <button key={chip} onClick={() => handleChip(chip)} className="sb-chip">
             {chip}
           </button>
         ))}
