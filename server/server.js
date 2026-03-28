@@ -84,6 +84,21 @@ db.getConnection((connErr, connection) => {
         else console.log('✅ tailor_profiles table ready');
     });
 
+    // ── Soft-migrate: add new profile columns if they don't exist yet ──────────
+    const newCols = [
+        `ALTER TABLE tailor_profiles ADD COLUMN shop_name VARCHAR(255) DEFAULT ''`,
+        `ALTER TABLE tailor_profiles ADD COLUMN tagline VARCHAR(255) DEFAULT ''`,
+        `ALTER TABLE tailor_profiles ADD COLUMN bio TEXT`,
+        `ALTER TABLE tailor_profiles ADD COLUMN experience VARCHAR(100) DEFAULT ''`,
+        `ALTER TABLE tailor_profiles ADD COLUMN specialities JSON DEFAULT NULL`,
+        `ALTER TABLE tailor_profiles ADD COLUMN timings JSON DEFAULT NULL`,
+    ];
+    newCols.forEach(sql => {
+        db.query(sql, (err) => {
+            if (err && err.code !== 'ER_DUP_FIELDNAME') console.warn('Column migration warning:', err.message);
+        });
+    });
+
     // Auto-create customer_profiles table if it doesn't exist
     const createCustomerProfileTable = `
         CREATE TABLE IF NOT EXISTS customer_profiles (
@@ -312,11 +327,13 @@ const upload = multer({ storage });
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 app.post('/api/upload/profile-image', verifyToken, requireRole('tailor'), upload.single('profile_img'), (req, res) => {
-    if (!req.file) {
-        return res.status(400).json({ message: 'No file uploaded' });
-    }
-    const imageUrl = `/uploads/${req.file.filename}`;
-    res.json({ message: 'Image uploaded successfully', imageUrl });
+    if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
+    res.json({ message: 'Image uploaded successfully', imageUrl: `/uploads/${req.file.filename}` });
+});
+
+app.post('/api/upload/gallery-image', verifyToken, requireRole('tailor'), upload.single('gallery_img'), (req, res) => {
+    if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
+    res.json({ message: 'Gallery image uploaded', imageUrl: `/uploads/${req.file.filename}` });
 });
 
 app.get('/api/products', (req, res) => {
@@ -329,27 +346,39 @@ app.get('/api/products', (req, res) => {
 
 // ── Tailor Profile: Save (upsert) ──────────────────────────────────────────
 app.post('/api/tailor/profile', verifyToken, (req, res) => {
-    const { phone, whatsapp, instagram, street, city, state, pin, products, gallery, profile_img } = req.body;
+    const {
+        phone, whatsapp, instagram, street, city, state, pin,
+        products, gallery, profile_img,
+        shop_name, tagline, bio, experience, specialities, timings
+    } = req.body;
 
-    // Verify the logged-in user is a tailor
     db.query('SELECT role FROM users WHERE id = ?', [req.userId], (err, rows) => {
         if (err || rows.length === 0) return res.status(500).json({ message: 'Server error' });
         if (rows[0].role !== 'tailor') return res.status(403).json({ message: 'Only tailors can update a tailor profile' });
 
         const sql = `
-            INSERT INTO tailor_profiles (user_id, phone, whatsapp, instagram, street, city, state, pin, products, gallery, profile_img)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO tailor_profiles
+                (user_id, phone, whatsapp, instagram, street, city, state, pin,
+                 products, gallery, profile_img,
+                 shop_name, tagline, bio, experience, specialities, timings)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
-                phone = VALUES(phone), whatsapp = VALUES(whatsapp), instagram = VALUES(instagram),
-                street = VALUES(street), city = VALUES(city), state = VALUES(state), pin = VALUES(pin),
-                products = VALUES(products), gallery = VALUES(gallery), profile_img = VALUES(profile_img)
+                phone=VALUES(phone), whatsapp=VALUES(whatsapp), instagram=VALUES(instagram),
+                street=VALUES(street), city=VALUES(city), state=VALUES(state), pin=VALUES(pin),
+                products=VALUES(products), gallery=VALUES(gallery), profile_img=VALUES(profile_img),
+                shop_name=VALUES(shop_name), tagline=VALUES(tagline), bio=VALUES(bio),
+                experience=VALUES(experience), specialities=VALUES(specialities), timings=VALUES(timings)
         `;
         const params = [
-            req.userId, phone || '', whatsapp || '', instagram || '',
+            req.userId,
+            phone || '', whatsapp || '', instagram || '',
             street || '', city || '', state || '', pin || '',
             JSON.stringify(products || []),
             JSON.stringify(gallery || []),
             profile_img || null,
+            shop_name || '', tagline || '', bio || '', experience || '',
+            JSON.stringify(specialities || []),
+            JSON.stringify(timings || {}),
         ];
         db.query(sql, params, (insertErr) => {
             if (insertErr) {
@@ -366,9 +395,9 @@ app.get('/api/tailor/profile', verifyToken, (req, res) => {
     const sql = `
         SELECT tp.phone, tp.whatsapp, tp.instagram,
                tp.street, tp.city, tp.state, tp.pin,
-               tp.products, tp.gallery, tp.profile_img
-        FROM tailor_profiles tp
-        WHERE tp.user_id = ?
+               tp.products, tp.gallery, tp.profile_img,
+               tp.shop_name, tp.tagline, tp.bio, tp.experience, tp.specialities, tp.timings
+        FROM tailor_profiles tp WHERE tp.user_id = ?
     `;
     db.query(sql, [req.userId], (err, results) => {
         if (err) return res.status(500).json({ message: 'Server error' });
@@ -377,8 +406,10 @@ app.get('/api/tailor/profile', verifyToken, (req, res) => {
         res.json({
             profile: {
                 ...p,
-                products: safeParseJSON(p.products, []),
-                gallery: safeParseJSON(p.gallery, []),
+                products:     safeParseJSON(p.products, []),
+                gallery:      safeParseJSON(p.gallery, []),
+                specialities: safeParseJSON(p.specialities, []),
+                timings:      safeParseJSON(p.timings, null),
             }
         });
     });
@@ -390,7 +421,8 @@ app.get('/api/tailors', (req, res) => {
         SELECT u.id, u.full_name, u.email,
                tp.phone, tp.whatsapp, tp.instagram,
                tp.street, tp.city, tp.state, tp.pin,
-               tp.products, tp.gallery, tp.profile_img
+               tp.products, tp.gallery, tp.profile_img,
+               tp.shop_name, tp.tagline, tp.bio, tp.experience, tp.specialities, tp.timings
         FROM users u
         INNER JOIN tailor_profiles tp ON u.id = tp.user_id
         WHERE u.role = 'tailor'
@@ -398,11 +430,12 @@ app.get('/api/tailors', (req, res) => {
     `;
     db.query(sql, (err, results) => {
         if (err) return res.status(500).json({ message: 'Server error' });
-        // Parse JSON fields
         const tailors = results.map(t => ({
             ...t,
-            products: safeParseJSON(t.products, []),
-            gallery: safeParseJSON(t.gallery, []),
+            products:     safeParseJSON(t.products, []),
+            gallery:      safeParseJSON(t.gallery, []),
+            specialities: safeParseJSON(t.specialities, []),
+            timings:      safeParseJSON(t.timings, null),
         }));
         res.json({ tailors });
     });
@@ -415,7 +448,8 @@ app.get('/api/tailors/:id', (req, res) => {
         SELECT u.id as user_id, u.full_name, u.email,
                tp.phone, tp.whatsapp, tp.instagram,
                tp.street, tp.city, tp.state, tp.pin,
-               tp.products, tp.gallery, tp.profile_img
+               tp.products, tp.gallery, tp.profile_img,
+               tp.shop_name, tp.tagline, tp.bio, tp.experience, tp.specialities, tp.timings
         FROM users u
         INNER JOIN tailor_profiles tp ON u.id = tp.user_id
         WHERE u.role = 'tailor' AND u.id = ?
@@ -427,8 +461,10 @@ app.get('/api/tailors/:id', (req, res) => {
         res.json({
             tailor: {
                 ...t,
-                products: safeParseJSON(t.products, []),
-                gallery: safeParseJSON(t.gallery, []),
+                products:     safeParseJSON(t.products, []),
+                gallery:      safeParseJSON(t.gallery, []),
+                specialities: safeParseJSON(t.specialities, []),
+                timings:      safeParseJSON(t.timings, null),
             }
         });
     });

@@ -2,9 +2,24 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
+
 const gradients = ['tc-av-rose', 'tc-av-indigo', 'tc-av-amber'];
 const getInitials = (name = '') =>
     name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+
+function resolveImg(path) {
+    if (!path) return null;
+    if (path.startsWith('http')) return path;
+    return `${API_URL}${path}`;
+}
+
+function getTodayTiming(timings) {
+    if (!timings) return null;
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const today = days[new Date().getDay()];
+    return timings[today] || null;
+}
 
 /* ── Single result card ── */
 const ResultCard = ({ tailor, index, query }) => {
@@ -19,6 +34,10 @@ const ResultCard = ({ tailor, index, query }) => {
     const startingPrice = products.length > 0
         ? `From ₹${Math.min(...products.map(p => Number(p.price) || 0))}`
         : null;
+    const profileImgUrl = resolveImg(tailor.profile_img);
+    const todayTiming = getTodayTiming(tailor.timings);
+    const isOpen = todayTiming && !todayTiming.closed;
+    const specialities = Array.isArray(tailor.specialities) ? tailor.specialities : [];
 
     // Highlight matching product names
     const matchedProducts = products.filter(p =>
@@ -34,41 +53,75 @@ const ResultCard = ({ tailor, index, query }) => {
             className="sr-card"
             onClick={() => navigate(`/tailor-profile/${id}`)}
         >
-            {/* Avatar */}
-            <div className={`sr-avatar ${gradient}`}>{initials}</div>
-
-            {/* Info */}
-            <div className="sr-info">
-                <div className="sr-name-row">
-                    <span className="sr-name">{tailor.full_name}</span>
-                    <span className="sr-area">📍 {area}</span>
+            {/* Top: Avatar + Info */}
+            <div className="sr-card-top">
+                {/* Avatar */}
+                <div className="tc-avatar-wrap">
+                    {profileImgUrl ? (
+                        <img src={profileImgUrl} alt={tailor.full_name} className="tc-avatar-img" />
+                    ) : (
+                        <div className={`sr-avatar ${gradient}`}>{initials}</div>
+                    )}
+                    {todayTiming && (
+                        <span className={`tc-availability-dot ${isOpen ? 'tc-dot-open' : 'tc-dot-closed'}`} />
+                    )}
                 </div>
 
-                {matchedProducts.length > 0 && (
-                    <div className="sr-matched-products">
-                        {matchedProducts.slice(0, 3).map((p, i) => (
-                            <span key={i} className="sr-product-chip">
-                                ✂️ {p.name}{p.price ? ` · ₹${p.price}` : ''}
-                            </span>
-                        ))}
+                {/* Info */}
+                <div className="sr-info">
+                    <div className="sr-name-row">
+                        <span className="sr-name">{tailor.full_name}</span>
+                        <span className="sr-area">📍 {area}</span>
                     </div>
-                )}
 
-                {matchedProducts.length === 0 && products.length > 0 && (
-                    <p className="sr-specialty">
-                        {products.slice(0, 2).map(p => p.name).join(' · ')}
-                    </p>
-                )}
+                    {/* Tagline */}
+                    {tailor.tagline && (
+                        <p className="tc-tagline" style={{ marginBottom: '0.25rem' }}>"{tailor.tagline}"</p>
+                    )}
 
-                <div className="sr-bottom">
-                    {startingPrice && <span className="sr-price">{startingPrice}</span>}
-                    <button
-                        className="sr-btn"
-                        onClick={e => { e.stopPropagation(); navigate(`/tailor-profile/${id}`); }}
-                    >
-                        View Profile →
-                    </button>
+                    {matchedProducts.length > 0 && (
+                        <div className="sr-matched-products">
+                            {matchedProducts.slice(0, 3).map((p, i) => (
+                                <span key={i} className="sr-product-chip">
+                                    ✂️ {p.name}{p.price ? ` · ₹${p.price}` : ''}
+                                </span>
+                            ))}
+                        </div>
+                    )}
+
+                    {matchedProducts.length === 0 && products.length > 0 && (
+                        <p className="sr-specialty">
+                            {products.slice(0, 2).map(p => p.name).join(' · ')}
+                        </p>
+                    )}
                 </div>
+            </div>
+
+            {/* Pills row: experience, timing, specialities */}
+            {(tailor.experience || todayTiming || specialities.length > 0) && (
+                <div className="tc-pills-row" style={{ marginTop: '0.6rem' }}>
+                    {tailor.experience && (
+                        <span className="tc-pill tc-pill-exp">🏆 {tailor.experience}</span>
+                    )}
+                    {todayTiming && (
+                        <span className={`tc-pill ${isOpen ? 'tc-pill-open' : 'tc-pill-closed'}`}>
+                            🕐 {isOpen ? `${todayTiming.open} – ${todayTiming.close}` : 'Closed Today'}
+                        </span>
+                    )}
+                    {specialities.slice(0, 2).map(s => (
+                        <span key={s} className="tc-pill tc-pill-spec">{s}</span>
+                    ))}
+                </div>
+            )}
+
+            <div className="sr-bottom">
+                {startingPrice && <span className="sr-price">{startingPrice}</span>}
+                <button
+                    className="sr-btn"
+                    onClick={e => { e.stopPropagation(); navigate(`/tailor-profile/${id}`); }}
+                >
+                    View Profile →
+                </button>
             </div>
         </motion.div>
     );
@@ -80,7 +133,7 @@ const SearchResults = ({ query, onClear }) => {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        fetch('http://localhost:3000/api/tailors')
+        fetch(`${API_URL}/api/tailors`)
             .then(res => res.ok ? res.json() : null)
             .then(data => {
                 if (data?.tailors) setAllTailors(data.tailors);
@@ -96,10 +149,14 @@ const SearchResults = ({ query, onClear }) => {
             const nameMatch = t.full_name?.toLowerCase().includes(q);
             const cityMatch = t.city?.toLowerCase().includes(q);
             const stateMatch = t.state?.toLowerCase().includes(q);
+            const taglineMatch = t.tagline?.toLowerCase().includes(q);
             const productMatch = (t.products || []).some(p =>
                 p.name?.toLowerCase().includes(q)
             );
-            return nameMatch || cityMatch || stateMatch || productMatch;
+            const specialityMatch = (t.specialities || []).some(s =>
+                s?.toLowerCase().includes(q)
+            );
+            return nameMatch || cityMatch || stateMatch || productMatch || taglineMatch || specialityMatch;
         });
     }, [query, allTailors]);
 
@@ -137,7 +194,7 @@ const SearchResults = ({ query, onClear }) => {
                     <span className="sr-empty-icon">🔍</span>
                     <p className="sr-empty-title">No tailors found</p>
                     <p className="sr-empty-sub">
-                        Try searching by tailor name, city, or product like "Shirt" or "Bridal"
+                        Try searching by tailor name, city, product like "Shirt", speciality like "Bridal" or "Ethnic Wear"
                     </p>
                 </motion.div>
             )}
