@@ -92,6 +92,7 @@ const TailorDetailsPage = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [activeCat, setActiveCat] = useState(null);
+    const [imgLightbox, setImgLightbox] = useState(false);
 
     useEffect(() => {
         if (id.startsWith('f')) {
@@ -159,103 +160,122 @@ const TailorDetailsPage = () => {
     const hasTimings = timings && Object.keys(timings).length > 0;
 
     return (
-        <div className="min-h-screen bg-gray-50 pb-28">
+        <div className="min-h-screen bg-gray-50 pb-24" style={{background:'linear-gradient(135deg,#f8f9ff 0%,#f0f2fb 100%)'}}>
             {/* Sticky top bar */}
-            <div className="bg-white shadow-sm sticky top-0 z-20">
-                <div className="flex items-center px-4 py-3">
-                    <button onClick={() => navigate(-1)} className="p-2 -ml-1 text-gray-500 hover:bg-gray-100 rounded-full transition-colors">
+            <div className="bg-white/95 backdrop-blur-md shadow-sm sticky top-0 z-20 border-b border-gray-100">
+                <div className="flex items-center px-4 py-3 max-w-screen-xl mx-auto">
+                    <button onClick={() => navigate(-1)} className="p-2 -ml-1 text-gray-500 hover:bg-indigo-50 hover:text-indigo-600 rounded-full transition-all">
                         <FaArrowLeft />
                     </button>
                     <h1 className="text-base font-bold text-gray-800 ml-2 flex-1 truncate">{tailor.full_name}</h1>
-                    {/* Today status badge in topbar */}
                     {todayStatus && (
-                        <span className={`text-xs font-bold px-2.5 py-1 rounded-full mr-1 ${todayStatus.open ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
-                            {todayStatus.open ? '🟢 Open' : '🔴 Closed'}
+                        <span className={`text-xs font-bold px-3 py-1.5 rounded-full mr-1 flex items-center gap-1.5 ${todayStatus.open ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
+                            <span className={`w-2 h-2 rounded-full inline-block ${todayStatus.open ? 'bg-green-500 animate-pulse' : 'bg-red-400'}`}/>
+                            {todayStatus.open ? 'Open' : 'Closed'}
                         </span>
                     )}
                 </div>
             </div>
 
-            <main className="max-w-2xl mx-auto px-4 py-5 space-y-4">
+            <main className="w-full px-0">
 
-                {/* ── Hero Card ── */}
-                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-                    className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-                    {/* Gradient banner */}
-                    <div className={`h-28 bg-gradient-to-br ${avatarGradient} relative`}>
+                {/* ── Full-Width Hero Banner ── */}
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="w-full">
+                    {/* Wide gradient banner */}
+                    <div className={`w-full bg-gradient-to-br ${avatarGradient} relative`} style={{minHeight:'220px'}}>
+                        {/* Decorative circles */}
+                        <div className="absolute inset-0 overflow-hidden">
+                            <div className="absolute -top-10 -right-10 w-64 h-64 rounded-full bg-white/10" />
+                            <div className="absolute top-10 right-32 w-32 h-32 rounded-full bg-white/5" />
+                            <div className="absolute -bottom-8 left-20 w-48 h-48 rounded-full bg-black/10" />
+                        </div>
                         {tailor.badge && (
-                            <span className="absolute top-3 right-3 px-3 py-1 bg-white/90 text-indigo-700 text-xs font-bold rounded-full shadow-sm">
+                            <span className="absolute top-4 right-4 px-3 py-1.5 bg-white/90 text-indigo-700 text-xs font-bold rounded-full shadow-md z-10">
                                 {tailor.badge}
                             </span>
                         )}
-                        {/* Today timing pill on banner */}
                         {todayStatus && (
-                            <span className={`absolute bottom-3 left-4 text-[11px] font-bold px-2.5 py-1 rounded-full backdrop-blur-sm border ${todayStatus.open ? 'bg-green-500/90 text-white border-green-400' : 'bg-red-500/90 text-white border-red-400'}`}>
-                                🕐 {todayStatus.open ? `Open · ${todayStatus.label}` : 'Closed Today'}
+                            <span className={`absolute bottom-4 right-4 text-[11px] font-bold px-3 py-1.5 rounded-full backdrop-blur-sm border z-10 flex items-center gap-1.5 ${todayStatus.open ? 'bg-green-500/90 text-white border-green-400' : 'bg-red-500/90 text-white border-red-400'}`}>
+                                <span className={`w-1.5 h-1.5 rounded-full inline-block ${todayStatus.open ? 'bg-white animate-pulse' : 'bg-red-200'}`}/>
+                                {todayStatus.open ? `Open · ${todayStatus.label}` : 'Closed Today'}
                             </span>
                         )}
                     </div>
-                    <div className="px-5 pb-5">
-                        {/* Avatar row */}
-                        <div className="flex items-end justify-between -mt-12 mb-3">
-                            <div className={`w-24 h-24 rounded-full border-4 border-white shadow-lg overflow-hidden flex items-center justify-center text-3xl font-bold text-white flex-shrink-0 ${profileImgUrl ? '' : `bg-gradient-to-br ${avatarGradient}`}`}>
-                                {profileImgUrl
-                                    ? <img src={profileImgUrl} alt={tailor.full_name} className="w-full h-full object-cover" />
-                                    : initials}
-                            </div>
-                            <div className="flex items-center gap-1 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-full mb-1">
-                                <FaStar className="text-amber-400 text-xs" />
-                                <span className="text-sm font-bold text-amber-700">{tailor.rating || '4.5'}</span>
-                                {tailor.reviews && <span className="text-xs text-gray-400">({tailor.reviews})</span>}
-                            </div>
+
+                    {/* Profile info row - full width, avatar sits on the banner/white boundary */}
+                    <div className="bg-white w-full px-4 md:px-8 pb-5 shadow-sm relative" style={{paddingTop:'72px'}}>
+                        {/* Avatar — absolutely positioned so it spans the border, fully visible */}
+                        <div
+                            className={`absolute -top-16 left-4 md:left-8 w-32 h-32 rounded-full border-4 border-white shadow-2xl overflow-hidden flex items-center justify-center text-4xl font-bold text-white flex-shrink-0 cursor-pointer ring-2 ring-white hover:ring-indigo-300 transition-all duration-200 ${profileImgUrl ? '' : `bg-gradient-to-br ${avatarGradient}`}`}
+                            onClick={() => profileImgUrl && setImgLightbox(true)}
+                            title={profileImgUrl ? 'Click to view photo' : ''}
+                        >
+                            {profileImgUrl
+                                ? <img src={profileImgUrl} alt={tailor.full_name} className="w-full h-full object-cover" />
+                                : initials}
+                            {/* Zoom hint overlay on hover */}
+                            {profileImgUrl && (
+                                <div className="absolute inset-0 bg-black/0 hover:bg-black/30 flex items-center justify-center transition-all duration-200 rounded-full">
+                                    <span className="text-white text-2xl opacity-0 hover:opacity-100 transition-opacity">🔍</span>
+                                </div>
+                            )}
                         </div>
-
-                        {/* Name */}
-                        <h2 className="text-xl font-bold text-gray-900">{tailor.full_name}</h2>
-
-                        {/* Shop name if different */}
-                        {tailor.shop_name && tailor.shop_name !== tailor.full_name && (
-                            <p className="text-indigo-600 font-semibold text-sm mt-0.5">{tailor.shop_name}</p>
-                        )}
-
-                        {/* Specialty / tagline */}
-                        {(tailor.tagline || tailor.specialty) && (
-                            <p className="text-gray-500 text-sm italic mt-1 flex items-start gap-1">
-                                <FaQuoteLeft className="text-indigo-200 text-xs mt-0.5 flex-shrink-0" />
-                                {tailor.tagline || tailor.specialty}
-                            </p>
-                        )}
-
-                        {/* Location pill */}
-                        {(tailor.city || tailor.state) && (
-                            <div className="flex items-center gap-1.5 mt-2 text-gray-500 text-sm">
-                                <FaMapMarkerAlt className="text-indigo-400 text-xs flex-shrink-0" />
-                                <span>{[tailor.city, tailor.state].filter(Boolean).join(', ')}</span>
+                        <div className="max-w-screen-xl mx-auto">
+                            {/* Rating row aligned to right */}
+                            <div className="flex items-start justify-end mb-4">
+                                <div className="flex items-center gap-1.5 bg-amber-50 border border-amber-200 px-4 py-2 rounded-full shadow-sm">
+                                    <FaStar className="text-amber-400" />
+                                    <span className="text-base font-black text-amber-700">{tailor.rating || '4.5'}</span>
+                                    {tailor.reviews && <span className="text-xs text-gray-400 font-medium">({tailor.reviews} reviews)</span>}
+                                </div>
                             </div>
-                        )}
 
-                        {/* Email */}
-                        {tailor.email && (
-                            <p className="text-gray-400 text-xs mt-1">✉️ {tailor.email}</p>
-                        )}
-
-                        {/* Experience + Specialities pills */}
-                        {(tailor.experience || specialities.length > 0) && (
-                            <div className="flex flex-wrap gap-1.5 mt-3">
-                                {tailor.experience && (
-                                    <span className="inline-flex items-center gap-1 text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 px-2.5 py-1 rounded-full">
-                                        🏆 {tailor.experience}
+                            {/* Name + details */}
+                            <h2 className="text-2xl md:text-3xl font-black text-gray-900 leading-tight">{tailor.full_name}</h2>
+                            {tailor.shop_name && tailor.shop_name !== tailor.full_name && (
+                                <p className="text-indigo-600 font-bold text-base mt-1">{tailor.shop_name}</p>
+                            )}
+                            {(tailor.tagline || tailor.specialty) && (
+                                <p className="text-gray-500 text-sm italic mt-2 flex items-start gap-1.5">
+                                    <FaQuoteLeft className="text-indigo-300 text-sm mt-0.5 flex-shrink-0" />
+                                    {tailor.tagline || tailor.specialty}
+                                </p>
+                            )}
+                            <div className="flex flex-wrap items-center gap-3 mt-3">
+                                {(tailor.city || tailor.state) && (
+                                    <span className="flex items-center gap-1.5 text-gray-500 text-sm">
+                                        <FaMapMarkerAlt className="text-indigo-400 text-xs" />
+                                        {[tailor.city, tailor.state].filter(Boolean).join(', ')}
                                     </span>
                                 )}
-                                {specialities.map(s => (
-                                    <span key={s} className="text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100 px-2.5 py-1 rounded-full">
-                                        {s}
-                                    </span>
-                                ))}
+                                {tailor.email && (
+                                    <span className="text-gray-400 text-xs">✉️ {tailor.email}</span>
+                                )}
                             </div>
-                        )}
+                            {(tailor.experience || specialities.length > 0) && (
+                                <div className="flex flex-wrap gap-2 mt-4">
+                                    {tailor.experience && (
+                                        <span className="inline-flex items-center gap-1 text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 px-3 py-1.5 rounded-full">
+                                            🏆 {tailor.experience}
+                                        </span>
+                                    )}
+                                    {specialities.map(s => (
+                                        <span key={s} className="text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100 px-3 py-1.5 rounded-full">
+                                            {s}
+                                        </span>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </motion.div>
+
+                {/* ── Content Grid (responsive 1 or 2 col) ── */}
+                <div className="max-w-screen-xl mx-auto px-4 md:px-8 py-5">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+                {/* ── Left column ── */}
+                <div className="lg:col-span-1 flex flex-col gap-4">
 
                 {/* ── About / Bio ── */}
                 {tailor.bio && (
@@ -272,31 +292,77 @@ const TailorDetailsPage = () => {
                 {/* ── Contact Actions ── */}
                 {(tailor.phone || tailor.whatsapp || tailor.instagram) && (
                     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }}
-                        className="grid grid-cols-1 gap-2.5">
-                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest px-1">Contact</p>
-                        <div className="flex flex-wrap gap-2.5">
+                        className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Contact</p>
+                        <div className="flex flex-col gap-2.5">
                             {tailor.phone && (
                                 <a href={`tel:${tailor.phone}`}
-                                    className="flex-1 min-w-[130px] flex items-center justify-center gap-2 bg-blue-50 text-blue-600 py-3 px-4 rounded-2xl font-semibold hover:bg-blue-100 transition border border-blue-100 text-sm">
+                                    className="w-full flex items-center justify-center gap-2 bg-blue-50 text-blue-600 py-3 px-4 rounded-xl font-semibold hover:bg-blue-100 transition border border-blue-100 text-sm">
                                     <FaPhone className="text-xs" /> Call Now
-                                    <span className="text-blue-400 text-xs font-normal">{tailor.phone}</span>
+                                    <span className="text-blue-400 text-xs font-normal ml-1">{tailor.phone}</span>
                                 </a>
                             )}
                             {tailor.whatsapp && (
                                 <a href={`https://wa.me/91${tailor.whatsapp}?text=Hi, I found your profile on TailorHub!`} target="_blank" rel="noreferrer"
-                                    className="flex-1 min-w-[130px] flex items-center justify-center gap-2 bg-green-50 text-green-600 py-3 px-4 rounded-2xl font-semibold hover:bg-green-100 transition border border-green-100 text-sm">
+                                    className="w-full flex items-center justify-center gap-2 bg-green-50 text-green-600 py-3 px-4 rounded-xl font-semibold hover:bg-green-100 transition border border-green-100 text-sm">
                                     <FaWhatsapp /> WhatsApp
                                 </a>
                             )}
                             {tailor.instagram && (
                                 <a href={`https://instagram.com/${tailor.instagram.replace('@', '')}`} target="_blank" rel="noreferrer"
-                                    className="flex-1 min-w-[130px] flex items-center justify-center gap-2 bg-pink-50 text-pink-600 py-3 px-4 rounded-2xl font-semibold hover:bg-pink-100 transition border border-pink-100 text-sm">
+                                    className="w-full flex items-center justify-center gap-2 bg-pink-50 text-pink-600 py-3 px-4 rounded-xl font-semibold hover:bg-pink-100 transition border border-pink-100 text-sm">
                                     <FaInstagram /> {tailor.instagram}
                                 </a>
                             )}
                         </div>
                     </motion.div>
                 )}
+
+                {/* ── Address (inside left column) ── */}
+                {hasAddress && (
+                    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}
+                        className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+                        <div className="flex items-center gap-2 mb-3">
+                            <FaMapMarkerAlt className="text-indigo-400" />
+                            <h3 className="font-bold text-sm text-gray-700 uppercase tracking-wide">Shop Address</h3>
+                        </div>
+                        <p className="text-gray-600 text-sm leading-relaxed">
+                            {tailor.street && <>{tailor.street}<br /></>}
+                            {[tailor.city, tailor.state].filter(Boolean).join(', ')}
+                            {tailor.pin && <> – {tailor.pin}</>}
+                        </p>
+                        <a href={`https://maps.google.com/?q=${encodeURIComponent(fullAddress)}`} target="_blank" rel="noreferrer"
+                            className="mt-3 inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:underline">
+                            📍 Open in Google Maps
+                        </a>
+                    </motion.div>
+                )}
+
+                {/* ── Quick Stats strip (left col) ── */}
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.22 }}
+                    className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                    <div className="grid grid-cols-3 divide-x divide-gray-100">
+                        <div className="flex flex-col items-center py-4 gap-0.5">
+                            <span className="text-xl font-black text-indigo-600">{allServices.length || '—'}</span>
+                            <span className="text-[11px] text-gray-400 font-semibold">Services</span>
+                        </div>
+                        <div className="flex flex-col items-center py-4 gap-0.5">
+                            <span className="text-xl font-black text-amber-500">{tailor.rating || '4.5'}⭐</span>
+                            <span className="text-[11px] text-gray-400 font-semibold">Rating</span>
+                        </div>
+                        <div className="flex flex-col items-center py-4 gap-0.5">
+                            <span className="text-xl font-black text-green-600">
+                                {hasTimings ? Object.values(timings).filter(t => !t.closed).length : '—'}
+                            </span>
+                            <span className="text-[11px] text-gray-400 font-semibold">Days Open</span>
+                        </div>
+                    </div>
+                </motion.div>
+
+                </div>{/* end left col */}
+
+                {/* ── Right column (2 cols wide) ── */}
+                <div className="lg:col-span-2 flex flex-col gap-4">
 
                 {/* ── Shop Timings ── */}
                 {hasTimings && (
@@ -341,25 +407,7 @@ const TailorDetailsPage = () => {
                     </motion.div>
                 )}
 
-                {/* ── Address ── */}
-                {hasAddress && (
-                    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}
-                        className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
-                        <div className="flex items-center gap-2 mb-3">
-                            <FaMapMarkerAlt className="text-indigo-400" />
-                            <h3 className="font-bold text-sm text-gray-700 uppercase tracking-wide">Shop Address</h3>
-                        </div>
-                        <p className="text-gray-600 text-sm leading-relaxed">
-                            {tailor.street && <>{tailor.street}<br /></>}
-                            {[tailor.city, tailor.state].filter(Boolean).join(', ')}
-                            {tailor.pin && <> – {tailor.pin}</>}
-                        </p>
-                        <a href={`https://maps.google.com/?q=${encodeURIComponent(fullAddress)}`} target="_blank" rel="noreferrer"
-                            className="mt-3 inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:underline">
-                            📍 Open in Google Maps
-                        </a>
-                    </motion.div>
-                )}
+                {/* Address is now in left col above */}
 
                 {/* ── Services & Pricing ── */}
                 {allServices.length > 0 && (
@@ -440,7 +488,7 @@ const TailorDetailsPage = () => {
                             <h3 className="font-bold text-sm text-gray-700 uppercase tracking-wide">Recent Work</h3>
                             <span className="ml-auto text-xs text-gray-400">{tailor.gallery.length} photos</span>
                         </div>
-                        <div className="p-4 grid grid-cols-3 gap-2">
+                        <div className="p-4 grid grid-cols-3 md:grid-cols-4 gap-2">
                             {tailor.gallery.map((img, idx) => (
                                 <div key={idx} className="aspect-square bg-gray-100 rounded-xl overflow-hidden border border-gray-200">
                                     <img src={resolveImg(img)} alt={`Work ${idx + 1}`} className="w-full h-full object-cover" />
@@ -450,26 +498,9 @@ const TailorDetailsPage = () => {
                     </motion.div>
                 )}
 
-                {/* ── Quick Stats strip ── */}
-                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.22 }}
-                    className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                    <div className="grid grid-cols-3 divide-x divide-gray-100">
-                        <div className="flex flex-col items-center py-4 gap-0.5">
-                            <span className="text-xl font-black text-indigo-600">{allServices.length || '—'}</span>
-                            <span className="text-[11px] text-gray-400 font-semibold">Services</span>
-                        </div>
-                        <div className="flex flex-col items-center py-4 gap-0.5">
-                            <span className="text-xl font-black text-amber-500">{tailor.rating || '4.5'}⭐</span>
-                            <span className="text-[11px] text-gray-400 font-semibold">Rating</span>
-                        </div>
-                        <div className="flex flex-col items-center py-4 gap-0.5">
-                            <span className="text-xl font-black text-green-600">
-                                {hasTimings ? Object.values(timings).filter(t => !t.closed).length : '—'}
-                            </span>
-                            <span className="text-[11px] text-gray-400 font-semibold">Days Open</span>
-                        </div>
-                    </div>
-                </motion.div>
+                </div>{/* end right col */}
+                </div>{/* end grid */}
+                </div>{/* end content wrapper */}
 
                 {/* Spacer for floating button */}
                 <div className="h-4" />
@@ -480,10 +511,40 @@ const TailorDetailsPage = () => {
                 <motion.button
                     initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
                     onClick={() => navigate(`/book-appointment/${id}`)}
-                    className="pointer-events-auto w-full max-w-sm bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold text-base py-4 px-8 rounded-2xl shadow-xl shadow-indigo-200 hover:shadow-2xl hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 flex items-center justify-center gap-2">
+                    className="pointer-events-auto w-full max-w-lg bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold text-base py-4 px-8 rounded-2xl shadow-xl shadow-indigo-200 hover:shadow-2xl hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 flex items-center justify-center gap-2">
                     ✂️ Book Appointment
                 </motion.button>
             </div>
+
+            {/* ── Profile Image Lightbox ── */}
+            {imgLightbox && profileImgUrl && (
+                <motion.div
+                    initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm"
+                    onClick={() => setImgLightbox(false)}
+                >
+                    <motion.div
+                        initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: 'spring', stiffness: 280, damping: 22 }}
+                        className="relative"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <img
+                            src={profileImgUrl}
+                            alt={tailor.full_name}
+                            className="max-w-[90vw] max-h-[80vh] rounded-2xl shadow-2xl object-contain border-4 border-white"
+                        />
+                        <p className="text-white text-center mt-3 font-semibold text-sm opacity-80">{tailor.full_name}</p>
+                        <button
+                            onClick={() => setImgLightbox(false)}
+                            className="absolute -top-4 -right-4 w-9 h-9 bg-white rounded-full flex items-center justify-center shadow-lg text-gray-700 hover:text-red-500 hover:bg-red-50 transition-all font-bold text-lg"
+                            aria-label="Close"
+                        >
+                            ×
+                        </button>
+                    </motion.div>
+                    <p className="absolute bottom-8 text-white/50 text-xs">Tap anywhere to close</p>
+                </motion.div>
+            )}
         </div>
     );
 };
