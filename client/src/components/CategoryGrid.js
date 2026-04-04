@@ -20,7 +20,7 @@ const itemVariants = {
   show: { opacity: 1, scale: 1, transition: { duration: 0.35, ease: 'easeOut' } },
 };
 
-const CategoryGrid = () => (
+const CategoryGrid = ({ onCategoryClick }) => (
   <section className="cg-section">
     <div className="cg-header">
       <h2 className="cg-title">Shop by Category</h2>
@@ -40,6 +40,7 @@ const CategoryGrid = () => (
           whileHover={{ scale: 1.05, y: -3 }}
           whileTap={{ scale: 0.97 }}
           className={`cg-card ${cat.gradient}`}
+          onClick={() => onCategoryClick && onCategoryClick(cat.name)}
         >
           <span className="cg-emoji">{cat.emoji}</span>
           <span className="cg-name">{cat.name}</span>

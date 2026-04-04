@@ -170,6 +170,189 @@ const OrdersTab = () => (
     </div>
 );
 
+/* ─── Category Results ───────────────────────────────────────── */
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
+const catEmojiMap = {
+    Bridal: '👰', Suits: '🤵', Kurta: '🧥', Blouses: '✂️', 'Kids Wear': '🧒', Alterations: '🔧',
+};
+
+const CategoryResults = ({ category, onBack }) => {
+    const navigate = useNavigate();
+    const [allTailors, setAllTailors] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        fetch(`${API_URL}/api/tailors`)
+            .then(res => res.ok ? res.json() : null)
+            .then(data => { if (data?.tailors) setAllTailors(data.tailors); })
+            .catch(() => {})
+            .finally(() => setLoading(false));
+    }, []);
+
+    const q = category.toLowerCase();
+    const results = allTailors.filter(t =>
+        (t.products || []).some(p => p.name?.toLowerCase().includes(q)) ||
+        (t.specialities || []).some(s => s?.toLowerCase().includes(q)) ||
+        t.full_name?.toLowerCase().includes(q) ||
+        t.tagline?.toLowerCase().includes(q)
+    );
+
+    const gradients = ['tc-av-rose', 'tc-av-indigo', 'tc-av-amber'];
+    const getInitials = (name = '') => name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+    const resolveImg = (path) => { if (!path) return null; return path.startsWith('http') ? path : `${API_URL}${path}`; };
+    const getTodayTiming = (timings) => {
+        if (!timings) return null;
+        const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+        return timings[days[new Date().getDay()]] || null;
+    };
+
+    return (
+        <div className="sr-container">
+            {/* Header */}
+            <div className="sr-header" style={{ alignItems: 'flex-start', flexDirection: 'column', gap: '0.5rem' }}>
+                <button
+                    onClick={onBack}
+                    style={{
+                        display: 'flex', alignItems: 'center', gap: '0.4rem',
+                        background: 'none', border: 'none', cursor: 'pointer',
+                        color: '#6366f1', fontWeight: 600, fontSize: '0.875rem', padding: 0,
+                    }}
+                >
+                    ← Back to Home
+                </button>
+                <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
+                    <div>
+                        <h2 className="sr-title">
+                            {catEmojiMap[category] || '✂️'} {category}
+                        </h2>
+                        {!loading && (
+                            <p className="sr-subtitle">
+                                {results.length > 0
+                                    ? `${results.length} shop${results.length !== 1 ? 's' : ''} offering ${category} services`
+                                    : 'No shops found for this category yet'}
+                            </p>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            {/* Loading */}
+            {loading && (
+                <div className="sr-loading">
+                    <span className="w-8 h-8 border-4 border-indigo-400 border-t-transparent rounded-full animate-spin" />
+                    <p>Finding tailors…</p>
+                </div>
+            )}
+
+            {/* No results */}
+            {!loading && results.length === 0 && (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="sr-empty">
+                    <span className="sr-empty-icon">{catEmojiMap[category] || '✂️'}</span>
+                    <p className="sr-empty-title">No shops available yet</p>
+                    <p className="sr-empty-sub">
+                        No tailor shops currently offer <strong>{category}</strong> services.<br />Check back soon!
+                    </p>
+                </motion.div>
+            )}
+
+            {/* Results */}
+            <AnimatePresence>
+                <div className="sr-list">
+                    {results.map((t, i) => {
+                        const id = t.id || t.user_id;
+                        const initials = getInitials(t.full_name);
+                        const gradient = gradients[i % gradients.length];
+                        const city = t.city || '';
+                        const state = t.state || '';
+                        const area = [city, state].filter(Boolean).join(', ') || '—';
+                        const products = t.products || [];
+                        const startingPrice = products.length > 0
+                            ? `From ₹${Math.min(...products.map(p => Number(p.price) || 0))}`
+                            : null;
+                        const profileImgUrl = resolveImg(t.profile_img);
+                        const todayTiming = getTodayTiming(t.timings);
+                        const isOpen = todayTiming && !todayTiming.closed;
+                        const specialities = Array.isArray(t.specialities) ? t.specialities : [];
+                        const matchedProducts = products.filter(p =>
+                            p.name?.toLowerCase().includes(q)
+                        );
+
+                        return (
+                            <motion.div
+                                key={id || i}
+                                initial={{ opacity: 0, y: 16 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -8 }}
+                                transition={{ delay: i * 0.06, duration: 0.3 }}
+                                className="sr-card"
+                                onClick={() => navigate(`/tailor-profile/${id}`)}
+                            >
+                                <div className="sr-card-top">
+                                    <div className="tc-avatar-wrap">
+                                        {profileImgUrl ? (
+                                            <img src={profileImgUrl} alt={t.full_name} className="tc-avatar-img" />
+                                        ) : (
+                                            <div className={`sr-avatar ${gradient}`}>{initials}</div>
+                                        )}
+                                        {todayTiming && (
+                                            <span className={`tc-availability-dot ${isOpen ? 'tc-dot-open' : 'tc-dot-closed'}`} />
+                                        )}
+                                    </div>
+                                    <div className="sr-info">
+                                        <div className="sr-name-row">
+                                            <span className="sr-name">{t.full_name}</span>
+                                            <span className="sr-area">📍 {area}</span>
+                                        </div>
+                                        {t.tagline && (
+                                            <p className="tc-tagline" style={{ marginBottom: '0.25rem' }}>"{t.tagline}"</p>
+                                        )}
+                                        {matchedProducts.length > 0 && (
+                                            <div className="sr-matched-products">
+                                                {matchedProducts.slice(0, 3).map((p, pi) => (
+                                                    <span key={pi} className="sr-product-chip">
+                                                        ✂️ {p.name}{p.price ? ` · ₹${p.price}` : ''}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        )}
+                                        {matchedProducts.length === 0 && products.length > 0 && (
+                                            <p className="sr-specialty">
+                                                {products.slice(0, 2).map(p => p.name).join(' · ')}
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
+                                {(t.experience || todayTiming || specialities.length > 0) && (
+                                    <div className="tc-pills-row" style={{ marginTop: '0.6rem' }}>
+                                        {t.experience && <span className="tc-pill tc-pill-exp">🏆 {t.experience}</span>}
+                                        {todayTiming && (
+                                            <span className={`tc-pill ${isOpen ? 'tc-pill-open' : 'tc-pill-closed'}`}>
+                                                🕐 {isOpen ? `${todayTiming.open} – ${todayTiming.close}` : 'Closed Today'}
+                                            </span>
+                                        )}
+                                        {specialities.slice(0, 2).map(s => (
+                                            <span key={s} className="tc-pill tc-pill-spec">{s}</span>
+                                        ))}
+                                    </div>
+                                )}
+                                <div className="sr-bottom">
+                                    {startingPrice && <span className="sr-price">{startingPrice}</span>}
+                                    <button
+                                        className="sr-btn"
+                                        onClick={e => { e.stopPropagation(); navigate(`/tailor-profile/${id}`); }}
+                                    >
+                                        View Profile →
+                                    </button>
+                                </div>
+                            </motion.div>
+                        );
+                    })}
+                </div>
+            </AnimatePresence>
+        </div>
+    );
+};
+
 /* ─── Nav tabs ─────────────────────────────────────────────────── */
 const NAV_TABS = [
     { id: 'home', label: 'Home', icon: '🏠' },
@@ -183,6 +366,12 @@ const CustomerDashboardPage = () => {
     const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState('home');
     const [searchQuery, setSearchQuery] = useState('');
+    const [selectedCategory, setSelectedCategory] = useState(null);
+
+    const handleCategoryClick = (categoryName) => {
+        setSelectedCategory(categoryName);
+        setSearchQuery('');
+    };
 
     const handleLogout = async () => {
         await logout();
@@ -192,7 +381,10 @@ const CustomerDashboardPage = () => {
     // Clear search when switching tabs
     const handleTabChange = (tabId) => {
         setActiveTab(tabId);
-        if (tabId !== 'home') setSearchQuery('');
+        if (tabId !== 'home') {
+            setSearchQuery('');
+            setSelectedCategory(null);
+        }
     };
 
     const renderTab = () => {
@@ -201,15 +393,20 @@ const CustomerDashboardPage = () => {
                 <div>
                     <SearchBar
                         value={searchQuery}
-                        onChange={setSearchQuery}
+                        onChange={(q) => { setSearchQuery(q); setSelectedCategory(null); }}
                     />
                     {searchQuery.trim().length > 0 ? (
                         <SearchResults
                             query={searchQuery}
                             onClear={() => setSearchQuery('')}
                         />
+                    ) : selectedCategory ? (
+                        <CategoryResults
+                            category={selectedCategory}
+                            onBack={() => setSelectedCategory(null)}
+                        />
                     ) : (
-                        <IndexPage />
+                        <IndexPage onCategoryClick={handleCategoryClick} />
                     )}
                 </div>
             );
