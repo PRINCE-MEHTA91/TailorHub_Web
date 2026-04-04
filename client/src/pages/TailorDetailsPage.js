@@ -544,6 +544,47 @@ const TailorDetailsPage = () => {
                     </motion.div>
                 )}
 
+                {/* ── Pricing Catalog ── */}
+                {tailor.price_listings && tailor.price_listings.length > 0 && (() => {
+                    const cats = [...new Set(tailor.price_listings.map(i=>i.cat).filter(Boolean))];
+                    return (
+                        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.18 }}
+                            className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-50">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-base">🏷️</span>
+                                    <h3 className="font-bold text-sm text-gray-700 uppercase tracking-wide">Pricing Catalog</h3>
+                                </div>
+                                <span className="text-xs text-gray-400">{tailor.price_listings.length} items</span>
+                            </div>
+                            <div className="p-4 space-y-5">
+                                {cats.map(cat => (
+                                    <div key={cat}>
+                                        <p className="text-[10px] font-black uppercase tracking-widest text-indigo-400 mb-2">{cat}</p>
+                                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                                            {tailor.price_listings.filter(i=>i.cat===cat).map((item,idx) => (
+                                                <div key={idx} className="rounded-xl border border-gray-100 overflow-hidden shadow-sm hover:shadow-md transition-shadow bg-gray-50">
+                                                    <div className="h-28 bg-gray-100 relative">
+                                                        {resolveImg(item.img)
+                                                            ? <img src={resolveImg(item.img)} alt={item.name} className="w-full h-full object-cover"/>
+                                                            : <div className="w-full h-full flex items-center justify-center text-3xl">🧵</div>}
+                                                        <span className="absolute top-1.5 left-1.5 text-[9px] font-black bg-indigo-600 text-white px-1.5 py-0.5 rounded-full">{cat}</span>
+                                                    </div>
+                                                    <div className="p-2.5">
+                                                        <p className="text-xs font-bold text-gray-800 leading-tight">{item.name}</p>
+                                                        {item.desc && <p className="text-[10px] text-gray-400 mt-0.5 line-clamp-2">{item.desc}</p>}
+                                                        <p className="text-indigo-600 font-black text-sm mt-1.5">₹{Number(item.price).toLocaleString('en-IN')}</p>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </motion.div>
+                    );
+                })()}
+
                 {/* ── Gallery ── */}
                 {tailor.gallery && tailor.gallery.length > 0 && (
                     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
