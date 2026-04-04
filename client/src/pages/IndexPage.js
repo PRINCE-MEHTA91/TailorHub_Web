@@ -46,7 +46,7 @@ const DealsStrip = () => (
 );
 
 /* ──── Main Index Page ─────────────────────────────── */
-const IndexPage = () => {
+const IndexPage = ({ onCategoryClick }) => {
     const { user, loading } = useAuth();
     const [showModal, setShowModal] = useState(false);
 
@@ -64,7 +64,7 @@ const IndexPage = () => {
             <HeroBanner />
             <DealsStrip />
             <FeaturedProducts />
-            <CategoryGrid />
+            <CategoryGrid onCategoryClick={onCategoryClick} />
             <TailorConnect />
         </>
     );

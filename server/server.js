@@ -92,6 +92,7 @@ db.getConnection((connErr, connection) => {
         `ALTER TABLE tailor_profiles ADD COLUMN experience VARCHAR(100) DEFAULT ''`,
         `ALTER TABLE tailor_profiles ADD COLUMN specialities JSON DEFAULT NULL`,
         `ALTER TABLE tailor_profiles ADD COLUMN timings JSON DEFAULT NULL`,
+        `ALTER TABLE tailor_profiles ADD COLUMN deals JSON DEFAULT NULL`,
     ];
     newCols.forEach(sql => {
         db.query(sql, (err) => {
@@ -143,6 +144,19 @@ const safeParseJSON = (val, fallback = []) => {
     if (val === null || val === undefined) return fallback;
     if (typeof val === 'object') return val;
     try { return JSON.parse(val); } catch { return fallback; }
+};
+
+// Normalize profile_img: strip any http://.../ prefix, keep only /uploads/... or null
+const normalizeImgPath = (img) => {
+    if (!img) return null;
+    // If a full URL was accidentally stored, strip everything up to /uploads/
+    const match = img.match(/(\/uploads\/[^?#]+)/);
+    if (match) return match[1];
+    // If it's already a relative /uploads/... path
+    if (img.startsWith('/uploads/')) return img;
+    // If it starts with http but has no /uploads/ segment, return as-is (external URL)
+    if (img.startsWith('http')) return img;
+    return img;
 };
 
 const verifyToken = (req, res, next) => {
@@ -349,7 +363,7 @@ app.post('/api/tailor/profile', verifyToken, (req, res) => {
     const {
         phone, whatsapp, instagram, street, city, state, pin,
         products, gallery, profile_img,
-        shop_name, tagline, bio, experience, specialities, timings
+        shop_name, tagline, bio, experience, specialities, timings, deals
     } = req.body;
 
     db.query('SELECT role FROM users WHERE id = ?', [req.userId], (err, rows) => {
@@ -360,14 +374,15 @@ app.post('/api/tailor/profile', verifyToken, (req, res) => {
             INSERT INTO tailor_profiles
                 (user_id, phone, whatsapp, instagram, street, city, state, pin,
                  products, gallery, profile_img,
-                 shop_name, tagline, bio, experience, specialities, timings)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 shop_name, tagline, bio, experience, specialities, timings, deals)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
                 phone=VALUES(phone), whatsapp=VALUES(whatsapp), instagram=VALUES(instagram),
                 street=VALUES(street), city=VALUES(city), state=VALUES(state), pin=VALUES(pin),
                 products=VALUES(products), gallery=VALUES(gallery), profile_img=VALUES(profile_img),
                 shop_name=VALUES(shop_name), tagline=VALUES(tagline), bio=VALUES(bio),
-                experience=VALUES(experience), specialities=VALUES(specialities), timings=VALUES(timings)
+                experience=VALUES(experience), specialities=VALUES(specialities), timings=VALUES(timings),
+                deals=VALUES(deals)
         `;
         const params = [
             req.userId,
@@ -379,6 +394,7 @@ app.post('/api/tailor/profile', verifyToken, (req, res) => {
             shop_name || '', tagline || '', bio || '', experience || '',
             JSON.stringify(specialities || []),
             JSON.stringify(timings || {}),
+            JSON.stringify(deals || []),
         ];
         db.query(sql, params, (insertErr) => {
             if (insertErr) {
@@ -396,7 +412,7 @@ app.get('/api/tailor/profile', verifyToken, (req, res) => {
         SELECT tp.phone, tp.whatsapp, tp.instagram,
                tp.street, tp.city, tp.state, tp.pin,
                tp.products, tp.gallery, tp.profile_img,
-               tp.shop_name, tp.tagline, tp.bio, tp.experience, tp.specialities, tp.timings
+               tp.shop_name, tp.tagline, tp.bio, tp.experience, tp.specialities, tp.timings, tp.deals
         FROM tailor_profiles tp WHERE tp.user_id = ?
     `;
     db.query(sql, [req.userId], (err, results) => {
@@ -406,12 +422,50 @@ app.get('/api/tailor/profile', verifyToken, (req, res) => {
         res.json({
             profile: {
                 ...p,
+                profile_img:  normalizeImgPath(p.profile_img),
                 products:     safeParseJSON(p.products, []),
-                gallery:      safeParseJSON(p.gallery, []),
+                gallery:      safeParseJSON(p.gallery, []).map(normalizeImgPath),
                 specialities: safeParseJSON(p.specialities, []),
                 timings:      safeParseJSON(p.timings, null),
+                deals:        safeParseJSON(p.deals, []),
             }
         });
+    });
+});
+
+// ── Tailor Deals: Save deals separately ────────────────────────────────────
+app.post('/api/tailor/deals', verifyToken, (req, res) => {
+    const { deals } = req.body;
+    db.query('SELECT role FROM users WHERE id = ?', [req.userId], (err, rows) => {
+        if (err || rows.length === 0) return res.status(500).json({ message: 'Server error' });
+        if (rows[0].role !== 'tailor') return res.status(403).json({ message: 'Only tailors can update deals' });
+        const sql = `INSERT INTO tailor_profiles (user_id, deals) VALUES (?, ?)
+            ON DUPLICATE KEY UPDATE deals = VALUES(deals)`;
+        db.query(sql, [req.userId, JSON.stringify(deals || [])], (err2) => {
+            if (err2) return res.status(500).json({ message: 'Failed to save deals' });
+            res.json({ message: 'Deals saved successfully' });
+        });
+    });
+});
+
+// ── Tailor Deals: Get own deals ─────────────────────────────────────────────
+app.get('/api/tailor/deals', verifyToken, (req, res) => {
+    db.query('SELECT deals FROM tailor_profiles WHERE user_id = ?', [req.userId], (err, results) => {
+        if (err) return res.status(500).json({ message: 'Server error' });
+        const deals = results.length > 0 ? safeParseJSON(results[0].deals, []) : [];
+        res.json({ deals });
+    });
+});
+
+// ── Tailor Deals: Get by tailor ID (public for customers) ──────────────────
+app.get('/api/tailors/:id/deals', (req, res) => {
+    const { id } = req.params;
+    const sql = `SELECT tp.deals FROM tailor_profiles tp
+        INNER JOIN users u ON u.id = tp.user_id WHERE u.id = ? AND u.role = 'tailor'`;
+    db.query(sql, [id], (err, results) => {
+        if (err) return res.status(500).json({ message: 'Server error' });
+        const deals = results.length > 0 ? safeParseJSON(results[0].deals, []) : [];
+        res.json({ deals });
     });
 });
 
@@ -432,8 +486,9 @@ app.get('/api/tailors', (req, res) => {
         if (err) return res.status(500).json({ message: 'Server error' });
         const tailors = results.map(t => ({
             ...t,
+            profile_img:  normalizeImgPath(t.profile_img),
             products:     safeParseJSON(t.products, []),
-            gallery:      safeParseJSON(t.gallery, []),
+            gallery:      safeParseJSON(t.gallery, []).map(normalizeImgPath),
             specialities: safeParseJSON(t.specialities, []),
             timings:      safeParseJSON(t.timings, null),
         }));
@@ -461,8 +516,9 @@ app.get('/api/tailors/:id', (req, res) => {
         res.json({
             tailor: {
                 ...t,
+                profile_img:  normalizeImgPath(t.profile_img),
                 products:     safeParseJSON(t.products, []),
-                gallery:      safeParseJSON(t.gallery, []),
+                gallery:      safeParseJSON(t.gallery, []).map(normalizeImgPath),
                 specialities: safeParseJSON(t.specialities, []),
                 timings:      safeParseJSON(t.timings, null),
             }

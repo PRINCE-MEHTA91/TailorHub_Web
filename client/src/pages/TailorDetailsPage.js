@@ -93,6 +93,7 @@ const TailorDetailsPage = () => {
     const [error, setError] = useState('');
     const [activeCat, setActiveCat] = useState(null);
     const [imgLightbox, setImgLightbox] = useState(false);
+    const [deals, setDeals] = useState([]);
 
     useEffect(() => {
         if (id.startsWith('f')) {
@@ -104,9 +105,18 @@ const TailorDetailsPage = () => {
         }
         fetch(`${API_URL}/api/tailors/${id}`)
             .then(res => { if (!res.ok) throw new Error('Tailor not found'); return res.json(); })
-            .then(data => setTailor(data.tailor))
+            .then(data => {
+                setTailor(data.tailor);
+                // Also set deals from profile if present
+                if (Array.isArray(data.tailor?.deals)) setDeals(data.tailor.deals);
+            })
             .catch(err => setError(err.message))
             .finally(() => setLoading(false));
+        // Fetch deals separately as fallback
+        fetch(`${API_URL}/api/tailors/${id}/deals`)
+            .then(r => r.ok ? r.json() : null)
+            .then(d => { if (d?.deals?.length) setDeals(d.deals); })
+            .catch(() => {});
     }, [id]);
 
     useEffect(() => {
@@ -158,6 +168,9 @@ const TailorDetailsPage = () => {
     const timings = tailor.timings || null;
     const todayStatus = getTodayStatus(timings);
     const hasTimings = timings && Object.keys(timings).length > 0;
+    const activeDeals = deals.filter(d => d.active !== false);
+    const now = new Date();
+    const validDeals = activeDeals.filter(d => !d.validUntil || new Date(d.validUntil) >= now);
 
     return (
         <div className="min-h-screen bg-gray-50 pb-24" style={{background:'linear-gradient(135deg,#f8f9ff 0%,#f0f2fb 100%)'}}>
@@ -363,6 +376,58 @@ const TailorDetailsPage = () => {
 
                 {/* ── Right column (2 cols wide) ── */}
                 <div className="lg:col-span-2 flex flex-col gap-4">
+
+                {/* ── Special Deals & Offers ── */}
+                {validDeals.length > 0 && (
+                    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
+                        className="bg-white rounded-2xl shadow-sm border border-orange-100 overflow-hidden">
+                        <div className="flex items-center justify-between px-5 py-4 border-b border-orange-50 bg-gradient-to-r from-orange-50 to-amber-50">
+                            <div className="flex items-center gap-2">
+                                <span className="text-lg">🎁</span>
+                                <h3 className="font-bold text-sm text-orange-800 uppercase tracking-wide">Special Deals & Offers</h3>
+                            </div>
+                            <span className="text-xs font-black bg-orange-500 text-white px-2.5 py-1 rounded-full shadow-sm">
+                                {validDeals.length} Active
+                            </span>
+                        </div>
+                        <div className="p-4 flex flex-col gap-3">
+                            {validDeals.map((deal, idx) => (
+                                <div key={idx} className="relative rounded-2xl border border-orange-200 bg-gradient-to-br from-orange-50 via-amber-50 to-yellow-50 p-4 overflow-hidden">
+                                    {/* bg glow */}
+                                    <div className="absolute -top-6 -right-6 w-24 h-24 rounded-full bg-orange-300/20" />
+                                    <div className="flex items-start justify-between gap-3 relative">
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                                                <span className="text-sm font-black text-gray-900">{deal.title}</span>
+                                                {deal.occasion && (
+                                                    <span className="text-[10px] font-bold text-indigo-600 bg-white border border-indigo-100 px-2 py-0.5 rounded-full flex-shrink-0">
+                                                        🎉 {deal.occasion}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            {deal.description && (
+                                                <p className="text-xs text-gray-600 leading-relaxed mb-2">{deal.description}</p>
+                                            )}
+                                            {deal.validUntil && (
+                                                <p className="text-[11px] text-gray-400 flex items-center gap-1">
+                                                    <span>📅</span>
+                                                    <span>Valid until <strong className="text-orange-600">{new Date(deal.validUntil).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}</strong></span>
+                                                </p>
+                                            )}
+                                        </div>
+                                        {deal.discount && (
+                                            <div className="flex-shrink-0 flex flex-col items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-orange-500 to-red-500 shadow-lg shadow-orange-200">
+                                                <span className="text-white font-black text-xl leading-none">{deal.discount}%</span>
+                                                <span className="text-orange-100 text-[9px] font-bold uppercase tracking-wider">OFF</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                            <p className="text-center text-[11px] text-orange-400 font-semibold">🌟 Book an appointment to avail these offers!</p>
+                        </div>
+                    </motion.div>
+                )}
 
                 {/* ── Shop Timings ── */}
                 {hasTimings && (

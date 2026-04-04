@@ -210,7 +210,7 @@ function ManagementTab() {
 }
 
 /* ── Profile Tab ── */
-function ProfileTab({ user, onLogout }) {
+function ProfileTab({ user, onLogout, onSaved }) {
   const [profileImg, setProfileImg]         = useState(null);
   const [profileImgFile, setProfileImgFile] = useState(null);
   const [saved, setSaved]                   = useState(false);
@@ -229,6 +229,8 @@ function ProfileTab({ user, onLogout }) {
   const [locationError, setLocationError]   = useState('');
   // gallery: array of { preview: string (blob or server URL), file: File|null }
   const [gallery, setGallery]               = useState([]);
+  const [deals, setDeals]                   = useState([]);
+  const [newDeal, setNewDeal]               = useState({ title:'', description:'', discount:'', occasion:'', validUntil:'', active:true });
   const [timings, setTimings] = useState({
     Mon:{open:'09:00',close:'20:00',closed:false}, Tue:{open:'09:00',close:'20:00',closed:false},
     Wed:{open:'09:00',close:'20:00',closed:false}, Thu:{open:'09:00',close:'20:00',closed:false},
@@ -292,6 +294,8 @@ function ProfileTab({ user, onLogout }) {
             serverPath: url.startsWith('/uploads') ? url : null,
           })));
         }
+        // Deals
+        if (Array.isArray(p.deals)) setDeals(p.deals);
       })
       .catch(err => console.error('Profile load error:', err))
       .finally(() => setLoadingProfile(false));
@@ -353,14 +357,21 @@ function ProfileTab({ user, onLogout }) {
     setSaving(true); setSaveError('');
     try {
       // 1. Upload profile image if changed
-      let finalImgUrl = profileImg || null;
+      // Normalize: strip API_URL prefix so we always store a relative path
+      const normalizeImgPath = (url) => {
+        if (!url) return null;
+        if (url.startsWith(API_URL)) return url.slice(API_URL.length); // strip http://localhost:3000
+        return url; // already relative e.g. /uploads/...
+      };
+
+      let finalImgUrl = normalizeImgPath(profileImg); // relative path or null
       if (profileImgFile) {
         const fd = new FormData();
         fd.append('profile_img', profileImgFile);
         const upRes = await fetch(`${API_URL}/api/upload/profile-image`, {method:'POST',body:fd,credentials:'include'});
         const upData = await upRes.json();
         if (!upRes.ok) { setSaveError(upData.message||'Image upload failed'); setSaving(false); return; }
-        finalImgUrl = upData.imageUrl;
+        finalImgUrl = upData.imageUrl; // '/uploads/...' relative path
       }
 
       // 2. Upload any new gallery images (file !== null), keep existing server paths
@@ -406,6 +417,8 @@ function ProfileTab({ user, onLogout }) {
           gallery: finalGallery,
           // Profile image
           profile_img: finalImgUrl,
+          // Deals
+          deals,
         }),
       });
       const data = await res.json();
@@ -414,7 +427,10 @@ function ProfileTab({ user, onLogout }) {
       // 4. Update local state to reflect what's now on server
       setSaved(true);
       setProfileImgFile(null);
-      if (finalImgUrl) setProfileImg(finalImgUrl.startsWith('/uploads') ? `${API_URL}${finalImgUrl}` : finalImgUrl);
+      const displayImg = finalImgUrl ? (finalImgUrl.startsWith('/uploads') ? `${API_URL}${finalImgUrl}` : finalImgUrl) : null;
+      if (displayImg) setProfileImg(displayImg);
+      // Notify parent (sidebar) of new image + shop name
+      if (onSaved) onSaved({ profileImg: finalImgUrl, shopName: about.shopName });
       // Replace gallery items with server-backed versions
       setGallery(finalGallery.map(path => ({
         preview: path.startsWith('/uploads') ? `${API_URL}${path}` : path,
@@ -708,6 +724,102 @@ function ProfileTab({ user, onLogout }) {
         </div>
       </SectionCard>
 
+      {/* Deals & Discounts */}
+      <SectionCard>
+        <SectionHeader icon="🎁" title="Deals & Discounts"
+          action={
+            <span className="text-[10px] font-bold bg-orange-50 text-orange-600 border border-orange-200 px-2.5 py-1 rounded-full">
+              {deals.filter(d=>d.active).length} Active
+            </span>
+          }
+        />
+        <div className="p-4 flex flex-col gap-3">
+
+          {/* Existing deals list */}
+          {deals.length === 0 && (
+            <div className="text-center py-8">
+              <div className="text-4xl mb-2">🎁</div>
+              <p className="text-stone-400 text-sm font-semibold">No deals yet</p>
+              <p className="text-stone-300 text-xs mt-0.5">Add a special offer below to attract more customers!</p>
+            </div>
+          )}
+          {deals.map((deal, idx) => (
+            <div key={idx} className={`rounded-2xl border p-3.5 flex flex-col gap-2 relative ${
+              deal.active ? 'bg-gradient-to-r from-orange-50 to-amber-50 border-orange-200' : 'bg-stone-50 border-stone-200 opacity-60'
+            }`}>
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-black text-stone-800 truncate">{deal.title}</span>
+                    {deal.discount && <span className="text-xs font-black text-white bg-orange-500 px-2 py-0.5 rounded-full flex-shrink-0">{deal.discount}% OFF</span>}
+                    {deal.occasion && <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-full flex-shrink-0">🎉 {deal.occasion}</span>}
+                  </div>
+                  {deal.description && <p className="text-xs text-stone-500 mt-0.5 leading-relaxed">{deal.description}</p>}
+                  {deal.validUntil && <p className="text-[10px] text-stone-400 mt-1">📅 Valid until: <span className="font-bold">{new Date(deal.validUntil).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}</span></p>}
+                </div>
+                <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+                  <button onClick={() => setDeals(d => d.map((x,i) => i===idx ? {...x,active:!x.active} : x))}
+                    className={`text-[10px] font-black px-2.5 py-1 rounded-full border transition ${
+                      deal.active ? 'bg-green-100 text-green-700 border-green-200' : 'bg-stone-100 text-stone-500 border-stone-200'
+                    }`}>
+                    {deal.active ? '✅ Active' : 'Off'}
+                  </button>
+                  <button onClick={() => setDeals(d => d.filter((_,i) => i!==idx))}
+                    className="text-[10px] font-bold text-red-400 hover:text-red-600 transition">Remove</button>
+                </div>
+              </div>
+            </div>
+          ))}
+
+          {/* Add new deal form */}
+          <div className="bg-white border-2 border-dashed border-orange-200 rounded-2xl p-4 flex flex-col gap-2.5">
+            <p className="text-xs font-black text-stone-600 uppercase tracking-wider">✨ Add New Deal</p>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="col-span-2">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Deal Title *</label>
+                <input value={newDeal.title} onChange={e=>setNewDeal(n=>({...n,title:e.target.value}))}
+                  placeholder="e.g. Diwali Festival Offer"
+                  className="w-full mt-1 bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-sm font-semibold text-stone-800 outline-none focus:border-orange-400 transition placeholder:text-stone-300"/>
+              </div>
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Discount (%)</label>
+                <input value={newDeal.discount} onChange={e=>setNewDeal(n=>({...n,discount:e.target.value}))} type="number" min="1" max="99"
+                  placeholder="20"
+                  className="w-full mt-1 bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-sm font-semibold text-stone-800 outline-none focus:border-orange-400 transition placeholder:text-stone-300"/>
+              </div>
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Occasion / Moment</label>
+                <input value={newDeal.occasion} onChange={e=>setNewDeal(n=>({...n,occasion:e.target.value}))}
+                  placeholder="Diwali, Wedding…"
+                  className="w-full mt-1 bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-sm font-semibold text-stone-800 outline-none focus:border-orange-400 transition placeholder:text-stone-300"/>
+              </div>
+              <div className="col-span-2">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Description</label>
+                <input value={newDeal.description} onChange={e=>setNewDeal(n=>({...n,description:e.target.value}))}
+                  placeholder="Brief description of the offer…"
+                  className="w-full mt-1 bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-sm font-semibold text-stone-800 outline-none focus:border-orange-400 transition placeholder:text-stone-300"/>
+              </div>
+              <div className="col-span-2">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Valid Until</label>
+                <input value={newDeal.validUntil} onChange={e=>setNewDeal(n=>({...n,validUntil:e.target.value}))} type="date"
+                  className="w-full mt-1 bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-sm font-semibold text-stone-700 outline-none focus:border-orange-400 transition"/>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                if (!newDeal.title.trim()) return;
+                setDeals(d => [...d, { ...newDeal, id: Date.now(), active: true }]);
+                setNewDeal({ title:'', description:'', discount:'', occasion:'', validUntil:'', active:true });
+              }}
+              className="w-full bg-orange-500 hover:bg-orange-600 text-white text-sm font-black py-2.5 rounded-xl transition shadow-sm">
+              🎁 Add Deal
+            </button>
+          </div>
+
+          <p className="text-stone-300 text-[11px] text-center">Deals are shown on your public profile. Remember to save your profile after adding!</p>
+        </div>
+      </SectionCard>
+
       {/* Gallery */}
       <SectionCard>
         <SectionHeader icon="🖼️" title="Gallery"/>
@@ -766,6 +878,24 @@ export default function TailorDashboardPage() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('home');
 
+  const API_URL_MAIN = process.env.REACT_APP_API_URL || 'http://localhost:3000';
+  const resolveImgMain = (p) => { if (!p) return null; return p.startsWith('http') ? p : `${API_URL_MAIN}${p}`; };
+
+  const [sidebarProfileImg, setSidebarProfileImg] = useState(null);
+  const [sidebarShopName, setSidebarShopName] = useState('');
+
+  // Fetch just the profile image and shop name for sidebar display
+  useEffect(() => {
+    fetch(`${API_URL_MAIN}/api/tailor/profile`, { credentials: 'include' })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.profile?.profile_img) setSidebarProfileImg(resolveImgMain(data.profile.profile_img));
+        if (data?.profile?.shop_name)   setSidebarShopName(data.profile.shop_name);
+      })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleLogout = async () => { await logout(); navigate('/'); };
 
   const renderTab = () => {
@@ -774,14 +904,17 @@ export default function TailorDashboardPage() {
       case 'home':    return <HomeTab {...props}/>;
       case 'orders':  return <OrdersTab/>;
       case 'manage':  return <ManagementTab/>;
-      case 'profile': return <ProfileTab {...props}/>;
+      case 'profile': return <ProfileTab {...props} onSaved={({ profileImg: img, shopName }) => {
+        if (img) setSidebarProfileImg(img.startsWith('/uploads') ? `${API_URL_MAIN}${img}` : img);
+        if (shopName) setSidebarShopName(shopName);
+      }} />;
       default:        return <HomeTab {...props}/>;
     }
   };
 
   return (
-    <div className="bg-stone-100 min-h-screen flex justify-center">
-      <div className="w-full max-w-[430px] bg-stone-100 relative pb-24">
+    <div className="bg-stone-100 min-h-screen">
+      <div className="w-full max-w-screen-xl mx-auto relative pb-24">
 
         {/* Top Nav */}
         <nav className="sticky top-0 z-50 bg-white border-b border-stone-200 flex items-center justify-between px-5 py-3.5 shadow-sm">
@@ -793,25 +926,96 @@ export default function TailorDashboardPage() {
             <span className="text-[10px] font-bold bg-orange-50 text-orange-600 border border-orange-200 px-2 py-0.5 rounded-full">Tailor</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="relative w-9 h-9 bg-stone-50 border border-stone-200 rounded-full flex items-center justify-center">
+            <div className="relative w-9 h-9 bg-stone-50 border border-stone-200 rounded-full flex items-center justify-center overflow-hidden">
               <span className="text-lg">🔔</span>
               <span className="absolute top-1.5 right-2 w-1.5 h-1.5 bg-red-500 rounded-full border border-white"/>
             </div>
-            <div className="w-9 h-9 bg-orange-500 rounded-full flex items-center justify-center text-white font-black text-sm">
-              {user?.full_name?.charAt(0)?.toUpperCase()||'T'}
+            <div className="w-9 h-9 bg-orange-500 rounded-full flex items-center justify-center text-white font-black text-sm overflow-hidden">
+              {sidebarProfileImg
+                ? <img src={sidebarProfileImg} alt="profile" className="w-full h-full object-cover" />
+                : (user?.full_name?.charAt(0)?.toUpperCase()||'T')}
             </div>
           </div>
         </nav>
 
         {/* Content */}
-        <main className="px-4 pt-4">
-          {renderTab()}
+        <main className="px-4 pt-4 lg:px-8 lg:pt-6">
+          <div className="lg:grid lg:grid-cols-[300px_1fr] lg:gap-8 xl:grid-cols-[340px_1fr]">
+
+            {/* ── Left Sidebar: always-visible tailor card + nav (desktop only) ── */}
+            <aside className="hidden lg:flex lg:flex-col gap-4 self-start sticky top-[73px]">
+              {/* Tailor profile card */}
+              <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl p-5 text-white relative overflow-hidden">
+                <div className="absolute -top-6 -right-6 w-28 h-28 rounded-full bg-white/10"/>
+                <div className="flex items-center gap-3 relative z-10">
+                  <div className="w-14 h-14 rounded-full border-2 border-white/40 flex items-center justify-center text-2xl font-black flex-shrink-0 overflow-hidden bg-white/20">
+                    {sidebarProfileImg
+                      ? <img src={sidebarProfileImg} alt="profile" className="w-full h-full object-cover" />
+                      : (user?.full_name?.charAt(0)?.toUpperCase()||'T')}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="font-black text-base leading-tight truncate" style={{fontFamily:'Sora,sans-serif'}}>
+                      {sidebarShopName || user?.full_name || 'My Tailor Shop'}
+                    </div>
+                    <div className="text-orange-100 text-xs mt-0.5 truncate">{user?.email}</div>
+                    <span className="mt-1.5 inline-flex items-center gap-1 bg-white/20 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+                      <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"/>
+                      Professional Tailor
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Quick nav links */}
+              <div className="bg-white rounded-2xl border border-stone-200 shadow-sm overflow-hidden">
+                <div className="px-4 py-3 border-b border-stone-100">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-stone-400">Quick Navigation</span>
+                </div>
+                {[
+                  {id:'home',   icon:'🏠', label:'Dashboard Home',   desc:'Stats & recent orders'},
+                  {id:'orders', icon:'📋', label:'My Orders',        desc:'View & manage orders'},
+                  {id:'manage', icon:'⚙️', label:'Management',       desc:'Portfolio & tools'},
+                  {id:'profile',icon:'👤', label:'Edit Profile',     desc:'Shop info & services'},
+                ].map(item => (
+                  <button key={item.id} onClick={() => setActiveTab(item.id)}
+                    className={`w-full flex items-center gap-3 px-4 py-3.5 text-left transition-colors border-b border-stone-50 last:border-0 ${
+                      activeTab === item.id
+                        ? 'bg-orange-50 border-l-4 border-l-orange-500'
+                        : 'hover:bg-stone-50 border-l-4 border-l-transparent'
+                    }`}>
+                    <span className="text-xl flex-shrink-0">{item.icon}</span>
+                    <div>
+                      <div className={`text-sm font-bold ${activeTab === item.id ? 'text-orange-600' : 'text-stone-800'}`}>
+                        {item.label}
+                      </div>
+                      <div className="text-xs text-stone-400">{item.desc}</div>
+                    </div>
+                    {activeTab === item.id && (
+                      <span className="ml-auto text-orange-400 font-bold text-lg">›</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+
+              {/* Logout button in sidebar on desktop */}
+              <button onClick={handleLogout}
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl border border-red-200 bg-red-50 text-red-500 text-sm font-bold hover:bg-red-100 transition">
+                🚪 Logout
+              </button>
+            </aside>
+
+            {/* ── Right Main Content — each tab is unique ── */}
+            {/* Single render — avoids duplicate input IDs between mobile/desktop */}
+            <div>{renderTab()}</div>
+
+          </div>
         </main>
 
-        {/* Bottom Nav */}
-        <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[430px] bg-white border-t border-stone-200 grid grid-cols-4 px-2 py-2 z-50 shadow-lg">
+        {/* Bottom Nav — full width on all screens */}
+        <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-stone-200 grid grid-cols-4 z-50 shadow-lg">
           {NAV_TABS.map(n=>(
-            <button key={n.id} onClick={()=>setActiveTab(n.id)} className="flex flex-col items-center gap-0.5 py-1 transition-all">
+            <button key={n.id} onClick={()=>setActiveTab(n.id)}
+              className="flex flex-col items-center gap-0.5 py-2.5 transition-all">
               {activeTab===n.id && <div className="w-5 h-0.5 bg-orange-500 rounded-full mb-0.5"/>}
               <span className={`text-xl transition-transform ${activeTab===n.id?'scale-110':'scale-100'}`}>{n.icon}</span>
               <span className={`text-[10px] font-bold ${activeTab===n.id?'text-orange-500':'text-stone-400'}`}>{n.label}</span>
