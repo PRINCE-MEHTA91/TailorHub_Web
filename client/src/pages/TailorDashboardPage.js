@@ -180,31 +180,241 @@ function OrdersTab() {
 }
 
 /* ── Management Tab ── */
+const PRICE_CATS = ['Men\'s Wear','Women\'s Wear','Kids Wear','Bridal','Alterations','Other'];
+
 function ManagementTab() {
-  const sections = [
-    {icon:'📐',title:'Measurement Templates',desc:'Save standard size templates',badge:null},
-    {icon:'🖼️',title:'Portfolio',            desc:'Showcase your best work',      badge:'5 items'},
-    {icon:'📆',title:'Availability',          desc:'Set your working hours',       badge:'Open'},
-    {icon:'💬',title:'Customer Messages',     desc:'Manage inquiries',             badge:'2 new'},
-    {icon:'🏷️',title:'Pricing List',         desc:'Set prices for your services', badge:null},
-    {icon:'⭐',title:'Reviews & Ratings',    desc:'See what customers say',       badge:'4.8 avg'},
-  ];
+  const API_URL_M = process.env.REACT_APP_API_URL || 'http://localhost:3000';
+  const resolveImg = (p) => { if(!p) return null; return p.startsWith('http')?p:`${API_URL_M}${p}`; };
+
+  const [listings, setListings]    = useState([]);
+  const [editId,   setEditId]      = useState(null); // item id being edited, or 'new'
+  const [form,     setForm]        = useState({ name:'', desc:'', price:'', cat:PRICE_CATS[0] });
+  const [imgFile,  setImgFile]     = useState(null);
+  const [imgPreview, setImgPreview] = useState(null);
+  const [saving,   setSaving]      = useState(false);
+  const [saved,    setSaved]       = useState(false);
+  const [loading,  setLoading]     = useState(true);
+  const [saveErr,  setSaveErr]     = useState('');
+
+  // Load existing listings
+  useEffect(() => {
+    fetch(`${API_URL_M}/api/tailor/profile`, { credentials:'include' })
+      .then(r=>r.ok?r.json():null)
+      .then(d => {
+        if (Array.isArray(d?.profile?.price_listings)) setListings(d.profile.price_listings);
+        setLoading(false);
+      })
+      .catch(()=>setLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const openNew = () => {
+    setEditId('new');
+    setForm({ name:'', desc:'', price:'', cat:PRICE_CATS[0] });
+    setImgFile(null); setImgPreview(null); setSaveErr('');
+  };
+  const openEdit = (item) => {
+    setEditId(item.id);
+    setForm({ name:item.name, desc:item.desc||'', price:String(item.price), cat:item.cat||PRICE_CATS[0] });
+    setImgFile(null); setImgPreview(resolveImg(item.img)); setSaveErr('');
+  };
+  const cancelEdit = () => { setEditId(null); setImgFile(null); setImgPreview(null); setSaveErr(''); };
+
+  const handleImgPick = (e) => {
+    const f = e.target.files[0]; if(!f) return;
+    setImgFile(f);
+    const r = new FileReader(); r.onloadend=()=>setImgPreview(r.result); r.readAsDataURL(f);
+  };
+
+  const persistListings = async (newList) => {
+    setSaving(true); setSaveErr('');
+    try {
+      // Use dedicated endpoint — won't overwrite other profile fields
+      const res = await fetch(`${API_URL_M}/api/tailor/price-listings`, {
+        method:'POST', credentials:'include',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ price_listings: newList }),
+      });
+      const d = await res.json();
+      if (!res.ok) { setSaveErr(d.message||'Save failed'); setSaving(false); return false; }
+      setSaved(true); setTimeout(()=>setSaved(false),2500);
+      return true;
+    } catch(err) {
+      console.error('Price listings save error:', err);
+      setSaveErr('Network error — please try again');
+      return false;
+    } finally { setSaving(false); }
+  };
+
+  const handleAddOrUpdate = async () => {
+    if (!form.name.trim() || !form.price) { setSaveErr('Name and price are required'); return; }
+    setSaveErr('');
+    setSaving(true);
+
+    // 1. Upload image first (if new file picked)
+    let imgPath = editId !== 'new' ? (listings.find(i=>i.id===editId)?.img||null) : null;
+    if (imgFile) {
+      try {
+        const fd = new FormData();
+        fd.append('pricing_img', imgFile);
+        const ur = await fetch(`${API_URL_M}/api/upload/pricing-image`, { method:'POST', body:fd, credentials:'include' });
+        if (ur.ok) {
+          const ud = await ur.json();
+          imgPath = ud.imageUrl; // e.g. /uploads/tailor_1_123.jpg
+        } else {
+          let errMsg = 'Image upload failed';
+          try { const ue = await ur.json(); errMsg = ue.message || errMsg; } catch { errMsg = `Upload failed (HTTP ${ur.status})`; }
+          setSaveErr(errMsg); setSaving(false); return;
+        }
+      } catch(uploadErr) {
+        console.error('Pricing image upload error:', uploadErr);
+        setSaveErr('Cannot reach server — is it running on port 3000?'); setSaving(false); return;
+      }
+    }
+
+    // 2. Build updated list
+    let newList;
+    if (editId === 'new') {
+      newList = [...listings, { id: Date.now(), name:form.name.trim(), desc:form.desc.trim(), price:Number(form.price), cat:form.cat, img:imgPath }];
+    } else {
+      newList = listings.map(i => i.id===editId
+        ? { ...i, name:form.name.trim(), desc:form.desc.trim(), price:Number(form.price), cat:form.cat, img:imgPath }
+        : i);
+    }
+
+    // 3. Persist
+    setSaving(false); // persistListings will set it again
+    const ok = await persistListings(newList);
+    if (ok) { setListings(newList); cancelEdit(); }
+  };
+
+  const handleDelete = async (id) => {
+    const newList = listings.filter(i=>i.id!==id);
+    const ok = await persistListings(newList);
+    if (ok) setListings(newList);
+  };
+
+  const groupedByCat = PRICE_CATS.reduce((acc,c)=>({ ...acc,[c]:listings.filter(i=>i.cat===c) }),{});
+  const activeCats = PRICE_CATS.filter(c=>groupedByCat[c].length>0);
+
   return (
-    <div className="space-y-3">
-      <h2 className="font-black text-stone-900 text-lg" style={{fontFamily:'Sora,sans-serif'}}>Management</h2>
-      {sections.map(s=>(
-        <SectionCard key={s.title}>
-          <button className="w-full flex items-center gap-4 p-4 text-left hover:bg-stone-50 transition-colors">
-            <div className="w-11 h-11 bg-orange-50 rounded-xl flex items-center justify-center text-2xl flex-shrink-0">{s.icon}</div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-bold text-stone-800">{s.title}</p>
-              <p className="text-xs text-stone-400 mt-0.5 truncate">{s.desc}</p>
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="font-black text-stone-900 text-lg" style={{fontFamily:'Sora,sans-serif'}}>Pricing List</h2>
+        <button onClick={openNew}
+          className="flex items-center gap-1.5 bg-orange-500 hover:bg-orange-600 text-white text-xs font-black px-4 py-2 rounded-xl transition shadow-sm">
+          + Add Item
+        </button>
+      </div>
+
+      {/* ── Add / Edit Form ── */}
+      {editId !== null && (
+        <div className="bg-white rounded-2xl border border-orange-200 shadow-md p-4 space-y-3">
+          <p className="font-black text-sm text-stone-800">{editId==='new'?'➕ New Pricing Item':'✏️ Edit Item'}</p>
+
+          {/* Image picker */}
+          <label className="flex flex-col items-center justify-center w-full h-36 rounded-xl border-2 border-dashed border-orange-300 bg-orange-50 cursor-pointer hover:bg-orange-100 transition overflow-hidden relative">
+            {imgPreview
+              ? <img src={imgPreview} alt="preview" className="w-full h-full object-cover rounded-xl"/>
+              : <div className="flex flex-col items-center gap-1 text-orange-400">
+                  <span className="text-3xl">🖼️</span>
+                  <span className="text-xs font-bold">Tap to add image</span>
+                </div>}
+            <input type="file" accept="image/*" className="hidden" onChange={handleImgPick}/>
+            {imgPreview && (
+              <div className="absolute inset-0 bg-black/0 hover:bg-black/30 flex items-center justify-center transition rounded-xl">
+                <span className="text-white text-sm font-bold opacity-0 hover:opacity-100">Change</span>
+              </div>
+            )}
+          </label>
+
+          {/* Fields */}
+          <input value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))}
+            placeholder="Item name (e.g. Bridal Lehenga)" maxLength={80}
+            className="w-full border border-stone-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"/>
+          <textarea value={form.desc} onChange={e=>setForm(f=>({...f,desc:e.target.value}))}
+            placeholder="Short description (optional)" rows={2} maxLength={200}
+            className="w-full border border-stone-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300 resize-none"/>
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <label className="text-[10px] font-black uppercase tracking-widest text-stone-400 block mb-1">Category</label>
+              <select value={form.cat} onChange={e=>setForm(f=>({...f,cat:e.target.value}))}
+                className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300 bg-white">
+                {PRICE_CATS.map(c=><option key={c}>{c}</option>)}
+              </select>
             </div>
-            {s.badge && <span className="flex-shrink-0 bg-orange-100 text-orange-700 text-[10px] font-black px-2 py-0.5 rounded-full">{s.badge}</span>}
-            <span className="text-stone-300 text-lg flex-shrink-0">›</span>
-          </button>
-        </SectionCard>
-      ))}
+            <div className="w-32">
+              <label className="text-[10px] font-black uppercase tracking-widest text-stone-400 block mb-1">Price (₹)</label>
+              <input type="number" min="0" value={form.price} onChange={e=>setForm(f=>({...f,price:e.target.value}))}
+                placeholder="0"
+                className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"/>
+            </div>
+          </div>
+          {saveErr && <p className="text-red-500 text-xs font-semibold">{saveErr}</p>}
+          <div className="flex gap-2">
+            <button onClick={cancelEdit}
+              className="flex-1 py-2.5 rounded-xl border border-stone-200 text-stone-500 text-sm font-bold hover:bg-stone-50 transition">
+              Cancel
+            </button>
+            <button onClick={handleAddOrUpdate} disabled={saving}
+              className="flex-1 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-sm font-black transition disabled:opacity-60">
+              {saving ? 'Saving…' : saved ? '✅ Saved!' : editId==='new' ? '➕ Add Item' : '💾 Save Changes'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Listing cards ── */}
+      {loading ? (
+        <div className="flex justify-center py-10">
+          <span className="w-6 h-6 border-2 border-orange-400 border-t-transparent rounded-full animate-spin"/>
+        </div>
+      ) : listings.length === 0 ? (
+        <div className="bg-white rounded-2xl border border-stone-200 p-10 text-center">
+          <span className="text-5xl block mb-3">🏷️</span>
+          <p className="font-bold text-stone-600">No pricing items yet</p>
+          <p className="text-stone-400 text-sm mt-1">Click "Add Item" to create your first pricing card</p>
+        </div>
+      ) : (
+        activeCats.map(cat => (
+          <div key={cat}>
+            <p className="text-[11px] font-black uppercase tracking-widest text-stone-400 mb-2 px-1">{cat}</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+              {groupedByCat[cat].map(item => (
+                <div key={item.id} className="bg-white rounded-2xl border border-stone-200 shadow-sm overflow-hidden flex flex-col group hover:shadow-md transition-shadow">
+                  {/* Image */}
+                  <div className="relative h-40 bg-stone-100 flex-shrink-0">
+                    {resolveImg(item.img)
+                      ? <img src={resolveImg(item.img)} alt={item.name} className="w-full h-full object-cover"/>
+                      : <div className="w-full h-full flex items-center justify-center text-4xl">🧵</div>}
+                    {/* Category badge */}
+                    <span className="absolute top-2 left-2 text-[10px] font-black bg-orange-500 text-white px-2 py-0.5 rounded-full">
+                      {item.cat}
+                    </span>
+                  </div>
+                  {/* Info */}
+                  <div className="p-3 flex flex-col flex-1">
+                    <p className="font-black text-stone-800 text-sm leading-tight">{item.name}</p>
+                    {item.desc && <p className="text-stone-400 text-xs mt-1 leading-relaxed line-clamp-2">{item.desc}</p>}
+                    <div className="flex items-center justify-between mt-auto pt-3">
+                      <span className="text-orange-600 font-black text-base">₹{Number(item.price).toLocaleString('en-IN')}</span>
+                      <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={()=>openEdit(item)}
+                          className="w-8 h-8 rounded-lg bg-blue-50 text-blue-500 flex items-center justify-center hover:bg-blue-100 transition text-sm">✏️</button>
+                        <button onClick={()=>handleDelete(item.id)}
+                          className="w-8 h-8 rounded-lg bg-red-50 text-red-500 flex items-center justify-center hover:bg-red-100 transition text-sm font-bold">×</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))
+      )}
+      {saved && !editId && (
+        <p className="text-center text-green-600 text-xs font-bold animate-pulse">✅ Changes saved!</p>
+      )}
     </div>
   );
 }
