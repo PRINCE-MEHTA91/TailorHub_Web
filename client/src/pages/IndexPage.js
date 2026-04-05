@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import QuickActions from '../components/QuickActions';
 import HeroBanner from '../components/HeroBanner';
+import ActiveOffers from '../components/ActiveOffers';
 import FeaturedProducts from '../components/FeaturedProducts';
+import FeaturedPricing from '../components/FeaturedPricing';
 import CategoryGrid from '../components/CategoryGrid';
 import TailorConnect from '../components/TailorConnect';
 import AuthModal from '../components/AuthModal';
@@ -62,8 +65,10 @@ const IndexPage = ({ onCategoryClick }) => {
             {showModal && <AuthModal onClose={() => setShowModal(false)} />}
             <QuickActions />
             <HeroBanner />
+            <ActiveOffers />
             <DealsStrip />
             <FeaturedProducts />
+            <FeaturedPricing />
             <CategoryGrid onCategoryClick={onCategoryClick} />
             <TailorConnect />
         </>
