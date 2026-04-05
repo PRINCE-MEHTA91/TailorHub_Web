@@ -120,6 +120,26 @@ db.getConnection((connErr, connection) => {
         if (tableErr) console.error('Error creating customer_profiles table:', tableErr.message);
         else console.log('✅ customer_profiles table ready');
     });
+
+    // Auto-create offers table
+    const createOffersTable = `
+        CREATE TABLE IF NOT EXISTS offers (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            tailor_id INT NOT NULL,
+            title VARCHAR(255) NOT NULL,
+            description TEXT DEFAULT NULL,
+            discount VARCHAR(100) NOT NULL,
+            discount_type ENUM('percent','flat') DEFAULT 'percent',
+            start_date DATE NOT NULL,
+            end_date DATE NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (tailor_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+    `;
+    db.query(createOffersTable, (tableErr) => {
+        if (tableErr) console.error('Error creating offers table:', tableErr.message);
+        else console.log('✅ offers table ready');
+    });
 });
 
 const transporter = nodemailer.createTransport({
@@ -699,6 +719,99 @@ const buttons = [
 buttons.forEach((buttonId) => {
     app.post(`/api/${buttonId}`, (req, res) => {
         res.json({ message: `${buttonId} click received` });
+    });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// OFFERS ENDPOINTS
+// ═══════════════════════════════════════════════════════════════
+
+// ── POST /api/tailor/offers — Create a new offer ───────────────
+app.post('/api/tailor/offers', verifyToken, (req, res) => {
+    const { title, description, discount, discount_type, start_date, end_date } = req.body;
+
+    // Validate required fields
+    if (!title || !discount || !start_date || !end_date)
+        return res.status(400).json({ message: 'title, discount, start_date and end_date are required' });
+
+    // Validate dates: end_date must be >= start_date
+    if (new Date(end_date) < new Date(start_date))
+        return res.status(400).json({ message: 'end_date must be on or after start_date' });
+
+    // Ensure user is a tailor
+    db.query('SELECT role FROM users WHERE id = ?', [req.userId], (err, rows) => {
+        if (err || rows.length === 0) return res.status(500).json({ message: 'Server error' });
+        if (rows[0].role !== 'tailor') return res.status(403).json({ message: 'Only tailors can create offers' });
+
+        const sql = `INSERT INTO offers (tailor_id, title, description, discount, discount_type, start_date, end_date)
+                     VALUES (?, ?, ?, ?, ?, ?, ?)`;
+        db.query(sql, [
+            req.userId, title, description || '', discount,
+            discount_type || 'percent', start_date, end_date
+        ], (insertErr, result) => {
+            if (insertErr) {
+                console.error('Offer insert error:', insertErr.message);
+                return res.status(500).json({ message: 'Failed to save offer' });
+            }
+            res.json({ message: 'Offer created successfully', id: result.insertId });
+        });
+    });
+});
+
+// ── GET /api/tailor/offers — Own offers with active status ─────
+app.get('/api/tailor/offers', verifyToken, (req, res) => {
+    const sql = `
+        SELECT id, title, description, discount, discount_type, start_date, end_date, created_at,
+               (CURDATE() >= start_date AND CURDATE() <= end_date) AS is_active,
+               DATEDIFF(end_date, CURDATE()) AS days_left
+        FROM offers WHERE tailor_id = ?
+        ORDER BY end_date ASC
+    `;
+    db.query(sql, [req.userId], (err, results) => {
+        if (err) return res.status(500).json({ message: 'Server error' });
+        res.json({ offers: results });
+    });
+});
+
+// ── DELETE /api/tailor/offers/:id — Delete own offer ──────────
+app.delete('/api/tailor/offers/:id', verifyToken, (req, res) => {
+    const { id } = req.params;
+    db.query('SELECT tailor_id FROM offers WHERE id = ?', [id], (err, rows) => {
+        if (err) return res.status(500).json({ message: 'Server error' });
+        if (rows.length === 0) return res.status(404).json({ message: 'Offer not found' });
+        if (rows[0].tailor_id !== req.userId) return res.status(403).json({ message: 'Not authorized' });
+        db.query('DELETE FROM offers WHERE id = ?', [id], (delErr) => {
+            if (delErr) return res.status(500).json({ message: 'Failed to delete offer' });
+            res.json({ message: 'Offer deleted successfully' });
+        });
+    });
+});
+
+// ── GET /api/offers/active — Public: all active offers with tailor info ──
+app.get('/api/offers/active', (req, res) => {
+    const sql = `
+        SELECT o.id, o.title, o.description, o.discount, o.discount_type,
+               o.start_date, o.end_date,
+               DATEDIFF(o.end_date, CURDATE()) AS days_left,
+               u.id AS tailor_id, u.full_name,
+               tp.shop_name, tp.city, tp.profile_img
+        FROM offers o
+        INNER JOIN users u ON u.id = o.tailor_id AND u.role = 'tailor'
+        LEFT JOIN tailor_profiles tp ON tp.user_id = o.tailor_id
+        WHERE CURDATE() >= o.start_date AND CURDATE() <= o.end_date
+        ORDER BY o.end_date ASC
+    `;
+    db.query(sql, (err, results) => {
+        if (err) return res.status(500).json({ message: 'Server error' });
+        const offers = results.map(o => ({
+            ...o,
+            shop_name:   o.shop_name || o.full_name || 'Tailor Shop',
+            profile_img: normalizeImgPath(o.profile_img),
+            discount_label: o.discount_type === 'percent'
+                ? `${o.discount}% OFF`
+                : `₹${Number(o.discount).toLocaleString('en-IN')} OFF`,
+        }));
+        res.json({ offers });
     });
 });
 

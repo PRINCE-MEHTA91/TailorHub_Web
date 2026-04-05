@@ -1074,10 +1074,131 @@ function ProfileTab({ user, onLogout, onSaved }) {
   );
 }
 
+/* ── Offers Tab ── */
+function OffersTab() {
+  const API_URL_M = process.env.REACT_APP_API_URL || 'http://localhost:3000';
+  const [offers, setOffers] = useState([]);
+  const [form, setForm] = useState({ title: '', description: '', discount: '', discount_type: 'percent', start_date: '', end_date: '' });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const fetchOffers = () => {
+    fetch(`${API_URL_M}/api/tailor/offers`, { credentials: 'include' })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.offers) setOffers(d.offers); setLoading(false); })
+      .catch(() => setLoading(false));
+  };
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { fetchOffers(); }, []);
+
+  const handleAdd = async () => {
+    setError('');
+    if (!form.title || !form.discount || !form.start_date || !form.end_date) {
+      setError('Title, discount, start date, and end date are required'); return;
+    }
+    setSaving(true);
+    try {
+      const r = await fetch(`${API_URL_M}/api/tailor/offers`, {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form)
+      });
+      const d = await r.json();
+      if (r.ok) {
+        setForm({ title: '', description: '', discount: '', discount_type: 'percent', start_date: '', end_date: '' });
+        fetchOffers();
+      } else {
+        setError(d.message || 'Failed to add offer');
+      }
+    } catch {
+      setError('Network error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('Delete this offer?')) return;
+    try {
+      const r = await fetch(`${API_URL_M}/api/tailor/offers/${id}`, { method: 'DELETE', credentials: 'include' });
+      if (r.ok) fetchOffers();
+    } catch {}
+  };
+
+  return (
+    <div className="space-y-4">
+      <h2 className="font-black text-stone-900 text-lg" style={{fontFamily:'Sora,sans-serif'}}>🔥 Manage Offers</h2>
+      <div className="bg-white rounded-2xl p-4 shadow-sm border border-stone-200 space-y-3">
+         <p className="font-bold text-sm text-stone-800">➕ Add New Offer</p>
+         <input placeholder="Offer Title (e.g., Summer Sale)" value={form.title} onChange={e=>setForm({...form,title:e.target.value})} className="w-full border border-stone-200 focus:ring-2 focus:ring-orange-300 outline-none rounded-xl px-3 py-2 text-sm" />
+         <textarea placeholder="Description (Optional)" value={form.description} onChange={e=>setForm({...form,description:e.target.value})} className="w-full border border-stone-200 focus:ring-2 focus:ring-orange-300 outline-none rounded-xl px-3 py-2 text-sm" />
+         <div className="flex gap-2">
+            <input placeholder="Discount Amount" type="number" min="0" value={form.discount} onChange={e=>setForm({...form,discount:e.target.value})} className="w-1/2 border border-stone-200 focus:ring-2 focus:ring-orange-300 outline-none rounded-xl px-3 py-2 text-sm" />
+            <select value={form.discount_type} onChange={e=>setForm({...form,discount_type:e.target.value})} className="w-1/2 border border-stone-200 focus:ring-2 focus:ring-orange-300 outline-none rounded-xl px-3 py-2 text-sm">
+               <option value="percent">% Percent OFF</option>
+               <option value="flat">₹ Flat OFF</option>
+            </select>
+         </div>
+         <div className="flex gap-2">
+            <div className="w-1/2">
+                <label className="text-[10px] font-bold text-stone-400 uppercase">Start Date</label>
+                <input type="date" value={form.start_date} onChange={e=>setForm({...form,start_date:e.target.value})} className="w-full border border-stone-200 outline-none focus:ring-2 focus:ring-orange-300 rounded-xl px-3 py-2 text-sm text-stone-700" />
+            </div>
+            <div className="w-1/2">
+                <label className="text-[10px] font-bold text-stone-400 uppercase">End Date</label>
+                <input type="date" value={form.end_date} onChange={e=>setForm({...form,end_date:e.target.value})} className="w-full border border-stone-200 outline-none focus:ring-2 focus:ring-orange-300 rounded-xl px-3 py-2 text-sm text-stone-700" />
+            </div>
+         </div>
+         {error && <p className="text-red-500 font-bold text-xs">{error}</p>}
+         <button onClick={handleAdd} disabled={saving} className="w-full bg-orange-500 hover:bg-orange-600 transition text-white font-bold py-2.5 rounded-xl disabled:opacity-50">
+           {saving ? 'Saving...' : '💾 Save Offer'}
+         </button>
+      </div>
+
+      <div>
+        <h3 className="font-bold text-sm text-stone-800 mb-3">Your Offers</h3>
+        {loading && <p className="text-stone-400 text-sm">Loading...</p>}
+        {offers.length === 0 && !loading && <p className="text-stone-500 text-sm bg-white p-4 rounded-xl shadow-sm text-center">No offers created yet</p>}
+        {offers.map(o => (
+           <div key={o.id} className="bg-white p-4 rounded-2xl mb-3 shadow-sm border border-stone-200">
+             <div className="flex justify-between items-start">
+               <div>
+                 <div className="flex items-center gap-2 mb-1">
+                     <p className="font-bold text-stone-800">{o.title}</p>
+                     {o.is_active ? 
+                        <span className="text-[10px] uppercase font-black bg-green-100 border border-green-200 text-green-700 px-2 py-0.5 rounded-full inline-flex items-center gap-1"><span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span>Active</span> 
+                      : <span className="text-[10px] uppercase font-bold bg-stone-100 border border-stone-200 text-stone-500 px-2 py-0.5 rounded-full">Inactive</span>
+                     }
+                 </div>
+                 {o.description && <p className="text-xs text-stone-500 mb-2">{o.description}</p>}
+                 <p className="text-sm font-black text-orange-600 bg-orange-50 px-2 py-1 rounded inline-block">
+                    {o.discount}{o.discount_type === 'percent' ? '% OFF' : '₹ OFF'}
+                 </p>
+                 <p className="text-[11px] text-stone-400 mt-2 font-bold uppercase tracking-wider">
+                    Valid: {new Date(o.start_date).toLocaleDateString()} - {new Date(o.end_date).toLocaleDateString()}
+                    {o.is_active && o.days_left !== null && o.days_left >= 0 && (
+                        <span className="ml-2 text-orange-500">({o.days_left} days left)</span>
+                    )}
+                 </p>
+               </div>
+               <button onClick={()=>handleDelete(o.id)} className="text-red-500 text-xs font-bold bg-red-50 hover:bg-red-100 border border-red-100 px-2 py-1.5 rounded-lg transition ml-2 flex-shrink-0">
+                  Delete
+               </button>
+             </div>
+           </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /* ── Bottom Nav ── */
 const NAV_TABS = [
   {id:'home',   icon:'🏠',label:'Home'},
   {id:'orders', icon:'📋',label:'Orders'},
+  {id:'offers', icon:'🔥',label:'Offers'},
   {id:'manage', icon:'⚙️',label:'Manage'},
   {id:'profile',icon:'👤',label:'Profile'},
 ];
@@ -1113,6 +1234,7 @@ export default function TailorDashboardPage() {
     switch(activeTab) {
       case 'home':    return <HomeTab {...props}/>;
       case 'orders':  return <OrdersTab/>;
+      case 'offers':  return <OffersTab/>;
       case 'manage':  return <ManagementTab/>;
       case 'profile': return <ProfileTab {...props} onSaved={({ profileImg: img, shopName }) => {
         if (img) setSidebarProfileImg(img.startsWith('/uploads') ? `${API_URL_MAIN}${img}` : img);
@@ -1184,6 +1306,7 @@ export default function TailorDashboardPage() {
                 {[
                   {id:'home',   icon:'🏠', label:'Dashboard Home',   desc:'Stats & recent orders'},
                   {id:'orders', icon:'📋', label:'My Orders',        desc:'View & manage orders'},
+                  {id:'offers', icon:'🔥', label:'Manage Offers',    desc:'Create & edit promos'},
                   {id:'manage', icon:'⚙️', label:'Management',       desc:'Portfolio & tools'},
                   {id:'profile',icon:'👤', label:'Edit Profile',     desc:'Shop info & services'},
                 ].map(item => (
@@ -1222,7 +1345,7 @@ export default function TailorDashboardPage() {
         </main>
 
         {/* Bottom Nav — full width on all screens */}
-        <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-stone-200 grid grid-cols-4 z-50 shadow-lg">
+        <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-stone-200 grid grid-cols-5 z-50 shadow-lg">
           {NAV_TABS.map(n=>(
             <button key={n.id} onClick={()=>setActiveTab(n.id)}
               className="flex flex-col items-center gap-0.5 py-2.5 transition-all">
