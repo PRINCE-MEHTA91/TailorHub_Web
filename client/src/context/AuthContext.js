@@ -7,7 +7,9 @@ export const AuthProvider = ({ children }) => {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        fetch('http://localhost:3000/api/auth/me', { credentials: 'include' })
+        const API_URL = process.env.REACT_APP_API_URL;
+
+        fetch(`${API_URL}/api/auth/me`, { credentials: 'include' })
             .then((res) => (res.ok ? res.json() : null))
             .then((data) => {
                 if (data?.user) setUser(data.user);
@@ -19,7 +21,8 @@ export const AuthProvider = ({ children }) => {
     const login = (userData) => setUser(userData);
 
     const logout = async () => {
-        await fetch('http://localhost:3000/api/auth/logout', { method: 'POST', credentials: 'include' });
+        const API_URL = process.env.REACT_APP_API_URL;
+        await fetch(`${API_URL}/api/auth/logout`, { method: 'POST', credentials: 'include' });
         setUser(null);
     };
 

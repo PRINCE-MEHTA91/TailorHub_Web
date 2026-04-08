@@ -18,7 +18,8 @@ const CustomerProfileTab = ({ user, onLogout }) => {
 
     // Load profile from DB on mount
     useEffect(() => {
-        fetch('http://localhost:3000/api/customer/profile', { credentials: 'include' })
+        const API_URL = process.env.REACT_APP_API_URL;
+        fetch(`${API_URL}/api/customer/profile`, { credentials: 'include' })
             .then(res => res.ok ? res.json() : null)
             .then(data => {
                 if (data?.profile) {
@@ -35,7 +36,8 @@ const CustomerProfileTab = ({ user, onLogout }) => {
         setSaving(true);
         setSaveError('');
         try {
-            const res = await fetch('http://localhost:3000/api/customer/profile', {
+            const API_URL = process.env.REACT_APP_API_URL;
+            const res = await fetch(`${API_URL}/api/customer/profile`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
@@ -171,7 +173,7 @@ const OrdersTab = () => (
 );
 
 /* ─── Category Results ───────────────────────────────────────── */
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
+const API_URL = process.env.REACT_APP_API_URL;
 const catEmojiMap = {
     Bridal: '👰', Suits: '🤵', Kurta: '🧥', Blouses: '✂️', 'Kids Wear': '🧒', Alterations: '🔧',
 };

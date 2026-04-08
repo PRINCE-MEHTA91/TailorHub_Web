@@ -35,7 +35,7 @@ const LocationModal = ({ onClose, onSave, currentProfile }) => {
                         `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`
                     );
                     const data = await response.json();
-                    
+
                     if (data && data.address) {
                         const addr = data.address;
                         setAddress(prev => ({
@@ -73,8 +73,9 @@ const LocationModal = ({ onClose, onSave, currentProfile }) => {
                 whatsapp: currentProfile?.whatsapp || '',
                 ...address
             };
+            const API_URL = process.env.REACT_APP_API_URL;
 
-            const res = await fetch('http://localhost:3000/api/customer/profile', {
+            const res = await fetch(`${API_URL}/api/customer/profile`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
@@ -125,7 +126,7 @@ const LocationModal = ({ onClose, onSave, currentProfile }) => {
                     </div>
 
                     <div className="p-5 overflow-y-auto space-y-4">
-                        <button 
+                        <button
                             onClick={handleDetectLocation}
                             disabled={detecting}
                             className="w-full flex items-center justify-center gap-2 bg-indigo-50 border border-indigo-100 text-indigo-600 font-semibold py-3 px-4 rounded-xl hover:bg-indigo-100 transition-colors disabled:opacity-70"
@@ -156,51 +157,51 @@ const LocationModal = ({ onClose, onSave, currentProfile }) => {
                         <div className="space-y-3">
                             <div>
                                 <label className="block text-xs font-semibold text-gray-600 mb-1 ml-1">Street / Area / Building</label>
-                                <input 
-                                    className={inputCls} 
-                                    placeholder="e.g. 123 Main St, Apartment 4B" 
+                                <input
+                                    className={inputCls}
+                                    placeholder="e.g. 123 Main St, Apartment 4B"
                                     value={address.street}
-                                    onChange={e => setAddress({ ...address, street: e.target.value })} 
+                                    onChange={e => setAddress({ ...address, street: e.target.value })}
                                 />
                             </div>
-                            
+
                             <div className="grid grid-cols-2 gap-3">
                                 <div>
                                     <label className="block text-xs font-semibold text-gray-600 mb-1 ml-1">City</label>
-                                    <input 
-                                        className={inputCls} 
-                                        placeholder="City" 
+                                    <input
+                                        className={inputCls}
+                                        placeholder="City"
                                         value={address.city}
-                                        onChange={e => setAddress({ ...address, city: e.target.value })} 
+                                        onChange={e => setAddress({ ...address, city: e.target.value })}
                                     />
                                 </div>
                                 <div>
                                     <label className="block text-xs font-semibold text-gray-600 mb-1 ml-1">State</label>
-                                    <input 
-                                        className={inputCls} 
-                                        placeholder="State" 
+                                    <input
+                                        className={inputCls}
+                                        placeholder="State"
                                         value={address.state}
-                                        onChange={e => setAddress({ ...address, state: e.target.value })} 
+                                        onChange={e => setAddress({ ...address, state: e.target.value })}
                                     />
                                 </div>
                             </div>
-                            
+
                             <div>
                                 <label className="block text-xs font-semibold text-gray-600 mb-1 ml-1">PIN Code</label>
-                                <input 
-                                    className={inputCls} 
-                                    placeholder="PIN Code" 
-                                    value={address.pin} 
+                                <input
+                                    className={inputCls}
+                                    placeholder="PIN Code"
+                                    value={address.pin}
                                     maxLength={10}
-                                    onChange={e => setAddress({ ...address, pin: e.target.value })} 
+                                    onChange={e => setAddress({ ...address, pin: e.target.value })}
                                 />
                             </div>
                         </div>
                     </div>
 
                     <div className="p-5 border-t border-gray-100 bg-white">
-                        <button 
-                            onClick={handleSave} 
+                        <button
+                            onClick={handleSave}
                             disabled={saving}
                             className="w-full bg-indigo-600 text-white font-bold py-3.5 rounded-xl hover:bg-indigo-700 transition-colors shadow-md disabled:opacity-70 flex items-center justify-center gap-2"
                         >

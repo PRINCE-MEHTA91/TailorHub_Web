@@ -20,7 +20,8 @@ const ResetPasswordPage = () => {
         if (form.password !== form.confirm) return setError('Passwords do not match');
         setLoading(true);
         try {
-            const res = await fetch(`http://localhost:3000/api/auth/reset-password/${token}`, {
+            const API_URL = process.env.REACT_APP_API_URL;
+            const res = await fetch(`${API_URL}/api/auth/reset-password/${token}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ password: form.password }),

@@ -97,7 +97,8 @@ const SignupPage = () => {
         let data = null;
 
         try {
-            res = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:3000'}/api/auth/signup`, {
+            const API_URL = process.env.REACT_APP_API_URL;
+            res = await fetch(`${API_URL}/api/auth/signup`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
