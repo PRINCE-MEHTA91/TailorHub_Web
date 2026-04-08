@@ -17,6 +17,18 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "mysql2": "^3.20.0",
     "react-router-dom": "^7.13.0"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/PRINCE-MEHTA91/TailorHub_web.git"
+  },
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/PRINCE-MEHTA91/TailorHub_web/issues"
+  },
+  "homepage": "https://github.com/PRINCE-MEHTA91/TailorHub_web#readme"
 }
