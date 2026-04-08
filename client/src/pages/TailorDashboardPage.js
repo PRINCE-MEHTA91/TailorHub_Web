@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
+const API_URL = process.env.REACT_APP_API_URL;
 
 const DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
 const TIMING_PRESETS = ['06:00','07:00','08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00','21:00','22:00'];
@@ -183,7 +183,7 @@ function OrdersTab() {
 const PRICE_CATS = ['Men\'s Wear','Women\'s Wear','Kids Wear','Bridal','Alterations','Other'];
 
 function ManagementTab() {
-  const API_URL_M = process.env.REACT_APP_API_URL || 'http://localhost:3000';
+  const API_URL_M = process.env.REACT_APP_API_URL;
   const resolveImg = (p) => { if(!p) return null; return p.startsWith('http')?p:`${API_URL_M}${p}`; };
 
   const [listings, setListings]    = useState([]);
@@ -570,7 +570,7 @@ function ProfileTab({ user, onLogout, onSaved }) {
       // Normalize: strip API_URL prefix so we always store a relative path
       const normalizeImgPath = (url) => {
         if (!url) return null;
-        if (url.startsWith(API_URL)) return url.slice(API_URL.length); // strip http://localhost:3000
+        if (url.startsWith(API_URL)) return url.slice(API_URL.length); // strip base API url
         return url; // already relative e.g. /uploads/...
       };
 
@@ -1076,7 +1076,7 @@ function ProfileTab({ user, onLogout, onSaved }) {
 
 /* ── Offers Tab ── */
 function OffersTab() {
-  const API_URL_M = process.env.REACT_APP_API_URL || 'http://localhost:3000';
+  const API_URL_M = process.env.REACT_APP_API_URL;
   const [offers, setOffers] = useState([]);
   const [form, setForm] = useState({ title: '', description: '', discount: '', discount_type: 'percent', start_date: '', end_date: '' });
   const [loading, setLoading] = useState(true);
@@ -1209,7 +1209,7 @@ export default function TailorDashboardPage() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('home');
 
-  const API_URL_MAIN = process.env.REACT_APP_API_URL || 'http://localhost:3000';
+  const API_URL_MAIN = process.env.REACT_APP_API_URL;
   const resolveImgMain = (p) => { if (!p) return null; return p.startsWith('http') ? p : `${API_URL_MAIN}${p}`; };
 
   const [sidebarProfileImg, setSidebarProfileImg] = useState(null);
