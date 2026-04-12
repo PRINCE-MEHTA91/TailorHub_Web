@@ -11,7 +11,6 @@ import AuthModal from '../components/AuthModal';
 import { useAuth } from '../context/AuthContext';
 import { motion } from 'framer-motion';
 
-/* ──── Deals of the Day ─────────────────────────────── */
 const deals = [
   { id: 1, emoji: '👔', label: 'Shirt Stitching', cut: '35%', price: '₹299', bg: '#ffe4e6' },
   { id: 2, emoji: '👗', label: 'Dress Alteration', cut: '25%', price: '₹149', bg: '#ede9fe' },
@@ -48,7 +47,6 @@ const DealsStrip = () => (
   </section>
 );
 
-/* ──── Main Index Page ─────────────────────────────── */
 const IndexPage = ({ onCategoryClick }) => {
     const { user, loading } = useAuth();
     const [showModal, setShowModal] = useState(false);

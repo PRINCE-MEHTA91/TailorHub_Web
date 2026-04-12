@@ -5,7 +5,6 @@ import { motion } from 'framer-motion';
 const API_URL = process.env.REACT_APP_API_URL;
 const resolveImg = (p) => { if (!p) return null; return p.startsWith('http') ? p : `${API_URL}${p}`; };
 
-/* ── Gradient palette cycling per card ─────────────────── */
 const GRADIENTS = [
   'from-rose-400 to-pink-600',
   'from-indigo-400 to-purple-600',
@@ -15,7 +14,6 @@ const GRADIENTS = [
   'from-emerald-400 to-green-600',
 ];
 
-/* ── Category accent colors ─────────────────────────────── */
 const CAT_COLORS = {
   "Bridal":       { bg: 'bg-rose-100',   text: 'text-rose-700'   },
   "Men's Wear":   { bg: 'bg-blue-100',   text: 'text-blue-700'   },
@@ -41,7 +39,6 @@ export default function FeaturedPricing() {
       .then(r => r.ok ? r.json() : null)
       .then(data => {
         if (!data?.tailors) return;
-        // Collect all price_listings across all tailors, attach tailor info
         const all = [];
         data.tailors.forEach(t => {
           const listings = Array.isArray(t.price_listings) ? t.price_listings : [];
@@ -54,7 +51,6 @@ export default function FeaturedPricing() {
             });
           });
         });
-        // Pick 2 random items so it feels "curated"
         const shuffled = all.sort(() => Math.random() - 0.5).slice(0, 2);
         setItems(shuffled);
       })
@@ -62,12 +58,10 @@ export default function FeaturedPricing() {
       .finally(() => setLoading(false));
   }, []);
 
-  // Don't render section if no real data
   if (loading || items.length === 0) return null;
 
   return (
     <section style={{ padding: '0 16px 8px' }}>
-      {/* Section header */}
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'12px' }}>
         <div>
           <h2 style={{ fontFamily:'Sora,sans-serif', fontWeight:900, fontSize:'15px', color:'#1c1917', margin:0 }}>
@@ -85,7 +79,6 @@ export default function FeaturedPricing() {
         </button>
       </div>
 
-      {/* Cards row */}
       <motion.div
         variants={{ hidden:{}, show:{ transition:{ staggerChildren:0.12 } } }}
         initial="hidden" whileInView="show" viewport={{ once:true, margin:'-40px' }}
@@ -108,7 +101,6 @@ export default function FeaturedPricing() {
                 overflow:'hidden', display:'flex', flexDirection:'column',
               }}
             >
-              {/* Image / gradient hero */}
               <div style={{ position:'relative', height:'130px', flexShrink:0 }}>
                 {imgUrl ? (
                   <img src={imgUrl} alt={item.name}
@@ -120,14 +112,12 @@ export default function FeaturedPricing() {
                     🧵
                   </div>
                 )}
-                {/* Category badge */}
                 <span className={`${cat.bg} ${cat.text}`}
                   style={{ position:'absolute', top:'8px', left:'8px', fontSize:'9px',
                            fontWeight:900, padding:'3px 8px', borderRadius:'999px',
                            textTransform:'uppercase', letterSpacing:'0.05em' }}>
                   {item.cat || 'Fashion'}
                 </span>
-                {/* Featured badge */}
                 <span style={{ position:'absolute', top:'8px', right:'8px', fontSize:'9px',
                                fontWeight:900, background:'rgba(249,115,22,0.95)',
                                color:'#fff', padding:'3px 8px', borderRadius:'999px' }}>
@@ -135,16 +125,13 @@ export default function FeaturedPricing() {
                 </span>
               </div>
 
-              {/* Content */}
               <div style={{ padding:'10px 12px 12px', display:'flex', flexDirection:'column', flex:1 }}>
-                {/* Product name */}
                 <p style={{ fontFamily:'Sora,sans-serif', fontWeight:900, fontSize:'13px',
                             color:'#1c1917', margin:0, lineHeight:'1.3',
                             display:'-webkit-box', WebkitLineClamp:2,
                             WebkitBoxOrient:'vertical', overflow:'hidden' }}>
                   {item.name}
                 </p>
-                {/* Shop name */}
                 <p style={{ fontSize:'10px', color:'#a78bfa', fontWeight:700,
                             margin:'3px 0 0', display:'flex', alignItems:'center', gap:'3px' }}>
                   <span>✂️</span> {item.shopName}
@@ -157,7 +144,6 @@ export default function FeaturedPricing() {
                   </p>
                 )}
 
-                {/* Price + Book Now */}
                 <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between',
                               marginTop:'auto', paddingTop:'10px' }}>
                   <span style={{ fontFamily:'Sora,sans-serif', fontWeight:900, fontSize:'16px',

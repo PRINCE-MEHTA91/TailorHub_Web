@@ -20,15 +20,12 @@ import CompletedOrdersPage from './pages/CompletedOrdersPage';
 import EarningsPage from './pages/EarningsPage';
 import TailorDetailsPage from './pages/TailorDetailsPage';
 import BookingPage from './pages/BookingPage';
+import BrowseTailorsDealsPage from './pages/BrowseTailorsDealsPage';
 
-/* ── Smart Home Route ──────────────────────────────────────────
-   If user is already logged in, redirect to their role dashboard.
-   Otherwise, show the normal public home page.
-──────────────────────────────────────────────────────────────── */
 const SmartHomeRoute = () => {
   const { user, loading } = useAuth();
 
-  if (loading) return null; // wait for auth check
+  if (loading) return null;
 
   if (user) {
     const dest = user.role === 'tailor' ? '/tailor/dashboard' : '/customer/dashboard';
@@ -50,28 +47,24 @@ function App() {
     <AuthProvider>
       <Router>
         <Routes>
-          {/* Public Routes */}
           <Route path="/login" element={<LoginPage />} />
           <Route path="/signup" element={<SignupPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
 
-          {/* Role-specific dashboards */}
           <Route path="/customer/dashboard" element={<PrivateRoute role="customer"><CustomerDashboardPage /></PrivateRoute>} />
           <Route path="/tailor/dashboard" element={<PrivateRoute role="tailor"><TailorDashboardPage /></PrivateRoute>} />
 
-          {/* Generic /dashboard fallback — smart-switches by role */}
           <Route path="/dashboard" element={<PrivateRoute><DashboardPage /></PrivateRoute>} />
 
-          {/* Tailor Detail Pages */}
           <Route path="/tailor/pending-jobs" element={<PrivateRoute role="tailor"><PendingJobsPage /></PrivateRoute>} />
           <Route path="/tailor/completed" element={<PrivateRoute role="tailor"><CompletedOrdersPage /></PrivateRoute>} />
           <Route path="/tailor/earnings" element={<PrivateRoute role="tailor"><EarningsPage /></PrivateRoute>} />
 
           <Route path="/tailor-profile/:id" element={<TailorDetailsPage />} />
           <Route path="/book-appointment/:id" element={<BookingPage />} />
+          <Route path="/browse-deals" element={<BrowseTailorsDealsPage />} />
 
-          {/* Home Page — auto-redirects logged-in users to their dashboard */}
           <Route path="/" element={<SmartHomeRoute />} />
         </Routes>
       </Router>

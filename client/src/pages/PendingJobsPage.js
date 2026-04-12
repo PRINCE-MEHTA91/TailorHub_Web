@@ -26,7 +26,6 @@ export default function PendingJobsPage() {
 
     return (
         <div className="min-h-screen bg-gray-50">
-            {/* Header */}
             <header className="bg-white border-b border-gray-100 px-5 py-4 flex items-center gap-3 sticky top-0 z-10 shadow-sm">
                 <button onClick={() => navigate('/dashboard/tailor')}
                     className="w-9 h-9 flex items-center justify-center rounded-xl bg-gray-100 hover:bg-gray-200 transition-colors text-xl font-bold text-gray-600">
@@ -42,7 +41,6 @@ export default function PendingJobsPage() {
             </header>
 
             <main className="max-w-lg mx-auto px-4 py-5 pb-10">
-                {/* Summary Banner */}
                 <div className="bg-gradient-to-r from-amber-500 to-orange-400 rounded-2xl p-5 text-white mb-5">
                     <p className="text-amber-100 text-sm">Total pending work</p>
                     <h2 className="text-3xl font-extrabold mt-1">{allOrders.length} Jobs</h2>

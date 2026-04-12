@@ -10,7 +10,6 @@ const BookingPage = () => {
     const [tailor, setTailor] = useState(null);
     const [loading, setLoading] = useState(true);
 
-    // Form state
     const [selectedService, setSelectedService] = useState('');
     const [date, setDate] = useState('');
     const [time, setTime] = useState('');
@@ -55,7 +54,7 @@ const handleSubmit = async (e) => {
             method: 'POST',
 
             headers: { 'Content-Type': 'application/json' },
-            credentials: 'include', // verifyToken ke liye important
+            credentials: 'include',
 
             body: JSON.stringify({
                 tailor_id: id,
@@ -70,7 +69,6 @@ const handleSubmit = async (e) => {
         const data = await res.json();
 
         if (res.ok) {
-            // Keep showing success for 3 seconds before redirecting
             setIsSuccess(true);
             setTimeout(() => {
                 navigate(`/tailor-profile/${id}`);
@@ -117,7 +115,6 @@ if (isSuccess) {
 
 return (
     <div className="min-h-screen bg-gray-50 pb-10">
-        {/* Header Area */}
         <div className="bg-white shadow-sm sticky top-0 z-20">
             <div className="flex items-center p-4">
                 <button onClick={() => navigate(-1)} className="p-2 -ml-2 text-gray-600 hover:bg-gray-100 rounded-full transition-colors">
@@ -135,7 +132,6 @@ return (
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-5">
-                    {/* Service Selection */}
                     <div className="space-y-2">
                         <label className="text-sm font-bold text-gray-700 flex items-center gap-2">
                             <FaCut className="text-indigo-500" /> Select Service
@@ -164,7 +160,6 @@ return (
                         )}
                     </div>
 
-                    {/* Date & Time */}
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <label className="text-sm font-bold text-gray-700 flex items-center gap-2">
@@ -192,7 +187,6 @@ return (
                         </div>
                     </div>
 
-                    {/* Notes */}
                     <div className="space-y-2">
                         <label className="text-sm font-bold text-gray-700">Special Requirements (optional)</label>
                         <textarea

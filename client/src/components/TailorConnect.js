@@ -4,14 +4,12 @@ import { useNavigate } from 'react-router-dom';
 
 const API_URL = process.env.REACT_APP_API_URL;
 
-/* ── Resolve image path to full URL ── */
 function resolveImg(path) {
   if (!path) return null;
   if (path.startsWith('http')) return path;
   return `${API_URL}${path}`;
 }
 
-/* ── Get today's timing from saved timings object ── */
 function getTodayTiming(timings) {
   if (!timings) return null;
   const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -19,7 +17,6 @@ function getTodayTiming(timings) {
   return timings[today] || null;
 }
 
-/* ── Hardcoded fallback tailors ── */
 const fallbackTailors = [
   {
     id: 'f1', full_name: 'Priya Boutique', initials: 'PB',
@@ -66,7 +63,6 @@ const getInitials = (name = '') =>
 
 const gradients = ['tc-av-rose', 'tc-av-indigo', 'tc-av-amber'];
 
-/* ── Tailor Card ── */
 const TailorCard = ({ tailor, index }) => {
   const initials = tailor.initials || getInitials(tailor.full_name);
   const avatarGradient = tailor.avatarGradient || gradients[index % gradients.length];
@@ -92,29 +88,24 @@ const TailorCard = ({ tailor, index }) => {
       className="tc-card cursor-pointer"
       onClick={() => navigate(`/tailor-profile/${tailor.id || tailor.user_id}`)}
     >
-      {/* Top section: Avatar + Info side by side */}
       <div className="tc-card-top">
-        {/* Avatar */}
         <div className="tc-avatar-wrap">
           {profileImgUrl ? (
             <img src={profileImgUrl} alt={tailor.full_name} className="tc-avatar-img" />
           ) : (
             <div className={`tc-avatar ${avatarGradient}`}>{initials}</div>
           )}
-          {/* Open/Closed dot */}
           {todayTiming && (
             <span className={`tc-availability-dot ${isOpen ? 'tc-dot-open' : 'tc-dot-closed'}`} title={isOpen ? 'Open today' : 'Closed today'} />
           )}
         </div>
 
-        {/* Info */}
         <div className="tc-info">
           <div className="tc-name-row">
             <span className="tc-name">{tailor.full_name}</span>
             {tailor.badge && <span className="tc-badge">{tailor.badge}</span>}
           </div>
 
-          {/* Tagline */}
           {(tailor.tagline || tailor.specialty) && (
             <p className="tc-tagline">
               {tailor.tagline || tailor.specialty}
@@ -135,37 +126,30 @@ const TailorCard = ({ tailor, index }) => {
         </div>
       </div>
 
-      {/* Divider */}
       <div className="tc-divider" />
 
-      {/* Detail pills row */}
       <div className="tc-pills-row">
-        {/* Experience */}
         {tailor.experience && (
           <span className="tc-pill tc-pill-exp">
             🏆 {tailor.experience}
           </span>
         )}
-        {/* Timing */}
         {todayTiming && (
           <span className={`tc-pill ${isOpen ? 'tc-pill-open' : 'tc-pill-closed'}`}>
             🕐 {isOpen ? `${todayTiming.open} – ${todayTiming.close}` : 'Closed Today'}
           </span>
         )}
-        {/* Speciality chips (first 2) */}
         {specialities.slice(0, 2).map(s => (
           <span key={s} className="tc-pill tc-pill-spec">{s}</span>
         ))}
       </div>
 
-      {/* Products specialty line */}
       {tailor.products && tailor.products.length > 0 && (
         <p className="tc-specialty">
           ✂️ {tailor.products.slice(0, 2).map(p => p.name).join(' · ')}
         </p>
       )}
 
-      {/* Bottom: price + CTA */}
       <div className="tc-bottom">
         {startingPrice && <span className="tc-price">{startingPrice}</span>}
         <button className="tc-btn" onClick={(e) => {
@@ -177,10 +161,10 @@ const TailorCard = ({ tailor, index }) => {
   );
 };
 
-/* ── Main Component ── */
 const TailorConnect = () => {
   const [tailors, setTailors] = useState([]);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetch(`${API_URL}/api/tailors`)
@@ -203,7 +187,7 @@ const TailorConnect = () => {
           <h2 className="tc-title">Top Tailors Near You</h2>
           <p className="tc-subtitle">Trusted by thousands of customers</p>
         </div>
-        <button className="tc-view-all">View All →</button>
+        <button className="tc-view-all" onClick={() => navigate('/browse-deals')}>View All →</button>
       </div>
 
       {loading ? (

@@ -7,7 +7,6 @@ import SearchBar from '../components/SearchBar';
 import SearchResults from '../components/SearchResults';
 import IndexPage from './IndexPage';
 
-/* ─── Customer Profile Tab ───────────────────────────────────── */
 const CustomerProfileTab = ({ user, onLogout }) => {
     const [contact, setContact] = useState({ phone: '', whatsapp: '' });
     const [address, setAddress] = useState({ street: '', city: '', state: '', pin: '' });
@@ -16,7 +15,6 @@ const CustomerProfileTab = ({ user, onLogout }) => {
     const [saveError, setSaveError] = useState('');
     const [loadingProfile, setLoadingProfile] = useState(true);
 
-    // Load profile from DB on mount
     useEffect(() => {
         const API_URL = process.env.REACT_APP_API_URL;
         fetch(`${API_URL}/api/customer/profile`, { credentials: 'include' })
@@ -75,7 +73,6 @@ const CustomerProfileTab = ({ user, onLogout }) => {
 
     return (
         <div className="space-y-5 pb-4">
-            {/* Profile Header */}
             <div className="bg-gradient-to-br from-indigo-600 to-purple-600 rounded-2xl p-6 text-white text-center">
                 <div className="w-20 h-20 rounded-full mx-auto mb-3 bg-white/20 border-4 border-white/30 flex items-center justify-center">
                     <span className="text-3xl font-bold text-white">{initials}</span>
@@ -85,7 +82,6 @@ const CustomerProfileTab = ({ user, onLogout }) => {
                 <span className="mt-2 inline-block bg-white/20 text-xs font-semibold px-3 py-1 rounded-full">Customer</span>
             </div>
 
-            {/* Account Info (read-only) */}
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
                 {sectionHead('👤', 'Account Info')}
                 <div className="space-y-2">
@@ -100,7 +96,6 @@ const CustomerProfileTab = ({ user, onLogout }) => {
                 </div>
             </div>
 
-            {/* Contact */}
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
                 {sectionHead('📞', 'Contact')}
                 {loadingProfile ? (
@@ -117,7 +112,6 @@ const CustomerProfileTab = ({ user, onLogout }) => {
                 )}
             </div>
 
-            {/* Address */}
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
                 {sectionHead('📍', 'Delivery Address')}
                 {loadingProfile ? (
@@ -140,7 +134,6 @@ const CustomerProfileTab = ({ user, onLogout }) => {
                 )}
             </div>
 
-            {/* Save button */}
             {saveError && (
                 <p className="text-red-500 text-sm bg-red-50 border border-red-200 rounded-xl px-4 py-2 text-center">{saveError}</p>
             )}
@@ -151,7 +144,6 @@ const CustomerProfileTab = ({ user, onLogout }) => {
                 {saved ? '✅ Profile Saved!' : saving ? 'Saving...' : '💾 Save Profile'}
             </motion.button>
 
-            {/* Logout */}
             <button onClick={onLogout}
                 className="w-full bg-red-50 border border-red-100 text-red-600 font-semibold text-sm py-4 rounded-2xl hover:bg-red-100 transition-colors">
                 🚪 Logout
@@ -160,7 +152,6 @@ const CustomerProfileTab = ({ user, onLogout }) => {
     );
 };
 
-/* ─── Orders Tab (placeholder) ────────────────────────────────── */
 const OrdersTab = () => (
     <div className="space-y-4">
         <h2 className="text-lg font-bold text-gray-800">My Orders</h2>
@@ -172,7 +163,6 @@ const OrdersTab = () => (
     </div>
 );
 
-/* ─── Category Results ───────────────────────────────────────── */
 const API_URL = process.env.REACT_APP_API_URL;
 const catEmojiMap = {
     Bridal: '👰', Suits: '🤵', Kurta: '🧥', Blouses: '✂️', 'Kids Wear': '🧒', Alterations: '🔧',
@@ -210,7 +200,6 @@ const CategoryResults = ({ category, onBack }) => {
 
     return (
         <div className="sr-container">
-            {/* Header */}
             <div className="sr-header" style={{ alignItems: 'flex-start', flexDirection: 'column', gap: '0.5rem' }}>
                 <button
                     onClick={onBack}
@@ -238,7 +227,6 @@ const CategoryResults = ({ category, onBack }) => {
                 </div>
             </div>
 
-            {/* Loading */}
             {loading && (
                 <div className="sr-loading">
                     <span className="w-8 h-8 border-4 border-indigo-400 border-t-transparent rounded-full animate-spin" />
@@ -246,7 +234,6 @@ const CategoryResults = ({ category, onBack }) => {
                 </div>
             )}
 
-            {/* No results */}
             {!loading && results.length === 0 && (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="sr-empty">
                     <span className="sr-empty-icon">{catEmojiMap[category] || '✂️'}</span>
@@ -257,7 +244,6 @@ const CategoryResults = ({ category, onBack }) => {
                 </motion.div>
             )}
 
-            {/* Results */}
             <AnimatePresence>
                 <div className="sr-list">
                     {results.map((t, i) => {
@@ -355,14 +341,12 @@ const CategoryResults = ({ category, onBack }) => {
     );
 };
 
-/* ─── Nav tabs ─────────────────────────────────────────────────── */
 const NAV_TABS = [
     { id: 'home', label: 'Home', icon: '🏠' },
     { id: 'orders', label: 'Orders', icon: '📦' },
     { id: 'profile', label: 'Profile', icon: '👤' },
 ];
 
-/* ─── Customer Dashboard ─────────────────────────────────────── */
 const CustomerDashboardPage = () => {
     const { user, logout } = useAuth();
     const navigate = useNavigate();
@@ -380,7 +364,6 @@ const CustomerDashboardPage = () => {
         navigate('/');
     };
 
-    // Clear search when switching tabs
     const handleTabChange = (tabId) => {
         setActiveTab(tabId);
         if (tabId !== 'home') {
@@ -422,7 +405,6 @@ const CustomerDashboardPage = () => {
         <div className="min-h-screen bg-gray-50 flex flex-col w-full">
             <Header />
 
-            {/* Page Content */}
             <main className="flex-1 overflow-y-auto pb-20">
                 <AnimatePresence mode="wait">
                     <motion.div
@@ -439,7 +421,6 @@ const CustomerDashboardPage = () => {
                 </AnimatePresence>
             </main>
 
-            {/* Bottom Navigation */}
             <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 shadow-lg z-10">
                 <div className="w-full flex">
                     {NAV_TABS.map((tab) => {

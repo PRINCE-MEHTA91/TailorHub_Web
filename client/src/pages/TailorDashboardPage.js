@@ -1309,8 +1309,9 @@ export default function TailorDashboardPage() {
                   {id:'offers', icon:'🔥', label:'Manage Offers',    desc:'Create & edit promos'},
                   {id:'manage', icon:'⚙️', label:'Management',       desc:'Portfolio & tools'},
                   {id:'profile',icon:'👤', label:'Edit Profile',     desc:'Shop info & services'},
+                  {id:'browse', icon:'🔍', label:'Browse Tailors',   desc:'Explore tailors & deals', external:'/browse-deals'},
                 ].map(item => (
-                  <button key={item.id} onClick={() => setActiveTab(item.id)}
+                  <button key={item.id} onClick={() => item.external ? navigate(item.external) : setActiveTab(item.id)}
                     className={`w-full flex items-center gap-3 px-4 py-3.5 text-left transition-colors border-b border-stone-50 last:border-0 ${
                       activeTab === item.id
                         ? 'bg-orange-50 border-l-4 border-l-orange-500'
