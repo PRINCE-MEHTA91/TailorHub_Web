@@ -94,11 +94,13 @@ export default function FeaturedPricing() {
               key={item.id || idx}
               variants={cardVariants}
               whileHover={{ y:-4, boxShadow:'0 16px 40px rgba(0,0,0,0.13)' }}
+              onClick={() => navigate(`/tailor-profile/${item.tailorId}`)}
               style={{
                 background:'#fff', borderRadius:'20px',
                 border:'1px solid #f0f0f0',
                 boxShadow:'0 2px 12px rgba(0,0,0,0.07)',
                 overflow:'hidden', display:'flex', flexDirection:'column',
+                cursor:'pointer',
               }}
             >
               <div style={{ position:'relative', height:'130px', flexShrink:0 }}>
@@ -151,7 +153,7 @@ export default function FeaturedPricing() {
                     ₹{Number(item.price).toLocaleString('en-IN')}
                   </span>
                   <button
-                    onClick={() => navigate(`/tailor/${item.tailorId}`)}
+                    onClick={(e) => { e.stopPropagation(); navigate(`/tailor-profile/${item.tailorId}`); }}
                     style={{
                       background:'linear-gradient(135deg,#f97316,#ea580c)',
                       color:'#fff', fontWeight:800, fontSize:'11px',
