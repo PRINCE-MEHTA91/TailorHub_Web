@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import Header from '../components/Header';
-import BottomNav from '../components/BottomNav';
+import CustomerBottomNav from '../components/CustomerBottomNav';
 import {
     FaWhatsapp, FaInstagram, FaPhone, FaMapMarkerAlt,
     FaStar, FaArrowLeft, FaClock, FaQuoteLeft
@@ -133,7 +133,7 @@ const TailorDetailsPage = () => {
             <div className="flex-1 flex justify-center items-center">
                 <span className="w-8 h-8 border-4 border-indigo-400 border-t-transparent rounded-full animate-spin" />
             </div>
-            <BottomNav />
+            <CustomerBottomNav activeTab="tailors" />
         </div>
     );
 
@@ -148,7 +148,7 @@ const TailorDetailsPage = () => {
                     ← Go Back
                 </button>
             </div>
-            <BottomNav />
+            <CustomerBottomNav activeTab="tailors" />
         </div>
     );
 
@@ -613,7 +613,7 @@ const TailorDetailsPage = () => {
             </main>
 
             {/* ── Floating Book Appointment Button ── */}
-            <div className="fixed bottom-16 left-0 right-0 px-4 z-30 flex justify-center pointer-events-none">
+            <div className="fixed bottom-16 left-0 right-0 px-4 z-40 flex justify-center pointer-events-none">
                 <motion.button
                     initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
                     onClick={() => navigate(`/book-appointment/${id}`)}
@@ -651,6 +651,7 @@ const TailorDetailsPage = () => {
                     <p className="absolute bottom-8 text-white/50 text-xs">Tap anywhere to close</p>
                 </motion.div>
             )}
+            <CustomerBottomNav activeTab="tailors" />
         </div>
     );
 };

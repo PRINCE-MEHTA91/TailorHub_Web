@@ -1,4 +1,5 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 
 const actions = [
@@ -7,6 +8,7 @@ const actions = [
     label: 'Categories',
     gradient: 'qa-amber',
     desc: '50+ types',
+    path: null,
   },
   {
     icon: '🔥',
@@ -14,18 +16,21 @@ const actions = [
     gradient: 'qa-rose',
     desc: 'Up to 40% off',
     badge: 'HOT',
+    path: '/browse-deals',
   },
   {
     icon: '🆕',
     label: 'New Arrivals',
     gradient: 'qa-emerald',
     desc: 'Just added',
+    path: null,
   },
   {
     icon: '📈',
     label: 'Trending',
     gradient: 'qa-violet',
     desc: 'This week',
+    path: null,
   },
 ];
 
@@ -39,7 +44,9 @@ const itemVariants = {
   show: { opacity: 1, y: 0, transition: { duration: 0.35 } },
 };
 
-const QuickActions = () => (
+const QuickActions = () => {
+  const navigate = useNavigate();
+  return (
   <section className="qa-section">
     <motion.div
       className="qa-grid"
@@ -54,6 +61,8 @@ const QuickActions = () => (
           whileHover={{ y: -4, scale: 1.04 }}
           whileTap={{ scale: 0.96 }}
           className={`qa-card ${action.gradient}`}
+          style={action.path ? { cursor: 'pointer' } : {}}
+          onClick={() => action.path && navigate(action.path)}
         >
           {action.badge && (
             <span className="qa-badge">{action.badge}</span>
@@ -65,6 +74,7 @@ const QuickActions = () => (
       ))}
     </motion.div>
   </section>
-);
+  );
+};
 
 export default QuickActions;
