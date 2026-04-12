@@ -23,7 +23,6 @@ export default function CompletedOrdersPage() {
 
     return (
         <div className="min-h-screen bg-gray-50">
-            {/* Header */}
             <header className="bg-white border-b border-gray-100 px-5 py-4 flex items-center gap-3 sticky top-0 z-10 shadow-sm">
                 <button onClick={() => navigate('/dashboard/tailor')}
                     className="w-9 h-9 flex items-center justify-center rounded-xl bg-gray-100 hover:bg-gray-200 transition-colors text-xl font-bold text-gray-600">
@@ -39,7 +38,6 @@ export default function CompletedOrdersPage() {
             </header>
 
             <main className="max-w-lg mx-auto px-4 py-5 pb-10">
-                {/* Summary Banner */}
                 <div className="bg-gradient-to-r from-green-500 to-emerald-500 rounded-2xl p-5 text-white mb-5">
                     <p className="text-green-100 text-sm">Total completed deliveries</p>
                     <h2 className="text-3xl font-extrabold mt-1">{completedOrders.length} Orders</h2>
@@ -55,7 +53,6 @@ export default function CompletedOrdersPage() {
                     </div>
                 </div>
 
-                {/* Orders List */}
                 <div className="space-y-3">
                     {completedOrders.map((o, i) => (
                         <motion.div key={o.id}

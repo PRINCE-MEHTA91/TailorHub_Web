@@ -25,20 +25,15 @@ const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET;
 const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:3001';
 
-const allowedOrigins = [CLIENT_URL, 'http://127.0.0.1:3001', 'http://localhost:3001'];
 app.use(cors({
-    origin: function (origin, callback) {
-        if (!origin || allowedOrigins.includes(origin)) {
-            callback(null, true);
-        } else {
-            callback(null, true); // Allow all for dev, to prevent CORS issues
-        }
-    },
+    origin: CLIENT_URL,
     credentials: true
 }));
 app.use(express.json({ limit: '10mb' }));
 app.use(cookieParser());
 app.use(express.static(__dirname));
+
+console.log(`⏳ Attempting to connect to MySQL database at host: ${process.env.DB_HOST}`);
 
 const db = mysql.createPool({
     host: process.env.DB_HOST,
@@ -54,10 +49,12 @@ const db = mysql.createPool({
 // Test pool connectivity + auto-create tables on startup
 db.getConnection((connErr, connection) => {
     if (connErr) {
-        console.error('DB connection error:', connErr.message);
+        console.error('❌ DB connection error: Failed to connect to MySQL.');
+        console.error('❌ Exact Error Message:', connErr.message);
+        console.error('❌ Exact Error Code:', connErr.code);
         return;
     }
-    console.log('✅ Connected to MySQL database (pool)');
+    console.log('✅ Connected successfully to MySQL database (pool)');
     connection.release();
 
     // Auto-create tailor_profiles table if it doesn't exist
@@ -524,7 +521,7 @@ app.get('/api/tailors', (req, res) => {
                tp.street, tp.city, tp.state, tp.pin,
                tp.products, tp.gallery, tp.profile_img,
                tp.shop_name, tp.tagline, tp.bio, tp.experience, tp.specialities, tp.timings,
-               tp.price_listings
+               tp.price_listings, tp.deals
         FROM users u
         INNER JOIN tailor_profiles tp ON u.id = tp.user_id
         WHERE u.role = 'tailor'
@@ -540,6 +537,7 @@ app.get('/api/tailors', (req, res) => {
             specialities:   safeParseJSON(t.specialities, []),
             timings:        safeParseJSON(t.timings, null),
             price_listings: safeParseJSON(t.price_listings, []),
+            deals:          safeParseJSON(t.deals, []),
         }));
         res.json({ tailors });
     });
@@ -554,7 +552,7 @@ app.get('/api/tailors/:id', (req, res) => {
                tp.street, tp.city, tp.state, tp.pin,
                tp.products, tp.gallery, tp.profile_img,
                tp.shop_name, tp.tagline, tp.bio, tp.experience, tp.specialities, tp.timings,
-               tp.price_listings
+               tp.price_listings, tp.deals
         FROM users u
         INNER JOIN tailor_profiles tp ON u.id = tp.user_id
         WHERE u.role = 'tailor' AND u.id = ?
@@ -572,6 +570,7 @@ app.get('/api/tailors/:id', (req, res) => {
                 specialities:   safeParseJSON(t.specialities, []),
                 timings:        safeParseJSON(t.timings, null),
                 price_listings: safeParseJSON(t.price_listings, []),
+                deals:          safeParseJSON(t.deals, []),
             }
         });
     });
@@ -769,7 +768,19 @@ app.get('/api/tailor/offers', verifyToken, (req, res) => {
     `;
     db.query(sql, [req.userId], (err, results) => {
         if (err) return res.status(500).json({ message: 'Server error' });
-        res.json({ offers: results });
+        const toDateStr = (val) => {
+            if (!val) return null;
+            if (val instanceof Date) return val.toISOString().split('T')[0];
+            return String(val).split('T')[0];
+        };
+        const offers = results.map(o => ({
+            ...o,
+            start_date: toDateStr(o.start_date),
+            end_date:   toDateStr(o.end_date),
+            days_left:  Number(o.days_left),
+            is_active:  Boolean(o.is_active),
+        }));
+        res.json({ offers });
     });
 });
 
@@ -802,19 +813,39 @@ app.get('/api/offers/active', (req, res) => {
         ORDER BY o.end_date ASC
     `;
     db.query(sql, (err, results) => {
-        if (err) return res.status(500).json({ message: 'Server error' });
+        if (err) {
+            console.error('Error fetching active offers:', err.message);
+            return res.status(500).json({ message: 'Server error', error: err.message });
+        }
+        // mysql2 may return DATE columns as JS Date objects — serialize them to YYYY-MM-DD strings
+        const toDateStr = (val) => {
+            if (!val) return null;
+            if (val instanceof Date) return val.toISOString().split('T')[0];
+            return String(val).split('T')[0]; // already a string, trim any time part
+        };
         const offers = results.map(o => ({
-            ...o,
-            shop_name:   o.shop_name || o.full_name || 'Tailor Shop',
+            id: o.id,
+            title: o.title,
+            description: o.description || '',
+            discount: o.discount,
+            discount_type: o.discount_type || 'percent',
+            start_date: toDateStr(o.start_date),
+            end_date:   toDateStr(o.end_date),
+            days_left:  Number(o.days_left),
+            tailor_id:  o.tailor_id,
+            full_name:  o.full_name,
+            shop_name:  o.shop_name || o.full_name || 'Tailor Shop',
+            city:       o.city || '',
             profile_img: normalizeImgPath(o.profile_img),
             discount_label: o.discount_type === 'percent'
                 ? `${o.discount}% OFF`
                 : `₹${Number(o.discount).toLocaleString('en-IN')} OFF`,
         }));
+        console.log(`[/api/offers/active] returning ${offers.length} active offers`);
         res.json({ offers });
     });
 });
 
 app.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`✅ Server running and listening on port ${PORT}`);
 });

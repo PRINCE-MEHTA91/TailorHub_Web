@@ -3,14 +3,9 @@ import { useAuth } from '../context/AuthContext';
 import CustomerDashboardPage from './CustomerDashboardPage';
 import TailorDashboardPage from './TailorDashboardPage';
 
-/* ── Smart Dashboard ────────────────────────────────────────────
-   Renders the correct dashboard based on user role.
-   URL stays as /dashboard — no redirect needed.
-──────────────────────────────────────────────────────────────── */
 const DashboardPage = () => {
     const { user, loading } = useAuth();
 
-    // Show spinner while auth loads
     if (loading) {
         return (
             <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -22,7 +17,6 @@ const DashboardPage = () => {
         );
     }
 
-    // Render tailor or customer dashboard directly at /dashboard
     if (user?.role === 'tailor') {
         return <TailorDashboardPage />;
     }

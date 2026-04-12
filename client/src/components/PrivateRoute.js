@@ -2,13 +2,6 @@ import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
-/**
- * PrivateRoute — guards routes that require authentication.
- * Optional `role` prop adds role-based protection:
- *   <PrivateRoute role="tailor"> → only tailors can access
- *   <PrivateRoute role="customer"> → only customers can access
- *   <PrivateRoute> → any logged-in user
- */
 const PrivateRoute = ({ children, role }) => {
     const { user, loading } = useAuth();
 
@@ -20,10 +13,8 @@ const PrivateRoute = ({ children, role }) => {
         );
     }
 
-    // Not logged in → redirect to home/login
     if (!user) return <Navigate to="/login" replace />;
 
-    // Logged in but wrong role → redirect to their dashboard
     if (role && user.role !== role) {
         return <Navigate to="/dashboard" replace />;
     }

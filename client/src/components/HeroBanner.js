@@ -1,10 +1,12 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 const HeroBanner = () => {
   const { user } = useAuth();
   const firstName = user?.full_name?.split(' ')[0] || 'there';
+  const navigate = useNavigate();
 
   return (
     <motion.div
@@ -34,8 +36,8 @@ const HeroBanner = () => {
             Custom stitching, premium fabrics &amp; trusted tailors near you
           </p>
           <div className="hero-cta-row">
-            <button className="hero-btn-primary">Browse Tailors →</button>
-            <button className="hero-btn-secondary">View Deals</button>
+            <button className="hero-btn-primary" onClick={() => navigate('/browse-deals')}>Browse Tailors →</button>
+            <button className="hero-btn-secondary" onClick={() => navigate('/browse-deals')}>View Deals</button>
           </div>
 
           {/* Trust badges */}
