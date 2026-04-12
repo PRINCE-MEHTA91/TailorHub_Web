@@ -19,11 +19,19 @@ const deals = [
   { id: 5, emoji: '🧣', label: 'Kurta Custom', cut: '30%', price: '₹549', bg: '#cffafe' },
 ];
 
-const DealsStrip = () => (
+const DealsStrip = () => {
+  const navigate = useNavigate();
+  return (
   <section className="deals-section">
     <div className="deals-header">
       <span className="deals-title">🔥 Deals of the Day</span>
-      <span className="deals-timer">⏰ Ends in 06:42:19</span>
+      <span
+        className="deals-timer"
+        style={{ cursor: 'pointer' }}
+        onClick={() => navigate('/browse-deals')}
+      >
+        See All Deals →
+      </span>
     </div>
     <div className="deals-scroll">
       {deals.map((d, i) => (
@@ -35,7 +43,8 @@ const DealsStrip = () => (
           whileHover={{ scale: 1.05, y: -3 }}
           whileTap={{ scale: 0.96 }}
           className="deal-card"
-          style={{ background: d.bg }}
+          style={{ background: d.bg, cursor: 'pointer' }}
+          onClick={() => navigate('/browse-deals')}
         >
           <span className="deal-emoji">{d.emoji}</span>
           <span className="deal-cut">-{d.cut}</span>
@@ -45,7 +54,8 @@ const DealsStrip = () => (
       ))}
     </div>
   </section>
-);
+  );
+};
 
 const IndexPage = ({ onCategoryClick }) => {
     const { user, loading } = useAuth();

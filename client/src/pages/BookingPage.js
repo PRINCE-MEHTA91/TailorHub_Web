@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import Header from '../components/Header';
+import CustomerBottomNav from '../components/CustomerBottomNav';
 import { FaArrowLeft, FaCalendarAlt, FaClock, FaCheckCircle, FaCut } from 'react-icons/fa';
 
 const BookingPage = () => {
@@ -91,6 +92,7 @@ if (loading) {
             <div className="flex-1 flex justify-center items-center">
                 <span className="w-8 h-8 border-4 border-indigo-400 border-t-transparent rounded-full animate-spin" />
             </div>
+            <CustomerBottomNav activeTab="tailors" />
         </div>
     );
 }
@@ -213,6 +215,7 @@ return (
                 </form>
             </motion.div>
         </main>
+        <CustomerBottomNav activeTab="tailors" />
     </div>
 );
 };

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import Header from '../components/Header';
@@ -342,17 +342,26 @@ const CategoryResults = ({ category, onBack }) => {
 };
 
 const NAV_TABS = [
-    { id: 'home', label: 'Home', icon: '🏠' },
-    { id: 'orders', label: 'Orders', icon: '📦' },
+    { id: 'home',    label: 'Home',    icon: '🏠' },
+    { id: 'tailors', label: 'Tailors', icon: '✂️' },
+    { id: 'orders',  label: 'Orders',  icon: '📦' },
     { id: 'profile', label: 'Profile', icon: '👤' },
 ];
 
 const CustomerDashboardPage = () => {
     const { user, logout } = useAuth();
     const navigate = useNavigate();
+    const location = useLocation();
     const [activeTab, setActiveTab] = useState('home');
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedCategory, setSelectedCategory] = useState(null);
+
+    useEffect(() => {
+        if (location.state?.tab) {
+            setActiveTab(location.state.tab);
+            window.history.replaceState({}, '');
+        }
+    }, [location.state]);
 
     const handleCategoryClick = (categoryName) => {
         setSelectedCategory(categoryName);
@@ -395,6 +404,7 @@ const CustomerDashboardPage = () => {
                     )}
                 </div>
             );
+            case 'tailors': { navigate('/browse-deals'); return null; }
             case 'orders': return <OrdersTab />;
             case 'profile': return <CustomerProfileTab user={user} onLogout={handleLogout} />;
             default: return null;

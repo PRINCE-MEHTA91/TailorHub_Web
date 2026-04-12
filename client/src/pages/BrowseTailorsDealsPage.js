@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
-import BottomNav from '../components/BottomNav';
+import CustomerBottomNav from '../components/CustomerBottomNav';
 
 const API_URL = process.env.REACT_APP_API_URL;
 
@@ -172,7 +172,7 @@ const BrowseTailorsDealsPage = () => {
         )}
       </main>
       
-      <BottomNav />
+      <CustomerBottomNav activeTab="tailors" />
     </div>
   );
 };

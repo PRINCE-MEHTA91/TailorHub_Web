@@ -103,7 +103,7 @@ export default function ActiveOffers() {
             key={o.id}
             whileHover={{ y: -4, scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
-            onClick={() => navigate(`/tailor-profile/${o.tailor_id}`)}
+            onClick={() => navigate('/browse-deals')}
             className="flex-shrink-0 w-64 snap-center bg-gradient-to-br from-orange-400 to-red-500 rounded-2xl p-4 text-white shadow-lg relative overflow-hidden cursor-pointer"
           >
             <div className="absolute -top-10 -right-10 w-32 h-32 bg-white/10 rounded-full blur-2xl pointer-events-none" />
