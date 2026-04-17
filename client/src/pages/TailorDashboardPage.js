@@ -438,6 +438,10 @@ function ProfileTab({ user, onLogout, onSaved }) {
   const [about, setAbout]                   = useState({shopName:'',tagline:'',bio:'',experience:'',specialities:[]});
   const [detecting, setDetecting]           = useState(false);
   const [locationError, setLocationError]   = useState('');
+  const [shopLat, setShopLat]               = useState('');
+  const [shopLng, setShopLng]               = useState('');
+  const [detectingShop, setDetectingShop]   = useState(false);
+  const [shopLocError, setShopLocError]     = useState('');
   // gallery: array of { preview: string (blob or server URL), file: File|null }
   const [gallery, setGallery]               = useState([]);
   const [deals, setDeals]                   = useState([]);
@@ -468,6 +472,10 @@ function ProfileTab({ user, onLogout, onSaved }) {
         // Contact & Address
         setAddress({street:p.street||'',city:p.city||'',state:p.state||'',pin:p.pin||''});
         setContact({phone:p.phone||'',whatsapp:p.whatsapp||'',instagram:p.instagram||''});
+
+        // Shop GPS location
+        if (p.latitude != null) setShopLat(String(p.latitude));
+        if (p.longitude != null) setShopLng(String(p.longitude));
 
         // About fields
         setAbout({
@@ -513,7 +521,7 @@ function ProfileTab({ user, onLogout, onSaved }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /* Detect location */
+  /* Detect address location */
   const handleDetectLocation = () => {
     if (!navigator.geolocation) { setLocationError('Geolocation not supported.'); return; }
     setDetecting(true); setLocationError('');
@@ -530,6 +538,21 @@ function ProfileTab({ user, onLogout, onSaved }) {
         finally { setDetecting(false); }
       },
       () => { setLocationError('Location access denied.'); setDetecting(false); },
+      {enableHighAccuracy:true,timeout:10000}
+    );
+  };
+
+  /* Detect shop GPS coordinates */
+  const handleDetectShopLocation = () => {
+    if (!navigator.geolocation) { setShopLocError('Geolocation not supported.'); return; }
+    setDetectingShop(true); setShopLocError('');
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        setShopLat(pos.coords.latitude.toFixed(7));
+        setShopLng(pos.coords.longitude.toFixed(7));
+        setDetectingShop(false);
+      },
+      () => { setShopLocError('Location access denied.'); setDetectingShop(false); },
       {enableHighAccuracy:true,timeout:10000}
     );
   };
@@ -630,6 +653,9 @@ function ProfileTab({ user, onLogout, onSaved }) {
           profile_img: finalImgUrl,
           // Deals
           deals,
+          // Shop GPS
+          latitude:  shopLat !== '' ? parseFloat(shopLat) : null,
+          longitude: shopLng !== '' ? parseFloat(shopLng) : null,
         }),
       });
       const data = await res.json();
@@ -913,6 +939,68 @@ function ProfileTab({ user, onLogout, onSaved }) {
             <InputField label="PIN Code" value={address.pin} onChange={e=>setAddress(a=>({...a,pin:e.target.value}))} placeholder="PIN"/>
             <InputField label="Country" value="India" readOnly placeholder="Country"/>
           </div>
+        </div>
+      </SectionCard>
+
+      {/* Shop Location (GPS) */}
+      <SectionCard>
+        <SectionHeader icon="🗺️" title="Shop Location (Map)"
+          action={
+            <button onClick={handleDetectShopLocation} disabled={detectingShop}
+              className="flex items-center gap-1 text-[10px] font-bold text-orange-600 bg-orange-50 border border-orange-200 px-2.5 py-1 rounded-full disabled:opacity-60">
+              {detectingShop?<span className="w-3 h-3 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"/>:'📍'}
+              {detectingShop?'Locating...':'Use My Location'}
+            </button>
+          }
+        />
+        <div className="p-4 flex flex-col gap-3">
+          <p className="text-[11px] text-stone-400 leading-relaxed">
+            Add GPS coordinates so customers can get directions to your shop. Tap <strong>Use My Location</strong> to auto-detect, or paste from Google Maps.
+          </p>
+          {shopLocError && <div className="text-red-600 text-xs bg-red-50 p-2 rounded-lg border border-red-100">{shopLocError}</div>}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Latitude</label>
+              <input
+                value={shopLat}
+                onChange={e => setShopLat(e.target.value)}
+                placeholder="e.g. 28.6139"
+                className="bg-stone-50 border border-stone-200 rounded-xl px-3 py-2.5 text-sm font-semibold text-stone-800 outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100 transition w-full placeholder:text-stone-300 placeholder:font-normal"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Longitude</label>
+              <input
+                value={shopLng}
+                onChange={e => setShopLng(e.target.value)}
+                placeholder="e.g. 77.2090"
+                className="bg-stone-50 border border-stone-200 rounded-xl px-3 py-2.5 text-sm font-semibold text-stone-800 outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100 transition w-full placeholder:text-stone-300 placeholder:font-normal"
+              />
+            </div>
+          </div>
+          {shopLat && shopLng && !isNaN(parseFloat(shopLat)) && !isNaN(parseFloat(shopLng)) && (
+            <div className="bg-green-50 border border-green-200 rounded-xl p-3 flex items-center gap-3">
+              <span className="text-lg">✅</span>
+              <div className="flex-1">
+                <p className="text-xs font-bold text-green-700">Location Set!</p>
+                <p className="text-[11px] text-green-600">{parseFloat(shopLat).toFixed(5)}, {parseFloat(shopLng).toFixed(5)}</p>
+              </div>
+              <a
+                href={`https://maps.google.com/?q=${shopLat},${shopLng}`}
+                target="_blank"
+                rel="noreferrer"
+                className="text-[10px] font-bold text-orange-600 bg-orange-50 border border-orange-200 px-2.5 py-1.5 rounded-lg hover:bg-orange-100 transition flex-shrink-0"
+              >
+                Preview Map
+              </a>
+            </div>
+          )}
+          {!(shopLat && shopLng) && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-center gap-2">
+              <span className="text-sm">⚠️</span>
+              <p className="text-[11px] text-amber-700 font-semibold">No location set — customers won't be able to get directions.</p>
+            </div>
+          )}
         </div>
       </SectionCard>
 

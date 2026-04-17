@@ -94,6 +94,7 @@ const TailorDetailsPage = () => {
     const [activeCat, setActiveCat] = useState(null);
     const [imgLightbox, setImgLightbox] = useState(false);
     const [deals, setDeals] = useState([]);
+    const [directionToast, setDirectionToast] = useState('');
 
     useEffect(() => {
         if (id.startsWith('f')) {
@@ -159,6 +160,7 @@ const TailorDetailsPage = () => {
     const profileImgUrl = resolveImg(tailor.profile_img);
     const hasAddress = tailor.street || tailor.city || tailor.state || tailor.pin;
     const fullAddress = [tailor.street, tailor.city, tailor.state, tailor.pin].filter(Boolean).join(', ');
+    const hasGPS = tailor.latitude != null && tailor.longitude != null;
     const grouped = groupProducts(tailor.products);
     const isGrouped = grouped && !grouped.all;
     const allServices = isGrouped
@@ -171,6 +173,16 @@ const TailorDetailsPage = () => {
     const activeDeals = deals.filter(d => d.active !== false);
     const now = new Date();
     const validDeals = activeDeals.filter(d => !d.validUntil || new Date(d.validUntil) >= now);
+
+    const handleGetDirections = () => {
+        if (!hasGPS) {
+            setDirectionToast('Shop location not available');
+            setTimeout(() => setDirectionToast(''), 3000);
+            return;
+        }
+        const url = `https://www.google.com/maps/dir/?api=1&destination=${tailor.latitude},${tailor.longitude}&travelmode=driving`;
+        window.open(url, '_blank', 'noreferrer');
+    };
 
     return (
         <div className="min-h-screen bg-gray-50 pb-24" style={{background:'linear-gradient(135deg,#f8f9ff 0%,#f0f2fb 100%)'}}>
@@ -332,22 +344,58 @@ const TailorDetailsPage = () => {
                 )}
 
                 {/* ── Address (inside left column) ── */}
-                {hasAddress && (
+                {(hasAddress || hasGPS) && (
                     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}
                         className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
                         <div className="flex items-center gap-2 mb-3">
                             <FaMapMarkerAlt className="text-indigo-400" />
                             <h3 className="font-bold text-sm text-gray-700 uppercase tracking-wide">Shop Address</h3>
                         </div>
-                        <p className="text-gray-600 text-sm leading-relaxed">
-                            {tailor.street && <>{tailor.street}<br /></>}
-                            {[tailor.city, tailor.state].filter(Boolean).join(', ')}
-                            {tailor.pin && <> – {tailor.pin}</>}
-                        </p>
-                        <a href={`https://maps.google.com/?q=${encodeURIComponent(fullAddress)}`} target="_blank" rel="noreferrer"
-                            className="mt-3 inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:underline">
-                            📍 Open in Google Maps
-                        </a>
+                        {hasAddress && (
+                            <p className="text-gray-600 text-sm leading-relaxed mb-3">
+                                {tailor.street && <>{tailor.street}<br /></>}
+                                {[tailor.city, tailor.state].filter(Boolean).join(', ')}
+                                {tailor.pin && <> – {tailor.pin}</>}
+                            </p>
+                        )}
+
+                        {/* Get Directions button — primary CTA */}
+                        <button
+                            id="get-directions-btn"
+                            onClick={handleGetDirections}
+                            className={`w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-bold text-sm transition-all ${
+                                hasGPS
+                                    ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0'
+                                    : 'bg-gray-100 text-gray-400 cursor-pointer'
+                            }`}
+                        >
+                            <FaMapMarkerAlt className={hasGPS ? 'text-white' : 'text-gray-400'} />
+                            📍 Get Directions
+                            {hasGPS && <span className="text-indigo-200 text-xs font-normal ml-1">via Google Maps</span>}
+                        </button>
+
+                        {!hasGPS && (
+                            <p className="text-center text-xs text-gray-400 mt-2">
+                                👉 Shop location not available
+                            </p>
+                        )}
+
+                        {hasAddress && (
+                            <a href={`https://maps.google.com/?q=${encodeURIComponent(fullAddress)}`} target="_blank" rel="noreferrer"
+                                className="mt-3 inline-flex items-center gap-1.5 text-xs font-bold text-indigo-500 hover:underline">
+                                Search address in Maps &rarr;
+                            </a>
+                        )}
+                    </motion.div>
+                )}
+
+                {/* Directions card — show when GPS set but no text address */}
+                {!hasAddress && !hasGPS && (
+                    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}
+                        className="bg-gray-50 rounded-2xl border border-dashed border-gray-200 p-5 text-center">
+                        <FaMapMarkerAlt className="text-gray-300 mx-auto mb-2" size={20} />
+                        <p className="text-xs text-gray-400 font-semibold">No shop location added yet</p>
+                        <p className="text-[11px] text-gray-400 mt-0.5">Map directions unavailable</p>
                     </motion.div>
                 )}
 
@@ -645,10 +693,20 @@ const TailorDetailsPage = () => {
                             className="absolute -top-4 -right-4 w-9 h-9 bg-white rounded-full flex items-center justify-center shadow-lg text-gray-700 hover:text-red-500 hover:bg-red-50 transition-all font-bold text-lg"
                             aria-label="Close"
                         >
-                            ×
+                            &times;
                         </button>
                     </motion.div>
                     <p className="absolute bottom-8 text-white/50 text-xs">Tap anywhere to close</p>
+                </motion.div>
+            )}
+
+            {/* ── Direction Toast Notification ── */}
+            {directionToast && (
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }}
+                    className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 bg-gray-900/90 text-white text-sm font-semibold px-5 py-3 rounded-2xl shadow-xl backdrop-blur-sm flex items-center gap-2 whitespace-nowrap"
+                >
+                    <span>👉</span> {directionToast}
                 </motion.div>
             )}
             <CustomerBottomNav activeTab="tailors" />
