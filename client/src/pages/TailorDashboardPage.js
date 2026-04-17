@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import PhoneInput from '../components/PhoneInput';
 
 const API_URL = process.env.REACT_APP_API_URL;
 
@@ -919,18 +920,27 @@ function ProfileTab({ user, onLogout, onSaved }) {
       <SectionCard>
         <SectionHeader icon="📞" title="Contact"/>
         <div className="p-4 flex flex-col gap-2.5">
-          {[
-            {icon:'📱',bg:'bg-amber-50', label:'Primary Phone',       val:contact.phone,     key:'phone'},
-            {icon:'💬',bg:'bg-green-50', label:'WhatsApp Number',     val:contact.whatsapp,  key:'whatsapp'},
-            {icon:'📷',bg:'bg-red-50',   label:'Instagram (optional)',val:contact.instagram, key:'instagram'},
-          ].map(c=>(
-            <div key={c.key} className="flex items-center gap-3 bg-stone-50 border border-stone-200 rounded-xl px-3 py-2.5 focus-within:border-orange-400 focus-within:ring-2 focus-within:ring-orange-100 transition">
-              <div className={`w-8 h-8 ${c.bg} rounded-lg flex items-center justify-center text-base flex-shrink-0`}>{c.icon}</div>
-              <input value={c.val} onChange={e=>setContact(ct=>({...ct,[c.key]:e.target.value}))} placeholder={c.label}
-                maxLength={c.key==='instagram'?undefined:10}
-                className="flex-1 bg-transparent text-sm font-semibold text-stone-800 outline-none placeholder:text-stone-300 placeholder:font-normal"/>
-            </div>
-          ))}
+          <PhoneInput
+            id="tailor-phone"
+            value={contact.phone}
+            onChange={val => setContact(ct => ({ ...ct, phone: val }))}
+            placeholder="Primary Phone"
+            label="Primary Phone"
+            inputStyle="tailor"
+          />
+          <PhoneInput
+            id="tailor-whatsapp"
+            value={contact.whatsapp}
+            onChange={val => setContact(ct => ({ ...ct, whatsapp: val }))}
+            placeholder="WhatsApp Number"
+            label="WhatsApp Number"
+            inputStyle="tailor"
+          />
+          <div className="flex items-center gap-3 bg-stone-50 border border-stone-200 rounded-xl px-3 py-2.5 focus-within:border-orange-400 focus-within:ring-2 focus-within:ring-orange-100 transition">
+            <div className="w-8 h-8 bg-red-50 rounded-lg flex items-center justify-center text-base flex-shrink-0">📷</div>
+            <input value={contact.instagram} onChange={e => setContact(ct => ({ ...ct, instagram: e.target.value }))} placeholder="Instagram (optional)"
+              className="flex-1 bg-transparent text-sm font-semibold text-stone-800 outline-none placeholder:text-stone-300 placeholder:font-normal"/>
+          </div>
         </div>
       </SectionCard>
 
