@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
+import PhoneInput from '../components/PhoneInput';
 import Header from '../components/Header';
 import SearchBar from '../components/SearchBar';
 import SearchResults from '../components/SearchResults';
@@ -104,10 +105,24 @@ const CustomerProfileTab = ({ user, onLogout }) => {
                     </div>
                 ) : (
                     <div className="space-y-3">
-                        <input className={inputCls} placeholder="Phone Number" value={contact.phone} maxLength={10}
-                            onChange={e => setContact({ ...contact, phone: e.target.value })} />
-                        <input className={inputCls} placeholder="WhatsApp Number" value={contact.whatsapp} maxLength={10}
-                            onChange={e => setContact({ ...contact, whatsapp: e.target.value })} />
+                        <PhoneInput
+                            id="customer-phone"
+                            value={contact.phone}
+                            onChange={val => setContact({ ...contact, phone: val })}
+                            placeholder="Enter phone number"
+                            icon="📱"
+                            iconBg="bg-indigo-50"
+                            inputStyle="customer"
+                        />
+                        <PhoneInput
+                            id="customer-whatsapp"
+                            value={contact.whatsapp}
+                            onChange={val => setContact({ ...contact, whatsapp: val })}
+                            placeholder="WhatsApp number"
+                            icon="💬"
+                            iconBg="bg-green-50"
+                            inputStyle="customer"
+                        />
                     </div>
                 )}
             </div>
