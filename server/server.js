@@ -91,6 +91,8 @@ db.getConnection((connErr, connection) => {
         `ALTER TABLE tailor_profiles ADD COLUMN timings JSON DEFAULT NULL`,
         `ALTER TABLE tailor_profiles ADD COLUMN deals JSON DEFAULT NULL`,
         `ALTER TABLE tailor_profiles ADD COLUMN price_listings JSON DEFAULT NULL`,
+        `ALTER TABLE tailor_profiles ADD COLUMN latitude DECIMAL(10,7) DEFAULT NULL`,
+        `ALTER TABLE tailor_profiles ADD COLUMN longitude DECIMAL(10,7) DEFAULT NULL`,
     ];
     newCols.forEach(sql => {
         db.query(sql, (err) => {
@@ -386,7 +388,8 @@ app.post('/api/tailor/profile', verifyToken, (req, res) => {
     const {
         phone, whatsapp, instagram, street, city, state, pin,
         products, gallery, profile_img,
-        shop_name, tagline, bio, experience, specialities, timings, deals, price_listings
+        shop_name, tagline, bio, experience, specialities, timings, deals, price_listings,
+        latitude, longitude
     } = req.body;
 
     db.query('SELECT role FROM users WHERE id = ?', [req.userId], (err, rows) => {
@@ -397,16 +400,20 @@ app.post('/api/tailor/profile', verifyToken, (req, res) => {
             INSERT INTO tailor_profiles
                 (user_id, phone, whatsapp, instagram, street, city, state, pin,
                  products, gallery, profile_img,
-                 shop_name, tagline, bio, experience, specialities, timings, deals, price_listings)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 shop_name, tagline, bio, experience, specialities, timings, deals, price_listings,
+                 latitude, longitude)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
                 phone=VALUES(phone), whatsapp=VALUES(whatsapp), instagram=VALUES(instagram),
                 street=VALUES(street), city=VALUES(city), state=VALUES(state), pin=VALUES(pin),
                 products=VALUES(products), gallery=VALUES(gallery), profile_img=VALUES(profile_img),
                 shop_name=VALUES(shop_name), tagline=VALUES(tagline), bio=VALUES(bio),
                 experience=VALUES(experience), specialities=VALUES(specialities), timings=VALUES(timings),
-                deals=VALUES(deals), price_listings=VALUES(price_listings)
+                deals=VALUES(deals), price_listings=VALUES(price_listings),
+                latitude=VALUES(latitude), longitude=VALUES(longitude)
         `;
+        const lat = (latitude !== undefined && latitude !== '' && latitude !== null) ? parseFloat(latitude) : null;
+        const lng = (longitude !== undefined && longitude !== '' && longitude !== null) ? parseFloat(longitude) : null;
         const params = [
             req.userId,
             phone || '', whatsapp || '', instagram || '',
@@ -419,6 +426,7 @@ app.post('/api/tailor/profile', verifyToken, (req, res) => {
             JSON.stringify(timings || {}),
             JSON.stringify(deals || []),
             JSON.stringify(price_listings || []),
+            lat, lng,
         ];
         db.query(sql, params, (insertErr) => {
             if (insertErr) {
@@ -437,7 +445,7 @@ app.get('/api/tailor/profile', verifyToken, (req, res) => {
                tp.street, tp.city, tp.state, tp.pin,
                tp.products, tp.gallery, tp.profile_img,
                tp.shop_name, tp.tagline, tp.bio, tp.experience, tp.specialities, tp.timings, tp.deals,
-               tp.price_listings
+               tp.price_listings, tp.latitude, tp.longitude
         FROM tailor_profiles tp WHERE tp.user_id = ?
     `;
     db.query(sql, [req.userId], (err, results) => {
@@ -454,6 +462,8 @@ app.get('/api/tailor/profile', verifyToken, (req, res) => {
                 timings:        safeParseJSON(p.timings, null),
                 deals:          safeParseJSON(p.deals, []),
                 price_listings: safeParseJSON(p.price_listings, []),
+                latitude:       p.latitude != null ? parseFloat(p.latitude) : null,
+                longitude:      p.longitude != null ? parseFloat(p.longitude) : null,
             }
         });
     });
@@ -521,7 +531,7 @@ app.get('/api/tailors', (req, res) => {
                tp.street, tp.city, tp.state, tp.pin,
                tp.products, tp.gallery, tp.profile_img,
                tp.shop_name, tp.tagline, tp.bio, tp.experience, tp.specialities, tp.timings,
-               tp.price_listings, tp.deals
+               tp.price_listings, tp.deals, tp.latitude, tp.longitude
         FROM users u
         INNER JOIN tailor_profiles tp ON u.id = tp.user_id
         WHERE u.role = 'tailor'
@@ -538,6 +548,8 @@ app.get('/api/tailors', (req, res) => {
             timings:        safeParseJSON(t.timings, null),
             price_listings: safeParseJSON(t.price_listings, []),
             deals:          safeParseJSON(t.deals, []),
+            latitude:       t.latitude != null ? parseFloat(t.latitude) : null,
+            longitude:      t.longitude != null ? parseFloat(t.longitude) : null,
         }));
         res.json({ tailors });
     });
@@ -552,7 +564,7 @@ app.get('/api/tailors/:id', (req, res) => {
                tp.street, tp.city, tp.state, tp.pin,
                tp.products, tp.gallery, tp.profile_img,
                tp.shop_name, tp.tagline, tp.bio, tp.experience, tp.specialities, tp.timings,
-               tp.price_listings, tp.deals
+               tp.price_listings, tp.deals, tp.latitude, tp.longitude
         FROM users u
         INNER JOIN tailor_profiles tp ON u.id = tp.user_id
         WHERE u.role = 'tailor' AND u.id = ?
@@ -571,6 +583,8 @@ app.get('/api/tailors/:id', (req, res) => {
                 timings:        safeParseJSON(t.timings, null),
                 price_listings: safeParseJSON(t.price_listings, []),
                 deals:          safeParseJSON(t.deals, []),
+                latitude:       t.latitude != null ? parseFloat(t.latitude) : null,
+                longitude:      t.longitude != null ? parseFloat(t.longitude) : null,
             }
         });
     });
