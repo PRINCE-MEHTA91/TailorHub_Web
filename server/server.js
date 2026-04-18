@@ -26,7 +26,7 @@ const JWT_SECRET = process.env.JWT_SECRET;
 const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:3001';
 
 app.use(cors({
-    origin: CLIENT_URL,
+    origin: [CLIENT_URL, 'http://localhost:3001', 'http://127.0.0.1:3001'],
     credentials: true
 }));
 app.use(express.json({ limit: '10mb' }));
@@ -138,6 +138,54 @@ db.getConnection((connErr, connection) => {
     db.query(createOffersTable, (tableErr) => {
         if (tableErr) console.error('Error creating offers table:', tableErr.message);
         else console.log('✅ offers table ready');
+    });
+
+    // Auto-create orders table
+    const createOrdersTable = `
+        CREATE TABLE IF NOT EXISTS orders (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            tailor_id INT NOT NULL,
+            customer_id INT NOT NULL,
+            product_name VARCHAR(255) NOT NULL,
+            total_amount DECIMAL(10,2) NOT NULL DEFAULT 0,
+            advance_payment DECIMAL(10,2) NOT NULL DEFAULT 0,
+            remaining_amount DECIMAL(10,2) GENERATED ALWAYS AS (total_amount - advance_payment) STORED,
+            delivery_date DATE DEFAULT NULL,
+            current_status VARCHAR(100) NOT NULL DEFAULT 'Order Placed',
+            notes TEXT DEFAULT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            FOREIGN KEY (tailor_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY (customer_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+    `;
+    db.query(createOrdersTable, (tableErr) => {
+        if (tableErr) console.error('Error creating orders table:', tableErr.message);
+        else {
+            console.log('✅ orders table ready');
+            db.query('ALTER TABLE orders ADD COLUMN notes TEXT DEFAULT NULL', (err) => {
+                if (err && err.code !== 'ER_DUP_FIELDNAME') console.warn('Order notes migration warning:', err.message);
+            });
+            db.query("ALTER TABLE orders ADD COLUMN current_status VARCHAR(100) NOT NULL DEFAULT 'Order Placed'", (err) => {
+                if (err && err.code !== 'ER_DUP_FIELDNAME') console.warn('Order status migration warning:', err.message);
+            });
+        }
+    });
+
+    // Auto-create order_status_history table
+    const createOrderStatusHistoryTable = `
+        CREATE TABLE IF NOT EXISTS order_status_history (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            order_id INT NOT NULL,
+            status VARCHAR(100) NOT NULL,
+            note TEXT DEFAULT NULL,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE
+        )
+    `;
+    db.query(createOrderStatusHistoryTable, (tableErr) => {
+        if (tableErr) console.error('Error creating order_status_history table:', tableErr.message);
+        else console.log('✅ order_status_history table ready');
     });
 });
 
@@ -859,6 +907,238 @@ app.get('/api/offers/active', (req, res) => {
         res.json({ offers });
     });
 });
+
+// ═══════════════════════════════════════════════════════════════
+// ORDERS ENDPOINTS
+// ═══════════════════════════════════════════════════════════════
+
+// ── GET /api/tailor/verify-customer — Find customer by email or phone ──
+app.get('/api/tailor/verify-customer', verifyToken, requireRole('tailor'), (req, res) => {
+    const { query } = req.query; // this can be email or phone
+    if (!query) return res.status(400).json({ message: 'Please provide email or phone to search' });
+
+    const sql = `
+        SELECT u.id, u.full_name, u.email, c.phone 
+        FROM users u 
+        LEFT JOIN customer_profiles c ON u.id = c.user_id 
+        WHERE u.role = 'customer' AND (u.email = ? OR c.phone = ?)
+    `;
+    db.query(sql, [query, query], (err, results) => {
+        if (err) return res.status(500).json({ message: 'Server error' });
+        if (results.length === 0) return res.status(404).json({ message: 'Customer not found. Please register first.' });
+        res.json({ customer: results[0] });
+    });
+});
+
+// ── POST /api/orders — Create a new order (Tailor only) ──
+app.post('/api/orders', verifyToken, requireRole('tailor'), async (req, res) => {
+    try {
+        console.log('📦 Create Order Request Body:', req.body);
+        const { customer_id, product_name, total_amount, advance_payment, delivery_date, notes } = req.body;
+        
+        if (!customer_id || !product_name || total_amount === undefined || advance_payment === undefined || !delivery_date) {
+            return res.status(400).json({ message: 'All required fields must be provided' });
+        }
+
+        // Ensure customerId exists
+        const [customerCheck] = await db.promise().query('SELECT id FROM users WHERE id = ?', [customer_id]);
+        if (customerCheck.length === 0) {
+            return res.status(404).json({ message: 'Customer does not exist' });
+        }
+
+        const sql = `
+            INSERT INTO orders (tailor_id, customer_id, product_name, total_amount, advance_payment, delivery_date, notes) 
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        `;
+        const params = [
+            req.userId, 
+            customer_id, 
+            product_name, 
+            parseFloat(total_amount), 
+            parseFloat(advance_payment), 
+            delivery_date, 
+            notes || null
+        ];
+        
+        const [result] = await db.promise().query(sql, params);
+        console.log('✅ DB Query Result:', result);
+        
+        const orderId = result.insertId;
+        // Insert initial status into history
+        await db.promise().query('INSERT INTO order_status_history (order_id, status, note) VALUES (?, "Order Placed", "Order initially placed by tailor.")', [orderId]);
+        
+        res.status(201).json({ message: 'Order created successfully', order_id: orderId });
+    } catch (err) {
+        console.error('❌ Create order error:', err);
+        res.status(500).json({ message: err.message || 'Failed to create order' });
+    }
+});
+
+// ── GET /api/orders/tailor — Get all orders for the logged in tailor ──
+app.get('/api/orders/tailor', verifyToken, requireRole('tailor'), (req, res) => {
+    const sql = `
+        SELECT o.*, u.full_name AS customer_name, u.email AS customer_email, c.phone AS customer_phone 
+        FROM orders o 
+        JOIN users u ON o.customer_id = u.id 
+        LEFT JOIN customer_profiles c ON u.id = c.user_id 
+        WHERE o.tailor_id = ?
+        ORDER BY o.created_at DESC
+    `;
+    db.query(sql, [req.userId], (err, results) => {
+        if (err) return res.status(500).json({ message: 'Server error' });
+        res.json({ orders: results });
+    });
+});
+
+// ── GET /api/orders/customer — Get all orders for logged in customer ──
+app.get('/api/orders/customer', verifyToken, requireRole('customer'), (req, res) => {
+    const sql = `
+        SELECT o.*, u.full_name AS tailor_name, tp.shop_name 
+        FROM orders o 
+        JOIN users u ON o.tailor_id = u.id 
+        LEFT JOIN tailor_profiles tp ON u.id = tp.user_id 
+        WHERE o.customer_id = ?
+        ORDER BY o.created_at DESC
+    `;
+    db.query(sql, [req.userId], (err, results) => {
+        if (err) return res.status(500).json({ message: 'Server error' });
+        res.json({ orders: results });
+    });
+});
+
+// ── GET /api/orders/:id/history — Get status history for an order ──
+app.get('/api/orders/:id/history', verifyToken, (req, res) => {
+    const orderId = req.params.id;
+    console.log(`[GET History] Request for orderId: ${orderId}, userRole: ${req.userRole}, userId: ${req.userId}`);
+    // Verify ownership (tailor or customer of the order)
+    db.query('SELECT tailor_id, customer_id FROM orders WHERE id = ?', [orderId], (err, rows) => {
+        if (err) {
+            console.error('[GET History] Verify query err:', err);
+            return res.status(404).json({ message: 'Order not found error' });
+        }
+        if (rows.length === 0) {
+            return res.status(404).json({ message: 'Order not found' });
+        }
+        const { tailor_id, customer_id } = rows[0];
+        if (req.userRole === 'tailor' && req.userId !== tailor_id) return res.status(403).json({ message: 'Access denied' });
+        if (req.userRole === 'customer' && req.userId !== customer_id) return res.status(403).json({ message: 'Access denied' });
+
+        db.query('SELECT id, order_id, status, note, created_at as updated_at FROM order_status_history WHERE order_id = ? ORDER BY created_at ASC', [orderId], (errHistory, results) => {
+            if (errHistory) {
+                console.error('[History fetch error]:', errHistory);
+                return res.status(500).json({ message: 'Server error fetching history DB' });
+            }
+            console.log('[GET History] Success sending results:', results.length);
+            res.json({ history: results });
+        });
+    });
+});
+
+// ── PUT /api/orders/:id/status — Update order status and add history (Tailor only) ──
+app.put('/api/orders/:id/status', verifyToken, requireRole('tailor'), (req, res) => {
+    const orderId = req.params.id;
+    const { status, note, delivery_date } = req.body;
+    console.log(`[Update Order] Request for orderId ${orderId} by tailor ${req.userId}. Body:`, req.body);
+    
+    // First, verify order belongs to tailor and fetch associated names and emails
+    const verifySql = `
+        SELECT o.id, o.product_name, u.email AS customer_email, u.full_name AS customer_name, t.full_name AS tailor_name
+        FROM orders o
+        JOIN users u ON o.customer_id = u.id
+        JOIN users t ON o.tailor_id = t.id
+        WHERE o.id = ? AND o.tailor_id = ?
+    `;
+    db.query(verifySql, [orderId, req.userId], (err, rows) => {
+        if (err) {
+            console.error('[Update Order] verifySql error:', err);
+            return res.status(500).json({ message: 'Server error during verification' });
+        }
+        if (rows.length === 0) {
+            console.log(`[Update Order] Order not found or unauthorized for orderId ${orderId}, tailor_id ${req.userId}`);
+            return res.status(404).json({ message: 'Order not found or unauthorized' });
+        }
+        
+        const orderInfo = rows[0];
+        console.log('[Update Order] Order Info fetched:', orderInfo);
+
+        // Treat empty delivery_date as null to avoid invalid date syntax in MySQL
+        const finalDeliveryDate = delivery_date === '' ? null : delivery_date;
+        let updateSql = 'UPDATE orders SET current_status = ?';
+        let params = [status];
+        if (finalDeliveryDate !== undefined) {
+            updateSql += ', delivery_date = ?';
+            params.push(finalDeliveryDate);
+        }
+        updateSql += ' WHERE id = ?';
+        params.push(orderId);
+        
+        console.log('[Update Order] Executing UPDATE:', updateSql, params);
+        db.query(updateSql, params, (updateErr) => {
+            if (updateErr) {
+                console.error('[Update Order] updateSql error:', updateErr);
+                return res.status(500).json({ message: 'Failed to update order' });
+            }
+
+            
+            // Insert into history
+            db.query('INSERT INTO order_status_history (order_id, status, note) VALUES (?, ?, ?)', [orderId, status, note || null], (histErr) => {
+                if (histErr) return res.status(500).json({ message: 'Updated order but failed to log history' });
+
+                // Send email to customer
+                if (orderInfo.customer_email) {
+                    const mailOptions = {
+                        from: `"TailorHub" <${process.env.EMAIL_USER}>`,
+                        to: orderInfo.customer_email,
+                        subject: `TailorHub – Order Status Updated to: ${status}`,
+                        html: `
+                            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 24px; border: 1px solid #e5e7eb; border-radius: 8px;">
+                                <h2 style="color: #6366f1;">📦 Order Status Updated</h2>
+                                <p style="color: #374151;">Hi <strong>${orderInfo.customer_name}</strong>,</p>
+                                <p style="color: #374151;">Your tailor <strong>${orderInfo.tailor_name}</strong> has updated the status of your order.</p>
+                                
+                                <div style="background-color: #f9fafb; padding: 16px; border-radius: 8px; margin: 20px 0;">
+                                    <h3 style="margin-top: 0; color: #4b5563;">Order details:</h3>
+                                    <p style="margin: 4px 0;"><strong>Product:</strong> ${orderInfo.product_name}</p>
+                                    <p style="margin: 4px 0;"><strong>New Status:</strong> <span style="display:inline-block; padding: 2px 8px; background: #e0e7ff; color: #4338ca; border-radius: 12px; font-weight: bold; font-size: 12px;">${status}</span></p>
+                                    ${delivery_date ? `<p style="margin: 4px 0;"><strong>Expected Delivery:</strong> ${delivery_date}</p>` : ''}
+                                    ${note ? `<p style="margin: 4px 0;"><strong>Tailor's Note:</strong> ${note}</p>` : ''}
+                                </div>
+                                
+                                <p style="color: #6b7280; font-size: 14px;">You can view more details in your TailorHub dashboard.</p>
+                                <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
+                                <p style="color: #9ca3af; font-size: 12px;">TailorHub – Custom Tailoring Platform</p>
+                            </div>
+                        `,
+                    };
+                    transporter.sendMail(mailOptions, (mailErr) => {
+                        if (mailErr) console.error('❌ Email send error (Order Update):', mailErr.message);
+                        else console.log('✅ Order update email sent to:', orderInfo.customer_email);
+                    });
+                }
+
+                res.json({ message: 'Order status updated' });
+            });
+        });
+    });
+});
+
+// ── PUT /api/orders/:id/payment — Update payment details (Tailor only) ──
+app.put('/api/orders/:id/payment', verifyToken, requireRole('tailor'), (req, res) => {
+    const orderId = req.params.id;
+    const { total_amount, advance_payment } = req.body;
+    
+    if (total_amount === undefined || advance_payment === undefined) {
+        return res.status(400).json({ message: 'total_amount and advance_payment required' });
+    }
+
+    db.query('UPDATE orders SET total_amount = ?, advance_payment = ? WHERE id = ? AND tailor_id = ?', 
+             [total_amount, advance_payment, orderId, req.userId], (err, result) => {
+        if (err) return res.status(500).json({ message: 'Server error' });
+        if (result.affectedRows === 0) return res.status(404).json({ message: 'Order not found or unauthorized' });
+        res.json({ message: 'Payment updated successfully' });
+    });
+});
+
 
 app.listen(PORT, () => {
     console.log(`✅ Server running and listening on port ${PORT}`);
