@@ -167,16 +167,172 @@ const CustomerProfileTab = ({ user, onLogout }) => {
     );
 };
 
-const OrdersTab = () => (
-    <div className="space-y-4">
-        <h2 className="text-lg font-bold text-gray-800">My Orders</h2>
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8 flex flex-col items-center gap-3 text-center">
-            <span className="text-4xl">📦</span>
-            <p className="text-gray-600 font-semibold">No orders yet</p>
-            <p className="text-gray-400 text-sm">Browse tailors and place your first order!</p>
+const OrdersTab = () => {
+    const API_URL_O = process.env.REACT_APP_API_URL;
+    const [orders, setOrders] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [historyModal, setHistoryModal] = useState(null);
+    const [history, setHistory] = useState([]);
+
+    useEffect(() => {
+        fetch(`${API_URL_O}/api/orders/customer`, { credentials: 'include' })
+            .then(res => res.ok ? res.json() : null)
+            .then(data => { if (data?.orders) setOrders(data.orders); setLoading(false); })
+            .catch(() => setLoading(false));
+    }, [API_URL_O]);
+
+    const handleViewHistory = async (orderId) => {
+        setHistoryModal(orderId);
+        setHistory([]);
+        try {
+            const res = await fetch(`${API_URL_O}/api/orders/${orderId}/history`, { credentials: 'include' });
+            if (res.ok) {
+                const data = await res.json();
+                setHistory(data.history);
+            }
+        } catch {}
+    };
+
+    const sc = {
+        'Order Placed': 'bg-stone-100 text-stone-700',
+        'Cutting': 'bg-blue-100 text-blue-700',
+        'Stitching': 'bg-indigo-100 text-indigo-700',
+        'Trial Ready': 'bg-amber-100 text-amber-700',
+        'Completed': 'bg-green-100 text-green-700',
+        'Delivered': 'bg-emerald-100 text-emerald-700'
+    };
+
+    return (
+        <div className="space-y-4">
+            <h2 className="text-lg font-bold text-gray-800">My Orders</h2>
+            
+            {loading && <p className="text-center text-gray-400 text-sm">Loading orders...</p>}
+            
+            {!loading && orders.length === 0 && (
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8 flex flex-col items-center gap-3 text-center">
+                    <span className="text-4xl">📦</span>
+                    <p className="text-gray-600 font-semibold">No orders yet</p>
+                    <p className="text-gray-400 text-sm">Browse tailors and place your first order!</p>
+                </div>
+            )}
+
+            {orders.map(o => (
+                <div key={o.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 hover:shadow-md transition">
+                    <div className="flex justify-between items-start mb-2">
+                        <div>
+                            <p className="text-sm font-bold text-gray-800">{o.product_name}</p>
+                            <p className="text-xs text-gray-500">Tailor: <span className="font-semibold">{o.tailor_name} {o.shop_name ? `(${o.shop_name})` : ''}</span></p>
+                            <p className="text-[10px] text-gray-400 mt-0.5">Order ID: #{o.id}</p>
+                        </div>
+                        <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${sc[o.current_status]||sc['Completed']}`}>
+                            {o.current_status}
+                        </span>
+                    </div>
+                    
+                    <div className="flex justify-between items-center py-2 border-y border-gray-50 my-2">
+                        <div>
+                            <p className="text-[10px] font-bold text-gray-400 uppercase">Total</p>
+                            <p className="text-sm font-black text-gray-800">₹{o.total_amount}</p>
+                        </div>
+                        <div className="text-center">
+                            <p className="text-[10px] font-bold text-gray-400 uppercase">Advance</p>
+                            <p className="text-sm font-bold text-gray-600">₹{o.advance_payment}</p>
+                        </div>
+                        <div className="text-right">
+                            <p className="text-[10px] font-bold text-gray-400 uppercase">Remaining</p>
+                            <p className="text-sm font-black text-indigo-600">₹{o.remaining_amount}</p>
+                        </div>
+                    </div>
+                    
+                    <div className="flex justify-between items-center mt-2">
+                        <p className="text-xs text-gray-500">
+                            Delivery: <span className="font-bold text-gray-800">{o.delivery_date ? new Date(o.delivery_date).toLocaleDateString() : 'TBD'}</span>
+                        </p>
+                        <button onClick={() => handleViewHistory(o.id)} className="text-indigo-600 text-xs font-bold bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition">
+                            Track Status
+                        </button>
+                    </div>
+                </div>
+            ))}
+
+            <AnimatePresence>
+                {historyModal && (
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/60 z-50 flex flex-col justify-end">
+                        <motion.div initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} className="bg-white w-full rounded-t-3xl max-h-[85vh] overflow-y-auto w-full md:max-w-md md:m-auto md:rounded-3xl shadow-xl">
+                            <div className="sticky top-0 bg-white border-b border-gray-100 p-4 pt-5 pb-3 flex justify-between items-center z-10 rounded-t-3xl md:rounded-t-3xl">
+                                <h3 className="font-black text-lg">Order Tracking</h3>
+                                <button onClick={() => setHistoryModal(null)} className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-gray-600 hover:bg-gray-200 transition font-bold">&times;</button>
+                            </div>
+                            <div className="p-5">
+                                {(() => {
+                                    const selectedOrder = orders.find(o => o.id === historyModal);
+                                    const TRACKING_STEPS = ['Order Placed', 'Cutting', 'Stitching', 'Trial Ready', 'Completed', 'Delivered'];
+                                    const currentStatusIdx = selectedOrder ? TRACKING_STEPS.indexOf(selectedOrder.current_status) : -1;
+
+                                    return (
+                                        <div className="relative space-y-0 pl-2">
+                                            {TRACKING_STEPS.map((stepName, i) => {
+                                                const stepHistories = history.filter(h => h.status === stepName);
+                                                const mainHistory = stepHistories[stepHistories.length - 1]; // latest occurrence
+                                                
+                                                const isCompleted = currentStatusIdx > i;
+                                                const isCurrent = currentStatusIdx === i;
+                                                const isPending = currentStatusIdx < i;
+
+                                                return (
+                                                    <div key={stepName} className="relative z-10 flex gap-4 items-start pb-8">
+                                                        <div className="relative flex flex-col items-center h-full">
+                                                            <div className={`w-3.5 h-3.5 rounded-full flex-shrink-0 z-10 mt-1 transition-colors duration-300 shadow-sm
+                                                                ${isCompleted ? 'bg-green-500' : isCurrent ? 'bg-indigo-500 ring-4 ring-indigo-100' : 'bg-gray-200'}
+                                                            `} />
+                                                            {i < TRACKING_STEPS.length - 1 && (
+                                                                <div className={`w-0.5 absolute top-5 bottom-[-24px] ${isCompleted ? 'bg-green-500' : 'bg-gray-100'} transition-all duration-300`} />
+                                                            )}
+                                                        </div>
+                                                        <div className="flex-1 pb-1">
+                                                            <p className={`text-sm font-black ${isPending ? 'text-gray-400' : 'text-gray-800'}`}>{stepName}</p>
+                                                            
+                                                            {mainHistory ? (
+                                                                <>
+                                                                    <p className="text-[10px] text-gray-500 mt-0.5 font-semibold">
+                                                                        {new Date(mainHistory.updated_at).toLocaleString('en-IN')}
+                                                                    </p>
+                                                                    {mainHistory.note && (
+                                                                        <div className="mt-2 text-xs text-gray-600 bg-gray-50/80 border border-gray-100 rounded-xl p-3 shadow-sm inline-block">
+                                                                            {mainHistory.note}
+                                                                        </div>
+                                                                    )}
+                                                                </>
+                                                            ) : isPending ? (
+                                                                <p className="text-[10px] text-gray-400 mt-0.5 italic">Pending</p>
+                                                            ) : (
+                                                                <p className="text-[10px] text-green-600 mt-0.5 font-bold">Successfully Completed ✓</p>
+                                                            )}
+                                                            
+                                                            {stepHistories.length > 1 && (
+                                                                <div className="mt-3 pl-3 border-l-2 border-gray-100 space-y-1.5">
+                                                                    {stepHistories.slice(0, -1).map(sh => sh.note && (
+                                                                        <p key={sh.id} className="text-[10px] text-gray-500 flex items-center gap-1">
+                                                                            <span>↳</span> <span>{sh.note} ({new Date(sh.updated_at).toLocaleTimeString('en-IN', {hour: '2-digit', minute:'2-digit'})})</span>
+                                                                        </p>
+                                                                    ))}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    );
+                                })()}
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
-    </div>
-);
+    );
+};
 
 const API_URL = process.env.REACT_APP_API_URL;
 const catEmojiMap = {

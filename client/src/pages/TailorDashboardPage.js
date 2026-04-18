@@ -136,21 +136,192 @@ function HomeTab({ user }) {
 
 /* ── Orders Tab ── */
 function OrdersTab() {
+  const API_URL_O = process.env.REACT_APP_API_URL;
   const [filter, setFilter] = useState('All');
-  const filters = ['All','Pending','In Progress','Completed'];
-  const orders = [
-    {id:'#1042',customer:'Riya Sharma',item:'Lehenga (Bridal)',status:'In Progress',due:'Feb 28',amount:'₹4,500'},
-    {id:'#1041',customer:'Arun Mehta', item:'Sherwani',        status:'Pending',    due:'Mar 2', amount:'₹3,200'},
-    {id:'#1040',customer:'Priya Patel',item:'Blouse (Silk)',   status:'Completed',  due:'Feb 22',amount:'₹800'},
-    {id:'#1039',customer:'Karan Singh',item:'Suit (3-piece)',  status:'Completed',  due:'Feb 20',amount:'₹6,000'},
-    {id:'#1038',customer:'Anita Desai',item:'Salwar Kameez',   status:'Pending',    due:'Mar 5', amount:'₹1,200'},
-  ];
-  const sc = {'In Progress':'bg-blue-100 text-blue-700','Pending':'bg-amber-100 text-amber-700','Completed':'bg-green-100 text-green-700'};
-  const filtered = filter==='All' ? orders : orders.filter(o=>o.status===filter);
+  const filters = ['All', 'Order Placed', 'Cutting', 'Stitching', 'Trial Ready', 'Completed', 'Delivered'];
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const [showCreate, setShowCreate] = useState(false);
+  const [verifyQuery, setVerifyQuery] = useState('');
+  const [customer, setCustomer] = useState(null);
+  const [verifyErr, setVerifyErr] = useState('');
+  
+  const [newOrder, setNewOrder] = useState({ product_name: '', total_amount: '', advance_payment: '', delivery_date: '', notes: '' });
+  const [createErr, setCreateErr] = useState('');
+  const [creating, setCreating] = useState(false);
+
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [statusUpdate, setStatusUpdate] = useState({ status: '', note: '', delivery_date: '' });
+
+  const fetchOrders = () => {
+    fetch(`${API_URL_O}/api/orders/tailor`, { credentials: 'include' })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.orders) setOrders(d.orders); setLoading(false); })
+      .catch(() => setLoading(false));
+  };
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { fetchOrders(); }, []);
+
+  const handleVerify = async () => {
+    setVerifyErr(''); setCustomer(null);
+    if (!verifyQuery) { setVerifyErr('Enter email or phone'); return; }
+    try {
+      const res = await fetch(`${API_URL_O}/api/tailor/verify-customer?query=${encodeURIComponent(verifyQuery)}`, { credentials: 'include' });
+      const data = await res.json();
+      if (!res.ok) setVerifyErr(data.message || 'Customer not found. Please register first.');
+      else setCustomer(data.customer);
+    } catch { setVerifyErr('Network error'); }
+  };
+
+  const handleCreateOrder = async () => {
+    if (!customer) return;
+    if (!newOrder.product_name || !newOrder.total_amount || newOrder.advance_payment === '' || !newOrder.delivery_date) {
+      setCreateErr('Fill all required fields'); return;
+    }
+    setCreating(true);
+    try {
+      const res = await fetch(`${API_URL_O}/api/orders`, {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...newOrder, customer_id: customer.id })
+      });
+      const data = await res.json();
+      if (!res.ok) setCreateErr(data.message || 'Failed to create order');
+      else {
+        setShowCreate(false); setCustomer(null); setVerifyQuery('');
+        setNewOrder({ product_name: '', total_amount: '', advance_payment: '', delivery_date: '', notes: '' });
+        fetchOrders();
+      }
+    } catch { setCreateErr('Network error'); }
+    finally { setCreating(false); }
+  };
+
+  const handleUpdateStatus = async () => {
+    if (!selectedOrder) return;
+    try {
+      const res = await fetch(`${API_URL_O}/api/orders/${selectedOrder.id}/status`, {
+        method: 'PUT', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(statusUpdate)
+      });
+      if (res.ok) {
+        setSelectedOrder(null);
+        fetchOrders();
+      } else {
+        const errData = await res.json();
+        alert('Failed to update: ' + errData.message);
+      }
+    } catch (err) {
+      alert('Network error during update: ' + err.message);
+    }
+  };
+
+  const sc = {
+    'Order Placed': 'bg-stone-100 text-stone-700',
+    'Cutting': 'bg-blue-100 text-blue-700',
+    'Stitching': 'bg-indigo-100 text-indigo-700',
+    'Trial Ready': 'bg-amber-100 text-amber-700',
+    'Completed': 'bg-green-100 text-green-700',
+    'Delivered': 'bg-emerald-100 text-emerald-700' // using emerald for 'Delivered'
+  };
+  const filtered = filter === 'All' ? orders : orders.filter(o => o.current_status === filter);
 
   return (
-    <div className="space-y-3">
-      <h2 className="font-black text-stone-900 text-lg" style={{fontFamily:'Sora,sans-serif'}}>My Orders</h2>
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="font-black text-stone-900 text-lg" style={{fontFamily:'Sora,sans-serif'}}>Manage Orders</h2>
+        <button onClick={() => setShowCreate(!showCreate)} className="bg-orange-500 hover:bg-orange-600 text-white text-xs font-black px-4 py-2 rounded-xl transition shadow-sm">
+          {showCreate ? 'Close' : '+ New Order'}
+        </button>
+      </div>
+
+      {showCreate && (
+        <div className="bg-white border-2 border-orange-200 rounded-2xl p-4 space-y-4 shadow-sm relative">
+          <h3 className="font-bold text-sm text-stone-800">🔍 Verify Customer</h3>
+          <div className="flex gap-2">
+            <input value={verifyQuery} onChange={e=>setVerifyQuery(e.target.value)} placeholder="Customer Email or Phone" className="flex-1 border border-stone-200 focus:ring-2 focus:ring-orange-300 outline-none rounded-xl px-3 py-2 text-sm" />
+            <button onClick={handleVerify} className="bg-stone-800 text-white px-4 py-2 rounded-xl font-bold text-sm">Verify</button>
+          </div>
+          {verifyErr && <p className="text-red-500 text-xs font-bold">{verifyErr}</p>}
+          
+          {customer && (
+            <div className="bg-green-50 border border-green-200 rounded-xl p-3 flex flex-col gap-1">
+              <p className="text-xs font-black text-green-700">✅ Customer Found</p>
+              <p className="text-sm font-bold">{customer.full_name}</p>
+              <p className="text-xs text-stone-600">{customer.email} {customer.phone ? `• ${customer.phone}` : ''}</p>
+            </div>
+          )}
+
+          {customer && (
+            <div className="space-y-3 pt-2 border-t border-stone-100">
+              <h3 className="font-bold text-sm text-stone-800">📦 Order Details</h3>
+              <input placeholder="Product Name (e.g. Bridal Lehenga)" value={newOrder.product_name} onChange={e=>setNewOrder({...newOrder,product_name:e.target.value})} className="w-full border border-stone-200 focus:ring-2 focus:ring-orange-300 outline-none rounded-xl px-3 py-2 text-sm" />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-bold text-stone-400 uppercase">Total Amount (₹)</label>
+                  <input type="number" min="0" value={newOrder.total_amount} onChange={e=>setNewOrder({...newOrder,total_amount:e.target.value})} className="w-full border border-stone-200 focus:ring-2 focus:ring-orange-300 outline-none rounded-xl px-3 py-2 text-sm" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-stone-400 uppercase">Advance Payment (₹)</label>
+                  <input type="number" min="0" value={newOrder.advance_payment} onChange={e=>setNewOrder({...newOrder,advance_payment:e.target.value})} className="w-full border border-stone-200 focus:ring-2 focus:ring-orange-300 outline-none rounded-xl px-3 py-2 text-sm" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3 items-center">
+                <div>
+                  <label className="text-[10px] font-bold text-stone-400 uppercase">Delivery Date</label>
+                  <input type="date" value={newOrder.delivery_date} onChange={e=>setNewOrder({...newOrder,delivery_date:e.target.value})} className="w-full border border-stone-200 focus:ring-2 focus:ring-orange-300 outline-none rounded-xl px-3 py-2 text-sm" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-stone-400 uppercase">Remaining</p>
+                  <p className="text-orange-600 font-black pt-2">₹ {Math.max(0, (newOrder.total_amount||0) - (newOrder.advance_payment||0))}</p>
+                </div>
+              </div>
+              <input placeholder="Optional Notes" value={newOrder.notes} onChange={e=>setNewOrder({...newOrder,notes:e.target.value})} className="w-full border border-stone-200 focus:ring-2 focus:ring-orange-300 outline-none rounded-xl px-3 py-2 text-sm" />
+              {createErr && <p className="text-red-500 text-xs font-bold">{createErr}</p>}
+              <button onClick={handleCreateOrder} disabled={creating} className="w-full bg-orange-500 hover:bg-orange-600 text-white font-black py-2.5 rounded-xl disabled:opacity-60 transition">
+                {creating ? 'Creating...' : '+ Create Order'}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {selectedOrder && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md p-5 shadow-xl">
+             <div className="flex justify-between items-center mb-4">
+               <h3 className="font-black text-lg">Update Order #{selectedOrder.id}</h3>
+               <button onClick={()=>setSelectedOrder(null)} className="text-stone-400 hover:text-stone-600 text-2xl leading-none">&times;</button>
+             </div>
+             <div className="mb-4 bg-stone-50 p-3 rounded-xl border border-stone-200 text-sm">
+                <p><strong>Customer:</strong> {selectedOrder.customer_name}</p>
+                <p><strong>Product:</strong> {selectedOrder.product_name}</p>
+                <p><strong>Current Status:</strong> <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${sc[selectedOrder.current_status]||sc['Completed']}`}>{selectedOrder.current_status}</span></p>
+             </div>
+             <div className="space-y-3">
+               <div>
+                  <label className="text-[10px] font-bold text-stone-400 uppercase">New Status</label>
+                  <select value={statusUpdate.status} onChange={e=>setStatusUpdate({...statusUpdate,status:e.target.value})} className="w-full border border-stone-200 outline-none rounded-xl px-3 py-2 text-sm">
+                    {filters.slice(1).map(f => <option key={f} value={f}>{f}</option>)}
+                  </select>
+               </div>
+               <div>
+                  <label className="text-[10px] font-bold text-stone-400 uppercase">Update Delivery Date (Optional)</label>
+                  <input type="date" value={statusUpdate.delivery_date} onChange={e=>setStatusUpdate({...statusUpdate,delivery_date:e.target.value})} className="w-full border border-stone-200 outline-none rounded-xl px-3 py-2 text-sm text-stone-700" />
+               </div>
+               <div>
+                  <label className="text-[10px] font-bold text-stone-400 uppercase">Add a Note</label>
+                  <input value={statusUpdate.note} onChange={e=>setStatusUpdate({...statusUpdate,note:e.target.value})} placeholder="e.g. Delayed by 2 days" className="w-full border border-stone-200 outline-none rounded-xl px-3 py-2 text-sm" />
+               </div>
+               <button onClick={handleUpdateStatus} className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-2.5 rounded-xl transition">
+                 Update Order
+               </button>
+             </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
         {filters.map(f=>(
           <button key={f} onClick={()=>setFilter(f)}
@@ -159,22 +330,29 @@ function OrdersTab() {
           </button>
         ))}
       </div>
+      
+      {loading && <p className="text-center text-stone-400 text-sm mt-4">Loading orders...</p>}
+      {!loading && filtered.length === 0 && <p className="text-center text-stone-400 text-sm mt-4 bg-white p-6 rounded-2xl">No orders found.</p>}
+      
       {filtered.map(o=>(
-        <SectionCard key={o.id}>
-          <div className="p-4">
+        <div key={o.id} className="bg-white rounded-2xl border border-stone-200 shadow-sm overflow-hidden hover:shadow-md transition">
+          <div className="p-4 cursor-pointer" onClick={() => { setSelectedOrder(o); setStatusUpdate({ status: o.current_status, note: '', delivery_date: o.delivery_date ? new Date(o.delivery_date).toISOString().split('T')[0] : '' }); }}>
             <div className="flex justify-between items-start mb-2">
               <div>
-                <p className="text-sm font-black text-stone-800">{o.customer}</p>
-                <p className="text-xs text-stone-400">{o.id} · {o.item}</p>
+                <p className="text-sm font-black text-stone-800">{o.customer_name}</p>
+                <p className="text-xs text-stone-500">Ord #{o.id} · {o.product_name}</p>
               </div>
-              <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${sc[o.status]}`}>{o.status}</span>
+              <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${sc[o.current_status]||sc['Completed']}`}>{o.current_status}</span>
             </div>
             <div className="flex justify-between items-center pt-2 border-t border-stone-50">
-              <p className="text-xs text-stone-400">📅 Due: {o.due}</p>
-              <p className="text-sm font-black text-orange-500">{o.amount}</p>
+              <p className="text-xs text-stone-400">📅 Delivery: <span className="font-bold">{o.delivery_date ? new Date(o.delivery_date).toLocaleDateString() : 'TBD'}</span></p>
+              <div className="text-right">
+                 <p className="text-sm font-black text-orange-500">₹{o.total_amount}</p>
+                 <p className="text-[10px] text-stone-400">R: ₹{o.remaining_amount}</p>
+              </div>
             </div>
           </div>
-        </SectionCard>
+        </div>
       ))}
     </div>
   );
