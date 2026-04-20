@@ -250,8 +250,8 @@ const TailorDetailsPage = () => {
                             <div className="flex items-start justify-end mb-4">
                                 <div className="flex items-center gap-1.5 bg-amber-50 border border-amber-200 px-4 py-2 rounded-full shadow-sm">
                                     <FaStar className="text-amber-400" />
-                                    <span className="text-base font-black text-amber-700">{tailor.rating || '4.5'}</span>
-                                    {tailor.reviews && <span className="text-xs text-gray-400 font-medium">({tailor.reviews} reviews)</span>}
+                                    <span className="text-base font-black text-amber-700">{tailor.avg_rating || '0.0'}</span>
+                                    {tailor.total_reviews !== undefined && <span className="text-xs text-gray-400 font-medium">({tailor.total_reviews} reviews)</span>}
                                 </div>
                             </div>
 
@@ -408,8 +408,8 @@ const TailorDetailsPage = () => {
                             <span className="text-[11px] text-gray-400 font-semibold">Services</span>
                         </div>
                         <div className="flex flex-col items-center py-4 gap-0.5">
-                            <span className="text-xl font-black text-amber-500">{tailor.rating || '4.5'}⭐</span>
-                            <span className="text-[11px] text-gray-400 font-semibold">Rating</span>
+                            <span className="text-xl font-black text-amber-500">{tailor.avg_rating || '0.0'}⭐</span>
+                            <span className="text-[11px] text-gray-400 font-semibold">{tailor.total_reviews || 0} Reviews</span>
                         </div>
                         <div className="flex flex-col items-center py-4 gap-0.5">
                             <span className="text-xl font-black text-green-600">

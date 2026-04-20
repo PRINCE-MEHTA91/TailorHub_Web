@@ -149,10 +149,13 @@ db.getConnection((connErr, connection) => {
             product_name VARCHAR(255) NOT NULL,
             total_amount DECIMAL(10,2) NOT NULL DEFAULT 0,
             advance_payment DECIMAL(10,2) NOT NULL DEFAULT 0,
-            remaining_amount DECIMAL(10,2) GENERATED ALWAYS AS (total_amount - advance_payment) STORED,
+            discount_amount DECIMAL(10,2) NOT NULL DEFAULT 0,
+            final_amount DECIMAL(10,2) DEFAULT NULL,
+            remaining_amount DECIMAL(10,2) GENERATED ALWAYS AS (COALESCE(final_amount, total_amount) - advance_payment) STORED,
             delivery_date DATE DEFAULT NULL,
             current_status VARCHAR(100) NOT NULL DEFAULT 'Order Placed',
             notes TEXT DEFAULT NULL,
+            offer_id INT DEFAULT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             FOREIGN KEY (tailor_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -168,6 +171,22 @@ db.getConnection((connErr, connection) => {
             });
             db.query("ALTER TABLE orders ADD COLUMN current_status VARCHAR(100) NOT NULL DEFAULT 'Order Placed'", (err) => {
                 if (err && err.code !== 'ER_DUP_FIELDNAME') console.warn('Order status migration warning:', err.message);
+            });
+            // Discount / offer columns
+            db.query('ALTER TABLE orders ADD COLUMN offer_id INT DEFAULT NULL', (err) => {
+                if (err && err.code !== 'ER_DUP_FIELDNAME') console.warn('Order offer_id migration warning:', err.message);
+            });
+            db.query('ALTER TABLE orders ADD COLUMN discount_amount DECIMAL(10,2) NOT NULL DEFAULT 0', (err) => {
+                if (err && err.code !== 'ER_DUP_FIELDNAME') console.warn('Order discount_amount migration warning:', err.message);
+            });
+            db.query('ALTER TABLE orders ADD COLUMN final_amount DECIMAL(10,2) DEFAULT NULL', (err) => {
+                if (err && err.code !== 'ER_DUP_FIELDNAME') console.warn('Order final_amount migration warning:', err.message);
+            });
+            // Fix remaining amount generation for existing tables
+            db.query('ALTER TABLE orders DROP COLUMN remaining_amount', () => {
+                db.query('ALTER TABLE orders ADD COLUMN remaining_amount DECIMAL(10,2) GENERATED ALWAYS AS (COALESCE(final_amount, total_amount) - advance_payment) STORED', (err) => {
+                    if (err && err.code !== 'ER_DUP_FIELDNAME') console.warn('Order remaining_amount migration warning:', err.message);
+                });
             });
         }
     });
@@ -489,12 +508,15 @@ app.post('/api/tailor/profile', verifyToken, (req, res) => {
 // ── Tailor Profile: Get own profile ────────────────────────────────────────
 app.get('/api/tailor/profile', verifyToken, (req, res) => {
     const sql = `
-        SELECT tp.phone, tp.whatsapp, tp.instagram,
+        SELECT u.full_name, u.email, u.avg_rating, u.total_reviews,
+               tp.phone, tp.whatsapp, tp.instagram,
                tp.street, tp.city, tp.state, tp.pin,
                tp.products, tp.gallery, tp.profile_img,
                tp.shop_name, tp.tagline, tp.bio, tp.experience, tp.specialities, tp.timings, tp.deals,
                tp.price_listings, tp.latitude, tp.longitude
-        FROM tailor_profiles tp WHERE tp.user_id = ?
+        FROM users u
+        LEFT JOIN tailor_profiles tp ON u.id = tp.user_id
+        WHERE u.id = ? AND u.role = 'tailor'
     `;
     db.query(sql, [req.userId], (err, results) => {
         if (err) return res.status(500).json({ message: 'Server error' });
@@ -574,7 +596,7 @@ app.post('/api/tailor/price-listings', verifyToken, (req, res) => {
 // ── Tailor Profiles: Fetch all (for customer dashboard) ────────────────────
 app.get('/api/tailors', (req, res) => {
     const sql = `
-        SELECT u.id, u.full_name, u.email,
+        SELECT u.id, u.full_name, u.email, u.avg_rating, u.total_reviews,
                tp.phone, tp.whatsapp, tp.instagram,
                tp.street, tp.city, tp.state, tp.pin,
                tp.products, tp.gallery, tp.profile_img,
@@ -607,7 +629,7 @@ app.get('/api/tailors', (req, res) => {
 app.get('/api/tailors/:id', (req, res) => {
     const { id } = req.params;
     const sql = `
-        SELECT u.id as user_id, u.full_name, u.email,
+        SELECT u.id as user_id, u.full_name, u.email, u.avg_rating, u.total_reviews,
                tp.phone, tp.whatsapp, tp.instagram,
                tp.street, tp.city, tp.state, tp.pin,
                tp.products, tp.gallery, tp.profile_img,
@@ -908,6 +930,31 @@ app.get('/api/offers/active', (req, res) => {
     });
 });
 
+// ── GET /api/tailor/offers/active-for-order — Active offers for logged-in tailor (for order creation)
+app.get('/api/tailor/offers/active-for-order', verifyToken, requireRole('tailor'), (req, res) => {
+    const sql = `
+        SELECT id, title, description, discount, discount_type, start_date, end_date
+        FROM offers
+        WHERE tailor_id = ? AND CURDATE() >= start_date AND CURDATE() <= end_date
+        ORDER BY end_date ASC
+    `;
+    db.query(sql, [req.userId], (err, results) => {
+        if (err) return res.status(500).json({ message: 'Server error' });
+        const toDateStr = (val) => {
+            if (!val) return null;
+            if (val instanceof Date) return val.toISOString().split('T')[0];
+            return String(val).split('T')[0];
+        };
+        const offers = results.map(o => ({
+            ...o,
+            start_date: toDateStr(o.start_date),
+            end_date:   toDateStr(o.end_date),
+            discount:   Number(o.discount),
+        }));
+        res.json({ offers });
+    });
+});
+
 // ═══════════════════════════════════════════════════════════════
 // ORDERS ENDPOINTS
 // ═══════════════════════════════════════════════════════════════
@@ -934,7 +981,7 @@ app.get('/api/tailor/verify-customer', verifyToken, requireRole('tailor'), (req,
 app.post('/api/orders', verifyToken, requireRole('tailor'), async (req, res) => {
     try {
         console.log('📦 Create Order Request Body:', req.body);
-        const { customer_id, product_name, total_amount, advance_payment, delivery_date, notes } = req.body;
+        const { customer_id, product_name, total_amount, advance_payment, delivery_date, notes, offer_id, discount_amount, final_amount } = req.body;
         
         if (!customer_id || !product_name || total_amount === undefined || advance_payment === undefined || !delivery_date) {
             return res.status(400).json({ message: 'All required fields must be provided' });
@@ -946,9 +993,27 @@ app.post('/api/orders', verifyToken, requireRole('tailor'), async (req, res) => 
             return res.status(404).json({ message: 'Customer does not exist' });
         }
 
+        // Validate offer if provided
+        let resolvedOfferId = offer_id || null;
+        let resolvedDiscount = parseFloat(discount_amount) || 0;
+        let resolvedFinalAmount = final_amount !== undefined ? parseFloat(final_amount) : parseFloat(total_amount);
+
+        if (resolvedOfferId) {
+            const [offerRows] = await db.promise().query(
+                'SELECT id FROM offers WHERE id = ? AND tailor_id = ? AND CURDATE() >= start_date AND CURDATE() <= end_date',
+                [resolvedOfferId, req.userId]
+            );
+            if (offerRows.length === 0) {
+                // Offer is invalid or expired — proceed without it
+                resolvedOfferId = null;
+                resolvedDiscount = 0;
+                resolvedFinalAmount = parseFloat(total_amount);
+            }
+        }
+
         const sql = `
-            INSERT INTO orders (tailor_id, customer_id, product_name, total_amount, advance_payment, delivery_date, notes) 
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO orders (tailor_id, customer_id, product_name, total_amount, advance_payment, delivery_date, notes, offer_id, discount_amount, final_amount) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `;
         const params = [
             req.userId, 
@@ -957,7 +1022,10 @@ app.post('/api/orders', verifyToken, requireRole('tailor'), async (req, res) => 
             parseFloat(total_amount), 
             parseFloat(advance_payment), 
             delivery_date, 
-            notes || null
+            notes || null,
+            resolvedOfferId,
+            resolvedDiscount,
+            resolvedFinalAmount
         ];
         
         const [result] = await db.promise().query(sql, params);
@@ -993,7 +1061,8 @@ app.get('/api/orders/tailor', verifyToken, requireRole('tailor'), (req, res) => 
 // ── GET /api/orders/customer — Get all orders for logged in customer ──
 app.get('/api/orders/customer', verifyToken, requireRole('customer'), (req, res) => {
     const sql = `
-        SELECT o.*, u.full_name AS tailor_name, tp.shop_name 
+        SELECT o.*, u.full_name AS tailor_name, tp.shop_name,
+               (SELECT COUNT(*) FROM feedbacks f WHERE f.order_id = o.id) AS feedback_submitted
         FROM orders o 
         JOIN users u ON o.tailor_id = u.id 
         LEFT JOIN tailor_profiles tp ON u.id = tp.user_id 
@@ -1001,7 +1070,10 @@ app.get('/api/orders/customer', verifyToken, requireRole('customer'), (req, res)
         ORDER BY o.created_at DESC
     `;
     db.query(sql, [req.userId], (err, results) => {
-        if (err) return res.status(500).json({ message: 'Server error' });
+        if (err) {
+            console.error('Error fetching customer orders:', err);
+            return res.status(500).json({ message: 'Server error' });
+        }
         res.json({ orders: results });
     });
 });
@@ -1136,6 +1208,72 @@ app.put('/api/orders/:id/payment', verifyToken, requireRole('tailor'), (req, res
         if (err) return res.status(500).json({ message: 'Server error' });
         if (result.affectedRows === 0) return res.status(404).json({ message: 'Order not found or unauthorized' });
         res.json({ message: 'Payment updated successfully' });
+    });
+});
+
+
+// ═══════════════════════════════════════════════════════════════
+// FEEDBACK ENDPOINTS
+// ═══════════════════════════════════════════════════════════════
+
+// ── POST /api/add-feedback ──
+app.post('/api/add-feedback', verifyToken, (req, res) => {
+    const { orderId, customerId, tailorId, rating, message } = req.body;
+    
+    // Validate fields
+    if (!orderId || !customerId || !tailorId || !rating) {
+        return res.status(400).json({ message: 'Missing required fields' });
+    }
+
+    // Verify order status
+    db.query('SELECT current_status FROM orders WHERE id = ?', [orderId], (err, results) => {
+        if (err) return res.status(500).json({ message: 'Server error' });
+        if (results.length === 0) return res.status(404).json({ message: 'Order not found' });
+        
+        const status = results[0].current_status;
+        if (status !== 'Delivered' && status !== 'Completed') {
+            return res.status(400).json({ message: 'Feedback allowed only for Delivered or Completed orders' });
+        }
+
+        // Insert feedback
+        const sql = `INSERT INTO feedbacks (order_id, customer_id, tailor_id, rating, message) VALUES (?, ?, ?, ?, ?)`;
+        db.query(sql, [orderId, customerId, tailorId, rating, message || ''], (err2) => {
+            if (err2) {
+                if (err2.code === 'ER_DUP_ENTRY') {
+                    return res.status(400).json({ message: 'Feedback already submitted for this order' });
+                }
+                return res.status(500).json({ message: 'Error submitting feedback' });
+            }
+
+            // Recalculate tailor rating
+            db.query('SELECT COUNT(*) as totalReviews, AVG(rating) as avgRating FROM feedbacks WHERE tailor_id = ?', [tailorId], (err3, ratingResults) => {
+                if (!err3 && ratingResults.length > 0) {
+                    const { totalReviews, avgRating } = ratingResults[0];
+                    db.query('UPDATE users SET avg_rating = ?, total_reviews = ? WHERE id = ?', [avgRating || 0, totalReviews || 0, tailorId]);
+                }
+            });
+
+            res.status(201).json({ message: 'Feedback submitted successfully' });
+        });
+    });
+});
+
+// ── GET /api/tailor-feedback/:tailorId ──
+app.get('/api/tailor-feedback/:tailorId', (req, res) => {
+    const { tailorId } = req.params;
+    const sql = `
+        SELECT f.id as feedbackId, f.order_id, f.customer_id, f.tailor_id, f.rating, f.message, f.created_at,
+               u.full_name as customer_name,
+               o.product_name
+        FROM feedbacks f
+        JOIN users u ON f.customer_id = u.id
+        JOIN orders o ON f.order_id = o.id
+        WHERE f.tailor_id = ?
+        ORDER BY f.created_at DESC
+    `;
+    db.query(sql, [tailorId], (err, results) => {
+        if (err) return res.status(500).json({ message: 'Server error' });
+        res.json({ feedbacks: results });
     });
 });
 

@@ -8,6 +8,100 @@ import SearchBar from '../components/SearchBar';
 import SearchResults from '../components/SearchResults';
 import IndexPage from './IndexPage';
 
+const FeedbackModal = ({ order, onClose, onSuccess }) => {
+    const [rating, setRating] = useState(5);
+    const [message, setMessage] = useState('');
+    const [submitting, setSubmitting] = useState(false);
+    const [error, setError] = useState('');
+
+    if (!order) return null;
+
+    const handleSubmit = async () => {
+        setSubmitting(true);
+        setError('');
+        try {
+            const API_URL = process.env.REACT_APP_API_URL;
+            const res = await fetch(`${API_URL}/api/add-feedback`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({
+                    orderId: order.id,
+                    customerId: order.customer_id,
+                    tailorId: order.tailor_id,
+                    rating,
+                    message
+                }),
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                setError(data.message || 'Failed to submit feedback');
+                return;
+            }
+            onSuccess();
+        } catch {
+            setError('Network error. Please try again.');
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    return (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center px-4">
+            <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl">
+                <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-xl font-black text-gray-800">Share Feedback</h3>
+                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600 font-bold">&times;</button>
+                </div>
+
+                <div className="mb-4 text-center">
+                    <p className="text-sm text-gray-500 mb-1">How was your experience with</p>
+                    <p className="text-lg font-bold text-indigo-600">{order.tailor_name}</p>
+                    <p className="text-xs text-gray-400">for {order.product_name}</p>
+                </div>
+
+                <div className="flex justify-center gap-2 mb-6">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                        <button
+                            key={star}
+                            onClick={() => setRating(star)}
+                            className={`text-3xl transition-all duration-200 hover:scale-125 active:scale-95 ${star <= rating ? 'grayscale-0' : 'grayscale opacity-30 hover:grayscale-0 hover:opacity-100'}`}
+                        >
+                            ⭐
+                        </button>
+                    ))}
+                </div>
+
+                <textarea
+                    placeholder="Write a short message (optional)..."
+                    className="w-full border border-gray-200 rounded-2xl p-4 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 min-h-[100px] mb-4 bg-gray-50"
+                    value={message}
+                    onChange={(e) => setMessage(e.target.value)}
+                />
+
+                {error && <p className="text-red-500 text-xs text-center mb-4 bg-red-50 py-2 rounded-xl border border-red-100">{error}</p>}
+
+                <div className="flex gap-3">
+                    <button
+                        onClick={onClose}
+                        className="flex-1 py-3.5 rounded-2xl font-bold text-sm text-gray-500 bg-gray-100 hover:bg-gray-200"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        onClick={handleSubmit}
+                        disabled={submitting}
+                        className="flex-[2] bg-indigo-600 text-white font-bold text-sm py-3.5 px-8 rounded-2xl hover:bg-indigo-700 disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-indigo-100 transition-all"
+                    >
+                        {submitting && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+                        Submit
+                    </button>
+                </div>
+            </motion.div>
+        </motion.div>
+    );
+};
+
 const CustomerProfileTab = ({ user, onLogout }) => {
     const [contact, setContact] = useState({ phone: '', whatsapp: '' });
     const [address, setAddress] = useState({ street: '', city: '', state: '', pin: '' });
@@ -173,12 +267,18 @@ const OrdersTab = () => {
     const [loading, setLoading] = useState(true);
     const [historyModal, setHistoryModal] = useState(null);
     const [history, setHistory] = useState([]);
+    const [feedbackModalOrder, setFeedbackModalOrder] = useState(null);
 
-    useEffect(() => {
+    const fetchOrders = () => {
+        setLoading(true);
         fetch(`${API_URL_O}/api/orders/customer`, { credentials: 'include' })
             .then(res => res.ok ? res.json() : null)
             .then(data => { if (data?.orders) setOrders(data.orders); setLoading(false); })
             .catch(() => setLoading(false));
+    };
+
+    useEffect(() => {
+        fetchOrders();
     }, [API_URL_O]);
 
     const handleViewHistory = async (orderId) => {
@@ -232,25 +332,42 @@ const OrdersTab = () => {
                     <div className="flex justify-between items-center py-2 border-y border-gray-50 my-2">
                         <div>
                             <p className="text-[10px] font-bold text-gray-400 uppercase">Total</p>
-                            <p className="text-sm font-black text-gray-800">₹{o.total_amount}</p>
+                            {o.discount_amount > 0 ? (
+                                <div>
+                                    <p className="text-xs text-gray-400 line-through">₹{o.total_amount}</p>
+                                    <p className="text-sm font-black text-gray-800">₹{o.final_amount} <span className="text-[10px] font-bold text-green-500">(-₹{o.discount_amount})</span></p>
+                                </div>
+                            ) : (
+                                <p className="text-sm font-black text-gray-800">₹{o.total_amount}</p>
+                            )}
                         </div>
-                        <div className="text-center">
+                        <div className="text-center flex flex-col justify-end">
                             <p className="text-[10px] font-bold text-gray-400 uppercase">Advance</p>
                             <p className="text-sm font-bold text-gray-600">₹{o.advance_payment}</p>
                         </div>
-                        <div className="text-right">
+                        <div className="text-right flex flex-col justify-end">
                             <p className="text-[10px] font-bold text-gray-400 uppercase">Remaining</p>
                             <p className="text-sm font-black text-indigo-600">₹{o.remaining_amount}</p>
                         </div>
                     </div>
                     
-                    <div className="flex justify-between items-center mt-2">
+                    <div className="flex justify-between items-center mt-2 gap-2">
                         <p className="text-xs text-gray-500">
                             Delivery: <span className="font-bold text-gray-800">{o.delivery_date ? new Date(o.delivery_date).toLocaleDateString() : 'TBD'}</span>
                         </p>
-                        <button onClick={() => handleViewHistory(o.id)} className="text-indigo-600 text-xs font-bold bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition">
-                            Track Status
-                        </button>
+                        <div className="flex gap-2">
+                            {(o.current_status === 'Delivered' || o.current_status === 'Completed') && o.feedback_submitted === 0 && (
+                                <button
+                                    onClick={() => setFeedbackModalOrder(o)}
+                                    className="text-white text-xs font-bold bg-green-600 hover:bg-green-700 px-3 py-1.5 rounded-lg transition shadow-sm"
+                                >
+                                    ⭐ Give Feedback
+                                </button>
+                            )}
+                            <button onClick={() => handleViewHistory(o.id)} className="text-indigo-600 text-xs font-bold bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition">
+                                Track Status
+                            </button>
+                        </div>
                     </div>
                 </div>
             ))}
@@ -328,6 +445,19 @@ const OrdersTab = () => {
                             </div>
                         </motion.div>
                     </motion.div>
+                )}
+            </AnimatePresence>
+
+            <AnimatePresence>
+                {feedbackModalOrder && (
+                    <FeedbackModal
+                        order={feedbackModalOrder}
+                        onClose={() => setFeedbackModalOrder(null)}
+                        onSuccess={() => {
+                            setFeedbackModalOrder(null);
+                            fetchOrders();
+                        }}
+                    />
                 )}
             </AnimatePresence>
         </div>

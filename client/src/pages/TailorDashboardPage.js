@@ -134,6 +134,158 @@ function HomeTab({ user }) {
   );
 }
 
+/* ── Order Create Form sub-component ── */
+function OrderCreateForm({ API_URL_O, newOrder, setNewOrder, createErr, creating, onSubmit }) {
+  const [offers, setOffers] = useState([]);
+  const [offersLoading, setOffersLoading] = useState(true);
+  const [selectedOffer, setSelectedOffer] = useState(null);
+  const [offerInput, setOfferInput] = useState('');
+  const [offerError, setOfferError] = useState('');
+  const [offerApplied, setOfferApplied] = useState(false);
+
+  useEffect(() => {
+    fetch(`${API_URL_O}/api/tailor/offers/active-for-order`, { credentials: 'include' })
+      .then(r => r.ok ? r.json() : { offers: [] })
+      .then(d => { setOffers(d.offers || []); setOffersLoading(false); })
+      .catch(() => setOffersLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const totalAmt = parseFloat(newOrder.total_amount) || 0;
+  const advanceAmt = parseFloat(newOrder.advance_payment) || 0;
+
+  let discountAmount = 0;
+  if (selectedOffer && offerApplied) {
+    if (selectedOffer.discount_type === 'percent') {
+      discountAmount = (totalAmt * selectedOffer.discount) / 100;
+    } else {
+      discountAmount = selectedOffer.discount;
+    }
+    discountAmount = Math.min(discountAmount, totalAmt);
+  }
+  const finalAmount = Math.max(0, totalAmt - discountAmount);
+  const remainingAmount = Math.max(0, finalAmount - advanceAmt);
+
+  const handleApplyOffer = () => {
+    setOfferError('');
+    if (!offerInput.trim()) { setOfferError('Please select an offer'); return; }
+    const found = offers.find(o => String(o.id) === offerInput.trim());
+    if (!found) { setOfferError('Offer not found or expired'); setSelectedOffer(null); setOfferApplied(false); return; }
+    const today = new Date(); today.setHours(0,0,0,0);
+    const end = new Date(found.end_date);
+    if (end < today) { setOfferError('Offer expired or not valid'); setSelectedOffer(null); setOfferApplied(false); return; }
+    setSelectedOffer(found); setOfferApplied(true);
+  };
+
+  const handleRemoveOffer = () => {
+    setSelectedOffer(null); setOfferApplied(false); setOfferInput(''); setOfferError('');
+  };
+
+  useEffect(() => {
+    setNewOrder(prev => ({
+      ...prev,
+      offer_id: offerApplied && selectedOffer ? selectedOffer.id : null,
+      discount_amount: discountAmount,
+      final_amount: finalAmount,
+    }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [totalAmt, advanceAmt, discountAmount, finalAmount, offerApplied]);
+
+  return (
+    <div className="space-y-3 pt-2 border-t border-stone-100">
+      <h3 className="font-bold text-sm text-stone-800">&#128230; Order Details</h3>
+      <input placeholder="Product Name (e.g. Bridal Lehenga)" value={newOrder.product_name} onChange={e=>setNewOrder({...newOrder,product_name:e.target.value})} className="w-full border border-stone-200 focus:ring-2 focus:ring-orange-300 outline-none rounded-xl px-3 py-2 text-sm" />
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="text-[10px] font-bold text-stone-400 uppercase">Total Amount (&#8377;)</label>
+          <input type="number" min="0" value={newOrder.total_amount} onChange={e=>setNewOrder({...newOrder,total_amount:e.target.value})} className="w-full border border-stone-200 focus:ring-2 focus:ring-orange-300 outline-none rounded-xl px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label className="text-[10px] font-bold text-stone-400 uppercase">Advance Payment (&#8377;)</label>
+          <input type="number" min="0" value={newOrder.advance_payment} onChange={e=>setNewOrder({...newOrder,advance_payment:e.target.value})} className="w-full border border-stone-200 focus:ring-2 focus:ring-orange-300 outline-none rounded-xl px-3 py-2 text-sm" />
+        </div>
+      </div>
+
+      {/* Offer / Coupon Section */}
+      <div className="rounded-xl border border-dashed border-orange-300 bg-orange-50 p-3 space-y-2">
+        <p className="text-[11px] font-black uppercase tracking-widest text-orange-600">&#127991; Apply Offer / Coupon</p>
+        {offersLoading ? (
+          <p className="text-xs text-stone-400">Loading offers...</p>
+        ) : offers.length === 0 ? (
+          <p className="text-xs text-stone-400 italic">No active offers available right now.</p>
+        ) : !offerApplied ? (
+          <div className="space-y-2">
+            <select value={offerInput} onChange={e=>{ setOfferInput(e.target.value); setOfferError(''); }} className="w-full border border-orange-200 bg-white focus:ring-2 focus:ring-orange-300 outline-none rounded-xl px-3 py-2 text-sm text-stone-700">
+              <option value="">&#8212; Select an offer &#8212;</option>
+              {offers.map(o => (
+                <option key={o.id} value={String(o.id)}>
+                  {o.title} &middot; {o.discount_type === 'percent' ? `${o.discount}% OFF` : `₹${o.discount} OFF`} &middot; Valid till {o.end_date}
+                </option>
+              ))}
+            </select>
+            {offerInput && (() => {
+              const preview = offers.find(o => String(o.id) === offerInput);
+              if (!preview) return null;
+              return (
+                <div className="bg-white border border-orange-200 rounded-lg px-3 py-2 text-xs text-stone-600 space-y-0.5">
+                  <p className="font-black text-stone-800">{preview.title}</p>
+                  {preview.description && <p className="text-stone-500">{preview.description}</p>}
+                  <p>Type: <span className="font-bold text-orange-600">{preview.discount_type === 'percent' ? 'Percentage' : 'Flat'} Discount</span></p>
+                  <p>Value: <span className="font-bold text-orange-600">{preview.discount_type === 'percent' ? `${preview.discount}%` : `₹${preview.discount}`}</span></p>
+                  <p>Valid: <span className="font-semibold">{preview.start_date}</span> to <span className="font-semibold">{preview.end_date}</span></p>
+                </div>
+              );
+            })()}
+            {offerError && <p className="text-red-500 text-xs font-bold">&#9888;&#65039; {offerError}</p>}
+            <button onClick={handleApplyOffer} disabled={!offerInput} className="w-full bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white text-xs font-black py-2 rounded-xl transition">Apply Offer</button>
+          </div>
+        ) : (
+          <div className="bg-green-50 border border-green-200 rounded-xl p-3 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-black text-green-700">&#9989; Offer Applied!</p>
+              <p className="text-xs text-stone-700 font-semibold mt-0.5">{selectedOffer.title}</p>
+              <p className="text-xs text-green-600 font-bold">
+                {selectedOffer.discount_type === 'percent'
+                  ? `${selectedOffer.discount}% off → -₹${discountAmount.toLocaleString('en-IN', {maximumFractionDigits:2})}`
+                  : `₹${selectedOffer.discount} flat off`}
+              </p>
+            </div>
+            <button onClick={handleRemoveOffer} className="text-xs text-red-500 hover:text-red-700 font-bold border border-red-200 rounded-lg px-2 py-1 transition">Remove</button>
+          </div>
+        )}
+      </div>
+
+      {/* Payment Summary */}
+      <div className="rounded-xl bg-gradient-to-br from-stone-800 to-stone-900 text-white p-4 space-y-2 shadow-md">
+        <p className="text-[10px] font-black uppercase tracking-widest text-stone-400">&#128179; Payment Summary</p>
+        <div className="flex justify-between text-sm"><span className="text-stone-300">Total Amount</span><span className="font-black">₹{totalAmt.toLocaleString('en-IN', {minimumFractionDigits:2})}</span></div>
+        {discountAmount > 0 && (
+          <div className="flex justify-between text-sm text-green-400">
+            <span>Discount {selectedOffer?.discount_type === 'percent' ? `(${selectedOffer.discount}%)` : '(Flat)'}</span>
+            <span className="font-black">- ₹{discountAmount.toLocaleString('en-IN', {minimumFractionDigits:2})}</span>
+          </div>
+        )}
+        <div className="flex justify-between text-sm border-t border-stone-700 pt-2"><span className="text-stone-300">Final Amount</span><span className="font-black text-orange-400">₹{finalAmount.toLocaleString('en-IN', {minimumFractionDigits:2})}</span></div>
+        <div className="flex justify-between text-sm"><span className="text-stone-300">Advance Paid</span><span className="font-black text-green-400">₹{advanceAmt.toLocaleString('en-IN', {minimumFractionDigits:2})}</span></div>
+        <div className="flex justify-between text-sm border-t border-stone-700 pt-2">
+          <span className="text-stone-300 font-bold">Remaining</span>
+          <span className={`font-black text-lg ${remainingAmount > 0 ? 'text-amber-400' : 'text-green-400'}`}>₹{remainingAmount.toLocaleString('en-IN', {minimumFractionDigits:2})}</span>
+        </div>
+      </div>
+
+      <div>
+        <label className="text-[10px] font-bold text-stone-400 uppercase">Delivery Date</label>
+        <input type="date" value={newOrder.delivery_date} onChange={e=>setNewOrder({...newOrder,delivery_date:e.target.value})} className="w-full border border-stone-200 focus:ring-2 focus:ring-orange-300 outline-none rounded-xl px-3 py-2 text-sm" />
+      </div>
+      <input placeholder="Optional Notes" value={newOrder.notes} onChange={e=>setNewOrder({...newOrder,notes:e.target.value})} className="w-full border border-stone-200 focus:ring-2 focus:ring-orange-300 outline-none rounded-xl px-3 py-2 text-sm" />
+      {createErr && <p className="text-red-500 text-xs font-bold">{createErr}</p>}
+      <button onClick={onSubmit} disabled={creating} className="w-full bg-orange-500 hover:bg-orange-600 text-white font-black py-2.5 rounded-xl disabled:opacity-60 transition">
+        {creating ? 'Creating...' : '+ Create Order'}
+      </button>
+    </div>
+  );
+}
+
 /* ── Orders Tab ── */
 function OrdersTab() {
   const API_URL_O = process.env.REACT_APP_API_URL;
@@ -147,7 +299,7 @@ function OrdersTab() {
   const [customer, setCustomer] = useState(null);
   const [verifyErr, setVerifyErr] = useState('');
   
-  const [newOrder, setNewOrder] = useState({ product_name: '', total_amount: '', advance_payment: '', delivery_date: '', notes: '' });
+  const [newOrder, setNewOrder] = useState({ product_name: '', total_amount: '', advance_payment: '', delivery_date: '', notes: '', offer_id: null, discount_amount: 0, final_amount: 0 });
   const [createErr, setCreateErr] = useState('');
   const [creating, setCreating] = useState(false);
 
@@ -191,7 +343,7 @@ function OrdersTab() {
       if (!res.ok) setCreateErr(data.message || 'Failed to create order');
       else {
         setShowCreate(false); setCustomer(null); setVerifyQuery('');
-        setNewOrder({ product_name: '', total_amount: '', advance_payment: '', delivery_date: '', notes: '' });
+        setNewOrder({ product_name: '', total_amount: '', advance_payment: '', delivery_date: '', notes: '', offer_id: null, discount_amount: 0, final_amount: 0 });
         fetchOrders();
       }
     } catch { setCreateErr('Network error'); }
@@ -254,35 +406,14 @@ function OrdersTab() {
           )}
 
           {customer && (
-            <div className="space-y-3 pt-2 border-t border-stone-100">
-              <h3 className="font-bold text-sm text-stone-800">📦 Order Details</h3>
-              <input placeholder="Product Name (e.g. Bridal Lehenga)" value={newOrder.product_name} onChange={e=>setNewOrder({...newOrder,product_name:e.target.value})} className="w-full border border-stone-200 focus:ring-2 focus:ring-orange-300 outline-none rounded-xl px-3 py-2 text-sm" />
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[10px] font-bold text-stone-400 uppercase">Total Amount (₹)</label>
-                  <input type="number" min="0" value={newOrder.total_amount} onChange={e=>setNewOrder({...newOrder,total_amount:e.target.value})} className="w-full border border-stone-200 focus:ring-2 focus:ring-orange-300 outline-none rounded-xl px-3 py-2 text-sm" />
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold text-stone-400 uppercase">Advance Payment (₹)</label>
-                  <input type="number" min="0" value={newOrder.advance_payment} onChange={e=>setNewOrder({...newOrder,advance_payment:e.target.value})} className="w-full border border-stone-200 focus:ring-2 focus:ring-orange-300 outline-none rounded-xl px-3 py-2 text-sm" />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3 items-center">
-                <div>
-                  <label className="text-[10px] font-bold text-stone-400 uppercase">Delivery Date</label>
-                  <input type="date" value={newOrder.delivery_date} onChange={e=>setNewOrder({...newOrder,delivery_date:e.target.value})} className="w-full border border-stone-200 focus:ring-2 focus:ring-orange-300 outline-none rounded-xl px-3 py-2 text-sm" />
-                </div>
-                <div>
-                  <p className="text-[10px] font-bold text-stone-400 uppercase">Remaining</p>
-                  <p className="text-orange-600 font-black pt-2">₹ {Math.max(0, (newOrder.total_amount||0) - (newOrder.advance_payment||0))}</p>
-                </div>
-              </div>
-              <input placeholder="Optional Notes" value={newOrder.notes} onChange={e=>setNewOrder({...newOrder,notes:e.target.value})} className="w-full border border-stone-200 focus:ring-2 focus:ring-orange-300 outline-none rounded-xl px-3 py-2 text-sm" />
-              {createErr && <p className="text-red-500 text-xs font-bold">{createErr}</p>}
-              <button onClick={handleCreateOrder} disabled={creating} className="w-full bg-orange-500 hover:bg-orange-600 text-white font-black py-2.5 rounded-xl disabled:opacity-60 transition">
-                {creating ? 'Creating...' : '+ Create Order'}
-              </button>
-            </div>
+            <OrderCreateForm
+              API_URL_O={API_URL_O}
+              newOrder={newOrder}
+              setNewOrder={setNewOrder}
+              createErr={createErr}
+              creating={creating}
+              onSubmit={handleCreateOrder}
+            />
           )}
         </div>
       )}
@@ -347,8 +478,11 @@ function OrdersTab() {
             <div className="flex justify-between items-center pt-2 border-t border-stone-50">
               <p className="text-xs text-stone-400">📅 Delivery: <span className="font-bold">{o.delivery_date ? new Date(o.delivery_date).toLocaleDateString() : 'TBD'}</span></p>
               <div className="text-right">
-                 <p className="text-sm font-black text-orange-500">₹{o.total_amount}</p>
-                 <p className="text-[10px] text-stone-400">R: ₹{o.remaining_amount}</p>
+                 {Number(o.discount_amount) > 0 && (
+                   <p className="text-[10px] text-green-600 font-bold">&#127991; -&#8377;{Number(o.discount_amount).toLocaleString('en-IN')} off</p>
+                 )}
+                 <p className="text-sm font-black text-orange-500">&#8377;{Number(o.final_amount || o.total_amount).toLocaleString('en-IN')}</p>
+                 <p className="text-[10px] text-stone-400">R: &#8377;{o.remaining_amount}</p>
               </div>
             </div>
           </div>
@@ -1470,13 +1604,82 @@ function OffersTab() {
   );
 }
 
+/* ── Feedback Tab ── */
+function FeedbackTab() {
+  const API_URL_F = process.env.REACT_APP_API_URL;
+  const [feedbacks, setFeedbacks] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
+
+  useEffect(() => {
+    fetch(`${API_URL_F}/api/tailor-feedback/${user.id}`, { credentials: 'include' })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.feedbacks) setFeedbacks(d.feedbacks); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [API_URL_F, user.id]);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="font-black text-stone-900 text-lg" style={{fontFamily:'Sora,sans-serif'}}>Customer Feedback</h2>
+        <div className="bg-white border border-stone-200 px-3 py-1.5 rounded-xl flex items-center gap-2 shadow-sm">
+          <span className="text-sm">🏆</span>
+          <span className="text-xs font-black text-stone-700">{feedbacks.length} Reviews</span>
+        </div>
+      </div>
+
+      {loading && <p className="text-center text-stone-400 text-sm mt-4">Loading feedback...</p>}
+      {!loading && feedbacks.length === 0 && (
+        <div className="bg-white rounded-3xl border border-stone-200 p-10 text-center shadow-sm">
+          <span className="text-5xl block mb-4">⭐</span>
+          <p className="font-black text-stone-800 text-lg">No feedback yet</p>
+          <p className="text-stone-400 text-sm mt-1 max-w-[200px] mx-auto">Feedback will appear here once customers complete their orders.</p>
+        </div>
+      )}
+
+      <div className="grid gap-3">
+        {feedbacks.map(f => (
+          <div key={f.feedbackId} className="bg-white rounded-2xl border border-stone-200 p-4 shadow-sm hover:shadow-md transition">
+            <div className="flex justify-between items-start mb-2">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-indigo-50 rounded-full flex items-center justify-center text-xl">👤</div>
+                <div>
+                  <p className="text-sm font-black text-stone-800">{f.customer_name}</p>
+                  <p className="text-[10px] text-stone-400 font-bold uppercase tracking-wider">{new Date(f.created_at).toLocaleDateString()}</p>
+                </div>
+              </div>
+              <div className="flex gap-0.5">
+                {[1, 2, 3, 4, 5].map(s => (
+                  <span key={s} className={`text-xs ${s <= f.rating ? 'grayscale-0' : 'grayscale opacity-30'}`}>⭐</span>
+                ))}
+              </div>
+            </div>
+            
+            <div className="bg-stone-50 rounded-xl p-3 mb-2 border border-stone-100">
+               <p className="text-xs text-stone-600 leading-relaxed italic">"{f.message || 'No message provided'}"</p>
+            </div>
+
+            <div className="flex items-center gap-2 pt-1">
+              <span className="text-[10px] font-black bg-orange-50 text-orange-600 px-2 py-0.5 rounded-full border border-orange-100">
+                📦 {f.product_name}
+              </span>
+              <span className="text-[10px] text-stone-300 font-bold">ORD #{f.order_id}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /* ── Bottom Nav ── */
 const NAV_TABS = [
-  {id:'home',   icon:'🏠',label:'Home'},
-  {id:'orders', icon:'📋',label:'Orders'},
-  {id:'offers', icon:'🔥',label:'Offers'},
-  {id:'manage', icon:'⚙️',label:'Manage'},
-  {id:'profile',icon:'👤',label:'Profile'},
+  {id:'home',     icon:'🏠', label:'Home'},
+  {id:'orders',   icon:'📋', label:'Orders'},
+  {id:'feedback', icon:'⭐', label:'Feedback'},
+  {id:'offers',   icon:'🔥', label:'Offers'},
+  {id:'manage',   icon:'⚙️', label:'Manage'},
+  {id:'profile',  icon:'👤', label:'Profile'},
 ];
 
 /* ── Main ── */
@@ -1508,15 +1711,16 @@ export default function TailorDashboardPage() {
   const renderTab = () => {
     const props = { user, onLogout:handleLogout };
     switch(activeTab) {
-      case 'home':    return <HomeTab {...props}/>;
-      case 'orders':  return <OrdersTab/>;
-      case 'offers':  return <OffersTab/>;
-      case 'manage':  return <ManagementTab/>;
-      case 'profile': return <ProfileTab {...props} onSaved={({ profileImg: img, shopName }) => {
+      case 'home':     return <HomeTab {...props}/>;
+      case 'orders':   return <OrdersTab/>;
+      case 'feedback': return <FeedbackTab/>;
+      case 'offers':   return <OffersTab/>;
+      case 'manage':   return <ManagementTab/>;
+      case 'profile':  return <ProfileTab {...props} onSaved={({ profileImg: img, shopName }) => {
         if (img) setSidebarProfileImg(img.startsWith('/uploads') ? `${API_URL_MAIN}${img}` : img);
         if (shopName) setSidebarShopName(shopName);
       }} />;
-      default:        return <HomeTab {...props}/>;
+      default:         return <HomeTab {...props}/>;
     }
   };
 
@@ -1580,12 +1784,13 @@ export default function TailorDashboardPage() {
                   <span className="text-[10px] font-black uppercase tracking-widest text-stone-400">Quick Navigation</span>
                 </div>
                 {[
-                  {id:'home',   icon:'🏠', label:'Dashboard Home',   desc:'Stats & recent orders'},
-                  {id:'orders', icon:'📋', label:'My Orders',        desc:'View & manage orders'},
-                  {id:'offers', icon:'🔥', label:'Manage Offers',    desc:'Create & edit promos'},
-                  {id:'manage', icon:'⚙️', label:'Management',       desc:'Portfolio & tools'},
-                  {id:'profile',icon:'👤', label:'Edit Profile',     desc:'Shop info & services'},
-                  {id:'browse', icon:'🔍', label:'Browse Tailors',   desc:'Explore tailors & deals', external:'/browse-deals'},
+                  {id:'home',    icon:'🏠', label:'Dashboard Home',   desc:'Stats & recent orders'},
+                  {id:'orders',  icon:'📋', label:'My Orders',        desc:'View & manage orders'},
+                  {id:'feedback',icon:'⭐', label:'Feedback',         desc:'Customer reviews'},
+                  {id:'offers',  icon:'🔥', label:'Manage Offers',    desc:'Create & edit promos'},
+                  {id:'manage',  icon:'⚙️', label:'Management',       desc:'Portfolio & tools'},
+                  {id:'profile', icon:'👤', label:'Edit Profile',     desc:'Shop info & services'},
+                  {id:'browse',  icon:'🔍', label:'Browse Tailors',   desc:'Explore tailors & deals', external:'/browse-deals'},
                 ].map(item => (
                   <button key={item.id} onClick={() => item.external ? navigate(item.external) : setActiveTab(item.id)}
                     className={`w-full flex items-center gap-3 px-4 py-3.5 text-left transition-colors border-b border-stone-50 last:border-0 ${
@@ -1622,7 +1827,7 @@ export default function TailorDashboardPage() {
         </main>
 
         {/* Bottom Nav — full width on all screens */}
-        <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-stone-200 grid grid-cols-5 z-50 shadow-lg">
+        <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-stone-200 grid grid-cols-6 z-50 shadow-lg">
           {NAV_TABS.map(n=>(
             <button key={n.id} onClick={()=>setActiveTab(n.id)}
               className="flex flex-col items-center gap-0.5 py-2.5 transition-all">

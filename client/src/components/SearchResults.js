@@ -97,9 +97,14 @@ const ResultCard = ({ tailor, index, query }) => {
                 </div>
             </div>
 
-            {/* Pills row: experience, timing, specialities */}
-            {(tailor.experience || todayTiming || specialities.length > 0) && (
+            {/* Pills row: experience, timing, specialities, rating */}
+            {(tailor.experience || todayTiming || specialities.length > 0 || tailor.avg_rating > 0) && (
                 <div className="tc-pills-row" style={{ marginTop: '0.6rem' }}>
+                    {tailor.avg_rating > 0 && (
+                        <span className="tc-pill tc-pill-rating" style={{ backgroundColor: '#fff7ed', color: '#c2410c', border: '1px solid #fed7aa' }}>
+                            ⭐ {tailor.avg_rating} ({tailor.total_reviews})
+                        </span>
+                    )}
                     {tailor.experience && (
                         <span className="tc-pill tc-pill-exp">🏆 {tailor.experience}</span>
                     )}
@@ -108,7 +113,7 @@ const ResultCard = ({ tailor, index, query }) => {
                             🕐 {isOpen ? `${todayTiming.open} – ${todayTiming.close}` : 'Closed Today'}
                         </span>
                     )}
-                    {specialities.slice(0, 2).map(s => (
+                    {specialities.slice(0, 1).map(s => (
                         <span key={s} className="tc-pill tc-pill-spec">{s}</span>
                     ))}
                 </div>
