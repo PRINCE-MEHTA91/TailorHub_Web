@@ -1054,7 +1054,15 @@ app.get('/api/orders/tailor', verifyToken, requireRole('tailor'), (req, res) => 
     `;
     db.query(sql, [req.userId], (err, results) => {
         if (err) return res.status(500).json({ message: 'Server error' });
-        res.json({ orders: results });
+        const orders = results.map(o => ({
+            ...o,
+            total_amount:     parseFloat(o.total_amount) || 0,
+            advance_payment:  parseFloat(o.advance_payment) || 0,
+            discount_amount:  parseFloat(o.discount_amount) || 0,
+            final_amount:     parseFloat(o.final_amount) || parseFloat(o.total_amount) || 0,
+            remaining_amount: parseFloat(o.remaining_amount) || 0,
+        }));
+        res.json({ orders });
     });
 });
 
@@ -1074,7 +1082,15 @@ app.get('/api/orders/customer', verifyToken, requireRole('customer'), (req, res)
             console.error('Error fetching customer orders:', err);
             return res.status(500).json({ message: 'Server error' });
         }
-        res.json({ orders: results });
+        const orders = results.map(o => ({
+            ...o,
+            total_amount:     parseFloat(o.total_amount) || 0,
+            advance_payment:  parseFloat(o.advance_payment) || 0,
+            discount_amount:  parseFloat(o.discount_amount) || 0,
+            final_amount:     parseFloat(o.final_amount) || parseFloat(o.total_amount) || 0,
+            remaining_amount: parseFloat(o.remaining_amount) || 0,
+        }));
+        res.json({ orders });
     });
 });
 
@@ -1104,6 +1120,64 @@ app.get('/api/orders/:id/history', verifyToken, (req, res) => {
             res.json({ history: results });
         });
     });
+});
+
+// ── PUT /api/orders/:id — Edit order details (Tailor only) ──
+app.put('/api/orders/:id', verifyToken, requireRole('tailor'), async (req, res) => {
+    try {
+        const orderId = req.params.id;
+        const { product_name, total_amount, advance_payment, delivery_date, notes, offer_id, discount_amount, final_amount } = req.body;
+        
+        // Verify ownership
+        const [rows] = await db.promise().query('SELECT id FROM orders WHERE id = ? AND tailor_id = ?', [orderId, req.userId]);
+        if (rows.length === 0) return res.status(404).json({ message: 'Order not found or unauthorized' });
+
+        let resolvedOfferId = offer_id || null;
+        let resolvedDiscount = parseFloat(discount_amount) || 0;
+        let resolvedFinalAmount = final_amount !== undefined ? parseFloat(final_amount) : parseFloat(total_amount);
+
+        if (resolvedOfferId) {
+            const [offerRows] = await db.promise().query(
+                'SELECT id FROM offers WHERE id = ? AND tailor_id = ? AND CURDATE() >= start_date AND CURDATE() <= end_date',
+                [resolvedOfferId, req.userId]
+            );
+            if (offerRows.length === 0) {
+                resolvedOfferId = null;
+                resolvedDiscount = 0;
+                resolvedFinalAmount = parseFloat(total_amount);
+            }
+        }
+
+        const sql = `
+            UPDATE orders 
+            SET product_name = ?, 
+                total_amount = ?, 
+                advance_payment = ?, 
+                delivery_date = ?, 
+                notes = ?, 
+                offer_id = ?, 
+                discount_amount = ?, 
+                final_amount = ? 
+            WHERE id = ?
+        `;
+        const params = [
+            product_name, 
+            parseFloat(total_amount), 
+            parseFloat(advance_payment), 
+            delivery_date || null, 
+            notes || null,
+            resolvedOfferId,
+            resolvedDiscount,
+            resolvedFinalAmount,
+            orderId
+        ];
+
+        await db.promise().query(sql, params);
+        res.json({ message: 'Order updated successfully' });
+    } catch (err) {
+        console.error('❌ Update order error:', err);
+        res.status(500).json({ message: 'Failed to update order' });
+    }
 });
 
 // ── PUT /api/orders/:id/status — Update order status and add history (Tailor only) ──

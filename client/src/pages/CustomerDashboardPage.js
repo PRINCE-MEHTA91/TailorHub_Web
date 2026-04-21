@@ -332,22 +332,25 @@ const OrdersTab = () => {
                     <div className="flex justify-between items-center py-2 border-y border-gray-50 my-2">
                         <div>
                             <p className="text-[10px] font-bold text-gray-400 uppercase">Total</p>
-                            {o.discount_amount > 0 ? (
+                            {Number(o.discount_amount) > 0 ? (
                                 <div>
-                                    <p className="text-xs text-gray-400 line-through">₹{o.total_amount}</p>
-                                    <p className="text-sm font-black text-gray-800">₹{o.final_amount} <span className="text-[10px] font-bold text-green-500">(-₹{o.discount_amount})</span></p>
+                                    <p className="text-xs text-gray-400 line-through">₹{Number(o.total_amount).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p>
+                                    <p className="text-sm font-black text-gray-800">
+                                        ₹{Number(o.final_amount || o.total_amount).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})} 
+                                        <span className="text-[10px] font-bold text-green-500 ml-1">(-₹{Number(o.discount_amount).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})})</span>
+                                    </p>
                                 </div>
                             ) : (
-                                <p className="text-sm font-black text-gray-800">₹{o.total_amount}</p>
+                                <p className="text-sm font-black text-gray-800">₹{Number(o.total_amount).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p>
                             )}
                         </div>
                         <div className="text-center flex flex-col justify-end">
                             <p className="text-[10px] font-bold text-gray-400 uppercase">Advance</p>
-                            <p className="text-sm font-bold text-gray-600">₹{o.advance_payment}</p>
+                            <p className="text-sm font-bold text-gray-600">₹{Number(o.advance_payment).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p>
                         </div>
                         <div className="text-right flex flex-col justify-end">
                             <p className="text-[10px] font-bold text-gray-400 uppercase">Remaining</p>
-                            <p className="text-sm font-black text-indigo-600">₹{o.remaining_amount}</p>
+                            <p className="text-sm font-black text-indigo-600">₹{Number(o.remaining_amount).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p>
                         </div>
                     </div>
                     
