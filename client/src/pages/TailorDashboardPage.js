@@ -135,7 +135,7 @@ function HomeTab({ user }) {
 }
 
 /* ── Order Create Form sub-component ── */
-function OrderCreateForm({ API_URL_O, newOrder, setNewOrder, createErr, creating, onSubmit }) {
+function OrderCreateForm({ API_URL_O, newOrder, setNewOrder, createErr, creating, onSubmit, isEdit }) {
   const [offers, setOffers] = useState([]);
   const [offersLoading, setOffersLoading] = useState(true);
   const [selectedOffer, setSelectedOffer] = useState(null);
@@ -146,7 +146,18 @@ function OrderCreateForm({ API_URL_O, newOrder, setNewOrder, createErr, creating
   useEffect(() => {
     fetch(`${API_URL_O}/api/tailor/offers/active-for-order`, { credentials: 'include' })
       .then(r => r.ok ? r.json() : { offers: [] })
-      .then(d => { setOffers(d.offers || []); setOffersLoading(false); })
+      .then(d => { 
+          const offs = d.offers || [];
+          setOffers(offs); setOffersLoading(false); 
+          if(isEdit && newOrder.offer_id) {
+              const found = offs.find(o => String(o.id) === String(newOrder.offer_id));
+              if(found) {
+                  setSelectedOffer(found);
+                  setOfferInput(String(found.id));
+                  setOfferApplied(true);
+              }
+          }
+      })
       .catch(() => setOffersLoading(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -280,7 +291,7 @@ function OrderCreateForm({ API_URL_O, newOrder, setNewOrder, createErr, creating
       <input placeholder="Optional Notes" value={newOrder.notes} onChange={e=>setNewOrder({...newOrder,notes:e.target.value})} className="w-full border border-stone-200 focus:ring-2 focus:ring-orange-300 outline-none rounded-xl px-3 py-2 text-sm" />
       {createErr && <p className="text-red-500 text-xs font-bold">{createErr}</p>}
       <button onClick={onSubmit} disabled={creating} className="w-full bg-orange-500 hover:bg-orange-600 text-white font-black py-2.5 rounded-xl disabled:opacity-60 transition">
-        {creating ? 'Creating...' : '+ Create Order'}
+        {creating ? (isEdit ? 'Saving Updates...' : 'Creating...') : (isEdit ? '💾 Save Changes' : '+ Create Order')}
       </button>
     </div>
   );
@@ -306,6 +317,11 @@ function OrdersTab() {
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [statusUpdate, setStatusUpdate] = useState({ status: '', note: '', delivery_date: '' });
 
+  const [editingOrderDetails, setEditingOrderDetails] = useState(null);
+  const [editOrderData, setEditOrderData] = useState({ product_name: '', total_amount: '', advance_payment: '', delivery_date: '', notes: '', offer_id: null, discount_amount: 0, final_amount: 0 });
+  const [editErr, setEditErr] = useState('');
+  const [editingOngoing, setEditingOngoing] = useState(false);
+
   const fetchOrders = () => {
     fetch(`${API_URL_O}/api/orders/tailor`, { credentials: 'include' })
       .then(r => r.ok ? r.json() : null)
@@ -327,11 +343,30 @@ function OrdersTab() {
     } catch { setVerifyErr('Network error'); }
   };
 
+  const validateOrderForm = (order, setErr) => {
+    if (!order.product_name || order.total_amount === '' || order.advance_payment === '' || !order.delivery_date) {
+      setErr('Fill all required fields'); return false;
+    }
+    if (parseFloat(order.total_amount) <= 0) {
+      setErr('Total Amount must be greater than 0'); return false;
+    }
+    const finalAmt = order.final_amount !== undefined ? order.final_amount : parseFloat(order.total_amount);
+    if (parseFloat(order.advance_payment) > finalAmt) {
+      setErr('Advance cannot exceed final amount'); return false;
+    }
+    const today = new Date(); today.setHours(0,0,0,0);
+    const selectedDate = new Date(order.delivery_date);
+    if (selectedDate < today) {
+      setErr('Delivery date cannot be in the past'); return false;
+    }
+    return true;
+  };
+
   const handleCreateOrder = async () => {
     if (!customer) return;
-    if (!newOrder.product_name || !newOrder.total_amount || newOrder.advance_payment === '' || !newOrder.delivery_date) {
-      setCreateErr('Fill all required fields'); return;
-    }
+    setCreateErr('');
+    if (!validateOrderForm(newOrder, setCreateErr)) return;
+    
     setCreating(true);
     try {
       const res = await fetch(`${API_URL_O}/api/orders`, {
@@ -348,6 +383,27 @@ function OrdersTab() {
       }
     } catch { setCreateErr('Network error'); }
     finally { setCreating(false); }
+  };
+
+  const handleEditOrder = async () => {
+    setEditErr('');
+    if (!validateOrderForm(editOrderData, setEditErr)) return;
+    
+    setEditingOngoing(true);
+    try {
+      const res = await fetch(`${API_URL_O}/api/orders/${editingOrderDetails.id}`, {
+        method: 'PUT', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editOrderData)
+      });
+      const data = await res.json();
+      if (!res.ok) setEditErr(data.message || 'Failed to update order');
+      else {
+        setEditingOrderDetails(null);
+        fetchOrders();
+      }
+    } catch { setEditErr('Network error'); }
+    finally { setEditingOngoing(false); }
   };
 
   const handleUpdateStatus = async () => {
@@ -453,6 +509,26 @@ function OrdersTab() {
         </div>
       )}
 
+      {editingOrderDetails && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md p-5 shadow-xl max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-black text-lg">Edit Order #{editingOrderDetails.id}</h3>
+              <button onClick={() => setEditingOrderDetails(null)} className="text-stone-400 hover:text-stone-600 text-2xl leading-none">&times;</button>
+            </div>
+            <OrderCreateForm
+              API_URL_O={API_URL_O}
+              newOrder={editOrderData}
+              setNewOrder={setEditOrderData}
+              createErr={editErr}
+              creating={editingOngoing}
+              onSubmit={handleEditOrder}
+              isEdit={true}
+            />
+          </div>
+        </div>
+      )}
+
       <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
         {filters.map(f=>(
           <button key={f} onClick={()=>setFilter(f)}
@@ -473,16 +549,45 @@ function OrdersTab() {
                 <p className="text-sm font-black text-stone-800">{o.customer_name}</p>
                 <p className="text-xs text-stone-500">Ord #{o.id} · {o.product_name}</p>
               </div>
-              <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${sc[o.current_status]||sc['Completed']}`}>{o.current_status}</span>
+              <div className="flex flex-col items-end gap-2">
+                <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${sc[o.current_status]||sc['Completed']}`}>{o.current_status}</span>
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setEditingOrderDetails(o);
+                    setEditOrderData({
+                      product_name: o.product_name,
+                      total_amount: o.total_amount,
+                      advance_payment: o.advance_payment,
+                      delivery_date: o.delivery_date ? new Date(o.delivery_date).toISOString().split('T')[0] : '',
+                      notes: o.notes || '',
+                      offer_id: o.offer_id,
+                      discount_amount: o.discount_amount,
+                      final_amount: o.final_amount
+                    });
+                    setEditErr('');
+                  }}
+                  className="bg-stone-100 hover:bg-stone-200 text-stone-600 text-[10px] font-bold px-2 py-1 rounded transition"
+                >
+                  Edit Order ✏️
+                </button>
+              </div>
             </div>
             <div className="flex justify-between items-center pt-2 border-t border-stone-50">
               <p className="text-xs text-stone-400">📅 Delivery: <span className="font-bold">{o.delivery_date ? new Date(o.delivery_date).toLocaleDateString() : 'TBD'}</span></p>
-              <div className="text-right">
-                 {Number(o.discount_amount) > 0 && (
-                   <p className="text-[10px] text-green-600 font-bold">&#127991; -&#8377;{Number(o.discount_amount).toLocaleString('en-IN')} off</p>
+              <div className="text-right flex flex-col items-end">
+                 {Number(o.discount_amount) > 0 ? (
+                   <>
+                     <p className="text-[10px] text-stone-400 line-through">&#8377;{Number(o.total_amount).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p>
+                     <p className="text-sm font-black text-orange-500">
+                       &#8377;{Number(o.final_amount || o.total_amount).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                       <span className="text-[10px] text-green-600 font-bold ml-1">(-&#8377;{Number(o.discount_amount).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})})</span>
+                     </p>
+                   </>
+                 ) : (
+                   <p className="text-sm font-black text-orange-500">&#8377;{Number(o.total_amount).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p>
                  )}
-                 <p className="text-sm font-black text-orange-500">&#8377;{Number(o.final_amount || o.total_amount).toLocaleString('en-IN')}</p>
-                 <p className="text-[10px] text-stone-400">R: &#8377;{o.remaining_amount}</p>
+                 <p className="text-[10px] text-stone-400">R: &#8377;{Number(o.remaining_amount).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p>
               </div>
             </div>
           </div>
