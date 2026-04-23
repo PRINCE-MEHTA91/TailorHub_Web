@@ -109,6 +109,10 @@ const CustomerProfileTab = ({ user, onLogout }) => {
     const [saved, setSaved] = useState(false);
     const [saveError, setSaveError] = useState('');
     const [loadingProfile, setLoadingProfile] = useState(true);
+    const [profileImg, setProfileImg] = useState(null);
+    const [imgUploading, setImgUploading] = useState(false);
+    const [imgError, setImgError] = useState('');
+    const fileInputRef = React.useRef(null);
 
     useEffect(() => {
         const API_URL = process.env.REACT_APP_API_URL;
@@ -119,11 +123,58 @@ const CustomerProfileTab = ({ user, onLogout }) => {
                     const p = data.profile;
                     setContact({ phone: p.phone || '', whatsapp: p.whatsapp || '' });
                     setAddress({ street: p.street || '', city: p.city || '', state: p.state || '', pin: p.pin || '' });
+                    if (p.profile_img) {
+                        setProfileImg(
+                            p.profile_img.startsWith('http')
+                                ? p.profile_img
+                                : `${API_URL}${p.profile_img}`
+                        );
+                    }
                 }
             })
             .catch(() => {})
             .finally(() => setLoadingProfile(false));
     }, []);
+
+    const handleImageChange = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        // Optimistic preview
+        const localUrl = URL.createObjectURL(file);
+        setProfileImg(localUrl);
+        setImgError('');
+        setImgUploading(true);
+        try {
+            const API_URL = process.env.REACT_APP_API_URL;
+            const formData = new FormData();
+            formData.append('profile_img', file);
+            const res = await fetch(`${API_URL}/api/customer/upload/profile-image`, {
+                method: 'POST',
+                credentials: 'include',
+                body: formData,
+            });
+            let data = {};
+            try { data = await res.json(); } catch { /* ignore parse errors */ }
+            if (!res.ok) {
+                setImgError(data.message || `Upload failed (${res.status})`);
+                // Keep the optimistic preview — don't clear it on soft errors
+                return;
+            }
+            // Replace optimistic URL with the permanent server URL
+            const serverUrl = (data.imageUrl || '').startsWith('http')
+                ? data.imageUrl
+                : `${API_URL}${data.imageUrl}`;
+            setProfileImg(serverUrl);
+            URL.revokeObjectURL(localUrl);
+        } catch (err) {
+            console.error('Profile image upload error:', err);
+            setImgError('Could not reach server. Check your connection.');
+            // Keep the optimistic preview visible
+        } finally {
+            setImgUploading(false);
+            if (fileInputRef.current) fileInputRef.current.value = '';
+        }
+    };
 
     const handleSave = async () => {
         setSaving(true);
@@ -168,13 +219,52 @@ const CustomerProfileTab = ({ user, onLogout }) => {
 
     return (
         <div className="space-y-5 pb-4">
+            {/* Hidden file input */}
+            <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleImageChange}
+            />
             <div className="bg-gradient-to-br from-indigo-600 to-purple-600 rounded-2xl p-6 text-white text-center">
-                <div className="w-20 h-20 rounded-full mx-auto mb-3 bg-white/20 border-4 border-white/30 flex items-center justify-center">
-                    <span className="text-3xl font-bold text-white">{initials}</span>
+                {/* Tappable avatar */}
+                <div
+                    className="relative w-24 h-24 rounded-full mx-auto mb-3 cursor-pointer group"
+                    onClick={() => !imgUploading && fileInputRef.current?.click()}
+                    title="Tap to change profile photo"
+                >
+                    {profileImg ? (
+                        <img
+                            src={profileImg}
+                            alt="Profile"
+                            className="w-24 h-24 rounded-full object-cover border-4 border-white/40 shadow-lg"
+                        />
+                    ) : (
+                        <div className="w-24 h-24 rounded-full bg-white/20 border-4 border-white/30 flex items-center justify-center">
+                            <span className="text-3xl font-bold text-white">{initials}</span>
+                        </div>
+                    )}
+                    {/* Overlay on hover/upload */}
+                    <div className={`absolute inset-0 rounded-full flex flex-col items-center justify-center transition-all duration-200 ${
+                        imgUploading
+                            ? 'bg-black/50'
+                            : 'bg-black/0 group-hover:bg-black/40'
+                    }`}>
+                        {imgUploading ? (
+                            <span className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                            <span className="text-white text-lg opacity-0 group-hover:opacity-100 transition-opacity">📷</span>
+                        )}
+                    </div>
                 </div>
                 <h2 className="text-xl font-bold">{user?.full_name || 'Customer'}</h2>
                 <p className="text-indigo-200 text-sm mt-0.5">{user?.email}</p>
                 <span className="mt-2 inline-block bg-white/20 text-xs font-semibold px-3 py-1 rounded-full">Customer</span>
+                {imgError && (
+                    <p className="mt-2 text-red-200 text-xs bg-red-500/20 rounded-xl px-3 py-1">{imgError}</p>
+                )}
+                <p className="mt-1 text-white/60 text-[10px]">Tap photo to change</p>
             </div>
 
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">

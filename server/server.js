@@ -111,13 +111,20 @@ db.getConnection((connErr, connection) => {
             city VARCHAR(100) DEFAULT '',
             state VARCHAR(100) DEFAULT '',
             pin VARCHAR(10) DEFAULT '',
+            profile_img TEXT DEFAULT NULL,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         )
     `;
     db.query(createCustomerProfileTable, (tableErr) => {
         if (tableErr) console.error('Error creating customer_profiles table:', tableErr.message);
-        else console.log('✅ customer_profiles table ready');
+        else {
+            console.log('✅ customer_profiles table ready');
+            // Soft-migrate: add profile_img if it doesn't exist yet
+            db.query(`ALTER TABLE customer_profiles ADD COLUMN profile_img TEXT DEFAULT NULL`, (err) => {
+                if (err && err.code !== 'ER_DUP_FIELDNAME') console.warn('customer_profiles profile_img migration warning:', err.message);
+            });
+        }
     });
 
     // Auto-create offers table
@@ -421,26 +428,69 @@ const storage = multer.diskStorage({
         cb(null, dir);
     },
     filename: (req, file, cb) => {
-        cb(null, 'tailor_' + req.userId + '_' + Date.now() + path.extname(file.originalname));
+        const prefix = (req._uploadPrefix || 'tailor');
+        cb(null, prefix + '_' + req.userId + '_' + Date.now() + path.extname(file.originalname));
     }
 });
-const upload = multer({ storage });
+const upload = multer({
+    storage,
+    limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB max
+    fileFilter: (req, file, cb) => {
+        if (!file.mimetype.startsWith('image/')) {
+            return cb(new Error('Only image files are allowed'));
+        }
+        cb(null, true);
+    }
+});
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-app.post('/api/upload/profile-image', verifyToken, requireRole('tailor'), upload.single('profile_img'), (req, res) => {
+// Handle multer errors (file too large, wrong type, etc.)
+const handleUploadError = (err, req, res, next) => {
+    if (err && err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(413).json({ message: 'File too large. Maximum size is 10MB.' });
+    }
+    if (err) {
+        return res.status(400).json({ message: err.message || 'Upload error' });
+    }
+    next();
+};
+
+app.post('/api/upload/profile-image', verifyToken, requireRole('tailor'), (req, res, next) => { req._uploadPrefix = 'tailor'; next(); }, upload.single('profile_img'), (req, res) => {
     if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
     res.json({ message: 'Image uploaded successfully', imageUrl: `/uploads/${req.file.filename}` });
 });
 
-app.post('/api/upload/gallery-image', verifyToken, requireRole('tailor'), upload.single('gallery_img'), (req, res) => {
+app.post('/api/upload/gallery-image', verifyToken, requireRole('tailor'), (req, res, next) => { req._uploadPrefix = 'tailor'; next(); }, upload.single('gallery_img'), (req, res) => {
     if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
     res.json({ message: 'Gallery image uploaded', imageUrl: `/uploads/${req.file.filename}` });
 });
 
-app.post('/api/upload/pricing-image', verifyToken, requireRole('tailor'), upload.single('pricing_img'), (req, res) => {
+app.post('/api/upload/pricing-image', verifyToken, requireRole('tailor'), (req, res, next) => { req._uploadPrefix = 'tailor'; next(); }, upload.single('pricing_img'), (req, res) => {
     if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
     res.json({ message: 'Pricing image uploaded', imageUrl: `/uploads/${req.file.filename}` });
 });
+
+// ── Customer Profile Image: Upload & Save ────────────────────────────────────
+app.post('/api/customer/upload/profile-image',
+    verifyToken,
+    (req, res, next) => { req._uploadPrefix = 'customer'; next(); },
+    upload.single('profile_img'),
+    handleUploadError,
+    (req, res) => {
+        if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
+        const imageUrl = `/uploads/${req.file.filename}`;
+        const sql = `INSERT INTO customer_profiles (user_id, profile_img)
+            VALUES (?, ?)
+            ON DUPLICATE KEY UPDATE profile_img = VALUES(profile_img)`;
+        db.query(sql, [req.userId, imageUrl], (err) => {
+            if (err) {
+                console.error('Customer profile_img save error:', err);
+                return res.status(500).json({ message: 'Image uploaded but failed to save to profile' });
+            }
+            res.json({ message: 'Profile image updated successfully', imageUrl });
+        });
+    }
+);
 
 app.get('/api/products', (req, res) => {
     const sql = 'SELECT * FROM products';
@@ -688,11 +738,12 @@ app.post('/api/customer/profile', verifyToken, (req, res) => {
 
 // ── Customer Profile: Get own profile ────────────────────────────────────────
 app.get('/api/customer/profile', verifyToken, (req, res) => {
-    const sql = 'SELECT phone, whatsapp, street, city, state, pin FROM customer_profiles WHERE user_id = ?';
+    const sql = 'SELECT phone, whatsapp, street, city, state, pin, profile_img FROM customer_profiles WHERE user_id = ?';
     db.query(sql, [req.userId], (err, results) => {
         if (err) return res.status(500).json({ message: 'Server error' });
         if (results.length === 0) return res.json({ profile: null });
-        res.json({ profile: results[0] });
+        const p = results[0];
+        res.json({ profile: { ...p, profile_img: normalizeImgPath(p.profile_img) } });
     });
 });
 
