@@ -21,6 +21,7 @@ import EarningsPage from './pages/EarningsPage';
 import TailorDetailsPage from './pages/TailorDetailsPage';
 import BookingPage from './pages/BookingPage';
 import BrowseTailorsDealsPage from './pages/BrowseTailorsDealsPage';
+import HelpPage from './pages/HelpPage';
 
 const SmartHomeRoute = () => {
   const { user, loading } = useAuth();
@@ -64,6 +65,8 @@ function App() {
           <Route path="/tailor-profile/:id" element={<TailorDetailsPage />} />
           <Route path="/book-appointment/:id" element={<BookingPage />} />
           <Route path="/browse-deals" element={<BrowseTailorsDealsPage />} />
+          <Route path="/help/:section" element={<HelpPage />} />
+          <Route path="/help" element={<HelpPage />} />
 
           <Route path="/" element={<SmartHomeRoute />} />
         </Routes>

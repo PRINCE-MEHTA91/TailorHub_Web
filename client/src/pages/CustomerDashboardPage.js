@@ -1099,13 +1099,26 @@ const CustomerDashboardPage = () => {
     };
 
     // ── Footer ──────────────────────────────────────────────────────────────
-    const DashboardFooter = () => (
-        <footer style={{
-            background: '#1a1a2e',
-            color: '#c9d1d9',
-            fontFamily: "'Inter', sans-serif",
-            marginTop: '2rem',
-        }}>
+    const DashboardFooter = () => {
+        const footerNav = navigate; // reuse the existing navigate from parent scope
+
+        const footerLink = (label, path, external = false) => (
+            <a
+                key={label}
+                href={external ? path : undefined}
+                target={external ? '_blank' : undefined}
+                rel={external ? 'noopener noreferrer' : undefined}
+                onClick={!external ? (e) => { e.preventDefault(); footerNav(path); } : undefined}
+                style={{ display: 'block', fontSize: 12, color: '#c9d1d9', textDecoration: 'none', marginBottom: 8, lineHeight: 1.5, cursor: 'pointer' }}
+                onMouseEnter={e => e.target.style.color = '#ffffff'}
+                onMouseLeave={e => e.target.style.color = '#c9d1d9'}
+            >
+                {label}
+            </a>
+        );
+
+        return (
+        <footer style={{ background: '#1a1a2e', color: '#c9d1d9', fontFamily: "'Inter', sans-serif", marginTop: '2rem' }}>
             {/* Main grid */}
             <div style={{
                 maxWidth: '100%',
@@ -1117,51 +1130,51 @@ const CustomerDashboardPage = () => {
                 {/* About */}
                 <div>
                     <p style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.2px', color: '#8b949e', marginBottom: 12 }}>ABOUT</p>
-                    {[['Contact Us', 'mailto:support@tailorhub.in'], ['About TailorHub', '#'], ['Press', '#'], ['Careers', '#'], ['Corporate Info', '#']].map(([label, href]) => (
-                        <a key={label} href={href} style={{ display: 'block', fontSize: 12, color: '#c9d1d9', textDecoration: 'none', marginBottom: 8, lineHeight: 1.5 }}
-                           onMouseEnter={e => e.target.style.color='#ffffff'} onMouseLeave={e => e.target.style.color='#c9d1d9'}>
-                            {label}
-                        </a>
-                    ))}
+                    {footerLink('Contact Us', '/help/contact-us')}
+                    {footerLink('About TailorHub', '/help/how-it-works')}
+                    {footerLink('Press', '/help/contact-us')}
+                    {footerLink('Careers', '/help/contact-us')}
+                    {footerLink('Corporate Info', '/help/contact-us')}
                 </div>
 
                 {/* Quick Links */}
                 <div>
                     <p style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.2px', color: '#8b949e', marginBottom: 12 }}>QUICK LINKS</p>
-                    {[['Browse Tailors', '/browse-deals'], ['My Orders', '#'], ['Active Offers', '#'], ['Book an Appointment', '#'], ['Track Order', '#']].map(([label, href]) => (
-                        <a key={label} href={href} style={{ display: 'block', fontSize: 12, color: '#c9d1d9', textDecoration: 'none', marginBottom: 8, lineHeight: 1.5 }}
-                           onMouseEnter={e => e.target.style.color='#ffffff'} onMouseLeave={e => e.target.style.color='#c9d1d9'}>
-                            {label}
-                        </a>
-                    ))}
+                    {footerLink('Browse Tailors', '/browse-deals')}
+                    <a onClick={e => { e.preventDefault(); }} href="#"
+                       style={{ display: 'block', fontSize: 12, color: '#c9d1d9', textDecoration: 'none', marginBottom: 8, lineHeight: 1.5, cursor: 'pointer' }}
+                       onMouseEnter={e => e.target.style.color = '#ffffff'} onMouseLeave={e => e.target.style.color = '#c9d1d9'}>
+                        My Orders
+                    </a>
+                    {footerLink('Active Offers', '/help/payments-pricing')}
+                    {footerLink('Book an Appointment', '/browse-deals')}
+                    {footerLink('Track Order', '/help/how-it-works')}
                 </div>
 
                 {/* Help */}
                 <div>
                     <p style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.2px', color: '#8b949e', marginBottom: 12 }}>HELP</p>
-                    {[['How It Works', '#'], ['Payments & Pricing', '#'], ['Cancellation Policy', '#'], ['FAQ', '#'], ['Dispute Resolution', '#']].map(([label, href]) => (
-                        <a key={label} href={href} style={{ display: 'block', fontSize: 12, color: '#c9d1d9', textDecoration: 'none', marginBottom: 8, lineHeight: 1.5 }}
-                           onMouseEnter={e => e.target.style.color='#ffffff'} onMouseLeave={e => e.target.style.color='#c9d1d9'}>
-                            {label}
-                        </a>
-                    ))}
+                    {footerLink('How It Works', '/help/how-it-works')}
+                    {footerLink('Payments & Pricing', '/help/payments-pricing')}
+                    {footerLink('Cancellation Policy', '/help/cancellation-policy')}
+                    {footerLink('FAQ', '/help/faq')}
+                    {footerLink('Dispute Resolution', '/help/dispute-resolution')}
                 </div>
 
                 {/* Consumer Policy */}
                 <div>
                     <p style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.2px', color: '#8b949e', marginBottom: 12 }}>CONSUMER POLICY</p>
-                    {[['Return & Refunds', '#'], ['Terms of Use', '#'], ['Privacy Policy', '#'], ['Security', '#'], ['Sitemap', '#']].map(([label, href]) => (
-                        <a key={label} href={href} style={{ display: 'block', fontSize: 12, color: '#c9d1d9', textDecoration: 'none', marginBottom: 8, lineHeight: 1.5 }}
-                           onMouseEnter={e => e.target.style.color='#ffffff'} onMouseLeave={e => e.target.style.color='#c9d1d9'}>
-                            {label}
-                        </a>
-                    ))}
+                    {footerLink('Return & Refunds', '/help/return-refunds')}
+                    {footerLink('Terms of Use', '/help/terms-of-use')}
+                    {footerLink('Privacy Policy', '/help/privacy-policy')}
+                    {footerLink('Security', '/help/security')}
+                    {footerLink('Sitemap', '/help/how-it-works')}
                 </div>
 
-                {/* Contact & Social */}
+                {/* Connect */}
                 <div>
                     <p style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.2px', color: '#8b949e', marginBottom: 12 }}>CONNECT WITH US</p>
-                    <p style={{ fontSize: 12, marginBottom: 6, lineHeight: 1.6 }}>✉️ <span style={{ color: '#6e8efc' }}>support@tailorhub.in</span></p>
+                    <p style={{ fontSize: 12, marginBottom: 6, lineHeight: 1.6 }}>✉️ <a href="mailto:support@tailorhub.in" style={{ color: '#6e8efc', textDecoration: 'none' }}>support@tailorhub.in</a></p>
                     <p style={{ fontSize: 12, marginBottom: 6, lineHeight: 1.6 }}>📞 <span style={{ color: '#6e8efc' }}>+91-9999-000-111</span></p>
                     <p style={{ fontSize: 12, marginBottom: 14, lineHeight: 1.6 }}>🕐 Mon–Sat, 9AM – 7PM IST</p>
                     <p style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.2px', color: '#8b949e', marginBottom: 10 }}>SOCIAL</p>
@@ -1169,8 +1182,8 @@ const CustomerDashboardPage = () => {
                         {[['📘', 'Facebook', 'https://facebook.com'], ['📸', 'Instagram', 'https://instagram.com'], ['▶️', 'YouTube', 'https://youtube.com'], ['🐦', 'Twitter', 'https://twitter.com']].map(([icon, name, href]) => (
                             <a key={name} href={href} target="_blank" rel="noopener noreferrer" title={name}
                                style={{ width: 32, height: 32, borderRadius: '50%', background: '#2d2d44', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, textDecoration: 'none', transition: 'background 0.2s' }}
-                               onMouseEnter={e => e.currentTarget.style.background='#4f46e5'}
-                               onMouseLeave={e => e.currentTarget.style.background='#2d2d44'}>
+                               onMouseEnter={e => e.currentTarget.style.background = '#4f46e5'}
+                               onMouseLeave={e => e.currentTarget.style.background = '#2d2d44'}>
                                 {icon}
                             </a>
                         ))}
@@ -1182,37 +1195,25 @@ const CustomerDashboardPage = () => {
             <div style={{ borderTop: '1px solid #2d2d44', margin: '0 24px' }} />
 
             {/* Bottom bar */}
-            <div style={{
-                padding: '14px 24px 18px',
-                display: 'flex',
-                flexWrap: 'wrap',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: 12,
-            }}>
-                {/* Brand */}
+            <div style={{ padding: '14px 24px 18px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span style={{ fontSize: 18 }}>✂️</span>
                     <span style={{ fontSize: 14, fontWeight: 900, color: '#ffffff', letterSpacing: '-0.3px' }}>TailorHub</span>
                 </div>
-
-                {/* Quick bottom links */}
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 14px' }}>
-                    {['Become a Tailor', 'Advertise', 'Gift Cards', 'Help Center'].map(label => (
-                        <a key={label} href="#" style={{ fontSize: 11, color: '#8b949e', textDecoration: 'none' }}
-                           onMouseEnter={e => e.target.style.color='#ffffff'} onMouseLeave={e => e.target.style.color='#8b949e'}>
+                    {[['Become a Tailor', '/signup'], ['Help Center', '/help/how-it-works'], ['Contact Us', '/help/contact-us'], ['FAQ', '/help/faq']].map(([label, path]) => (
+                        <a key={label} href="#" onClick={e => { e.preventDefault(); footerNav(path); }}
+                           style={{ fontSize: 11, color: '#8b949e', textDecoration: 'none', cursor: 'pointer' }}
+                           onMouseEnter={e => e.target.style.color = '#ffffff'} onMouseLeave={e => e.target.style.color = '#8b949e'}>
                             {label}
                         </a>
                     ))}
                 </div>
-
-                {/* Copyright */}
-                <p style={{ fontSize: 11, color: '#8b949e', margin: 0 }}>
-                    © 2024–2026 TailorHub™ · All rights reserved
-                </p>
+                <p style={{ fontSize: 11, color: '#8b949e', margin: 0 }}>© 2024–2026 TailorHub™ · All rights reserved</p>
             </div>
         </footer>
-    );
+        );
+    };
 
     const handleTabChange = (tabId) => {
         setActiveTab(tabId);
