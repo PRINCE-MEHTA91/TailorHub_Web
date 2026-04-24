@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
@@ -7,6 +7,319 @@ import Header from '../components/Header';
 import SearchBar from '../components/SearchBar';
 import SearchResults from '../components/SearchResults';
 import IndexPage from './IndexPage';
+
+// ── Professional Invoice Modal ──────────────────────────────────────────────
+const InvoiceModal = ({ order, onClose }) => {
+    const printRef = useRef(null);
+    if (!order) return null;
+
+    const invoiceNumber = `TH-${String(order.id).padStart(5, '0')}`;
+    const invoiceDate = order.created_at
+        ? new Date(order.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })
+        : new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' });
+    const deliveryDate = order.delivery_date
+        ? new Date(order.delivery_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })
+        : 'N/A';
+
+    const totalAmt   = Number(order.total_amount   || 0);
+    const discountAmt= Number(order.discount_amount || 0);
+    const finalAmt   = Number(order.final_amount   || totalAmt);
+    const advanceAmt = Number(order.advance_payment || 0);
+    const remainAmt  = Number(order.remaining_amount || (finalAmt - advanceAmt));
+    const hasDiscount = discountAmt > 0;
+
+    const fmt = (n) => `₹${Number(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+    const handlePrint = () => {
+        const printContent = printRef.current?.innerHTML;
+        const w = window.open('', '_blank', 'width=800,height=900');
+        w.document.write(`
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Invoice ${invoiceNumber} – TailorHub</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Inter', sans-serif; background: #fff; color: #111827; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .invoice-wrap { max-width: 720px; margin: 0 auto; padding: 40px 36px; }
+    .header-band { background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); border-radius: 16px; padding: 28px 32px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px; }
+    .brand { color: #fff; }
+    .brand-name { font-size: 26px; font-weight: 900; letter-spacing: -0.5px; }
+    .brand-tag  { font-size: 12px; color: rgba(255,255,255,0.7); margin-top: 2px; }
+    .inv-meta { text-align: right; color: #fff; }
+    .inv-label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: rgba(255,255,255,0.65); }
+    .inv-number{ font-size: 20px; font-weight: 800; }
+    .inv-date  { font-size: 12px; color: rgba(255,255,255,0.8); margin-top: 2px; }
+    .status-badge { display: inline-block; background: #d1fae5; color: #065f46; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; padding: 4px 10px; border-radius: 999px; margin-bottom: 28px; }
+    .section-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #6b7280; margin-bottom: 12px; }
+    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 28px; }
+    .info-card { background: #f9fafb; border: 1px solid #f3f4f6; border-radius: 12px; padding: 16px 18px; }
+    .info-card .label { font-size: 10px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 6px; }
+    .info-card .value { font-size: 14px; font-weight: 700; color: #111827; line-height: 1.4; }
+    .info-card .sub   { font-size: 12px; color: #6b7280; margin-top: 2px; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
+    thead tr { background: #f9fafb; }
+    thead th { padding: 10px 14px; text-align: left; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #6b7280; border-bottom: 2px solid #f3f4f6; }
+    thead th:last-child { text-align: right; }
+    tbody td { padding: 14px 14px; font-size: 13px; border-bottom: 1px solid #f9fafb; }
+    tbody td:last-child { text-align: right; font-weight: 700; }
+    tbody td .sub { font-size: 11px; color: #9ca3af; margin-top: 2px; }
+    .summary-box { background: #f9fafb; border: 1px solid #f3f4f6; border-radius: 12px; padding: 18px 20px; margin-bottom: 28px; }
+    .sum-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; font-size: 13px; color: #374151; border-bottom: 1px solid #f3f4f6; }
+    .sum-row:last-child { border-bottom: none; }
+    .sum-row.discount { color: #10b981; }
+    .sum-row.total-final { font-size: 16px; font-weight: 900; color: #111827; padding-top: 10px; }
+    .sum-row .lbl { font-weight: 500; }
+    .sum-row .val { font-weight: 700; }
+    .payment-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 28px; }
+    .pay-card { border-radius: 12px; padding: 14px 16px; text-align: center; }
+    .pay-card.advance { background: #ede9fe; }
+    .pay-card.remain  { background: #fef3c7; }
+    .pay-card .p-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; font-weight: 700; margin-bottom: 4px; }
+    .pay-card.advance .p-label { color: #6d28d9; }
+    .pay-card.remain  .p-label { color: #92400e; }
+    .pay-card .p-value { font-size: 18px; font-weight: 900; }
+    .pay-card.advance .p-value { color: #4c1d95; }
+    .pay-card.remain  .p-value  { color: #78350f; }
+    .notes-box { background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; padding: 12px 16px; font-size: 12px; color: #78350f; margin-bottom: 24px; }
+    .footer { border-top: 2px solid #f3f4f6; padding-top: 20px; display: flex; justify-content: space-between; align-items: center; }
+    .footer-brand { font-size: 13px; font-weight: 800; color: #4f46e5; }
+    .footer-note { font-size: 11px; color: #9ca3af; }
+    @media print {
+      body { padding: 0; }
+      .invoice-wrap { padding: 20px; }
+    }
+  </style>
+</head>
+<body>
+  ${printContent}
+</body>
+</html>`);
+        w.document.close();
+        setTimeout(() => { w.focus(); w.print(); }, 600);
+    };
+
+    return (
+        <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/70 z-[70] flex items-center justify-center px-3 py-4 overflow-auto"
+        >
+            <motion.div
+                initial={{ scale: 0.94, y: 24 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.94, y: 24 }}
+                transition={{ type: 'spring', damping: 26, stiffness: 300 }}
+                className="bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]"
+            >
+                {/* Modal header */}
+                <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-5 py-4 flex items-center justify-between flex-shrink-0">
+                    <div>
+                        <p className="text-white/70 text-[10px] uppercase tracking-widest font-semibold">TailorHub Invoice</p>
+                        <p className="text-white font-black text-lg">{invoiceNumber}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={handlePrint}
+                            className="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 text-white text-xs font-bold px-3 py-2 rounded-xl transition"
+                        >
+                            🖨️ Print / Download
+                        </button>
+                        <button
+                            onClick={onClose}
+                            className="w-8 h-8 bg-white/20 hover:bg-white/30 rounded-full flex items-center justify-center text-white font-bold text-lg leading-none transition"
+                        >×</button>
+                    </div>
+                </div>
+
+                {/* Scrollable body */}
+                <div className="overflow-y-auto flex-1 p-5">
+                    {/* Hidden printable content */}
+                    <div ref={printRef} style={{ display: 'none' }}>
+                        <div className="invoice-wrap">
+                            <div className="header-band">
+                                <div className="brand">
+                                    <div className="brand-name">✂️ TailorHub</div>
+                                    <div className="brand-tag">Custom Tailoring Platform</div>
+                                </div>
+                                <div className="inv-meta">
+                                    <div className="inv-label">Invoice</div>
+                                    <div className="inv-number">{invoiceNumber}</div>
+                                    <div className="inv-date">Issued: {invoiceDate}</div>
+                                </div>
+                            </div>
+
+                            <div className="status-badge">✓ {order.current_status}</div>
+
+                            <div className="info-grid">
+                                <div className="info-card">
+                                    <div className="label">Billed To</div>
+                                    <div className="value">{order.customer_name || 'Customer'}</div>
+                                    <div className="sub">Order #{order.id}</div>
+                                </div>
+                                <div className="info-card">
+                                    <div className="label">Tailor / Shop</div>
+                                    <div className="value">{order.tailor_name}</div>
+                                    {order.shop_name && <div className="sub">{order.shop_name}</div>}
+                                </div>
+                                <div className="info-card">
+                                    <div className="label">Order Date</div>
+                                    <div className="value">{invoiceDate}</div>
+                                </div>
+                                <div className="info-card">
+                                    <div className="label">Delivery Date</div>
+                                    <div className="value">{deliveryDate}</div>
+                                </div>
+                            </div>
+
+                            <p className="section-title">Order Details</p>
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Description</th>
+                                        <th>Status</th>
+                                        <th>Amount</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>1</td>
+                                        <td>
+                                            <div style={{fontWeight:'700'}}>{order.product_name}</div>
+                                            {order.notes && <div className="sub">{order.notes}</div>}
+                                        </td>
+                                        <td>{order.current_status}</td>
+                                        <td>{fmt(totalAmt)}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+
+                            <p className="section-title">Summary</p>
+                            <div className="summary-box">
+                                <div className="sum-row">
+                                    <span className="lbl">Subtotal</span>
+                                    <span className="val">{fmt(totalAmt)}</span>
+                                </div>
+                                {hasDiscount && (
+                                    <div className="sum-row discount">
+                                        <span className="lbl">🎉 Discount Applied</span>
+                                        <span className="val">- {fmt(discountAmt)}</span>
+                                    </div>
+                                )}
+                                <div className="sum-row total-final">
+                                    <span className="lbl">Total Payable</span>
+                                    <span className="val">{fmt(finalAmt)}</span>
+                                </div>
+                            </div>
+
+                            <p className="section-title">Payment Breakdown</p>
+                            <div className="payment-grid">
+                                <div className="pay-card advance">
+                                    <div className="p-label">Advance Paid</div>
+                                    <div className="p-value">{fmt(advanceAmt)}</div>
+                                </div>
+                                <div className="pay-card remain">
+                                    <div className="p-label">Balance Due</div>
+                                    <div className="p-value">{fmt(remainAmt)}</div>
+                                </div>
+                            </div>
+
+                            {order.notes && (
+                                <div className="notes-box">📝 Notes: {order.notes}</div>
+                            )}
+
+                            <div className="footer">
+                                <div className="footer-brand">✂️ TailorHub</div>
+                                <div className="footer-note">Thank you for your business!</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* On-screen invoice preview */}
+                    <div className="space-y-4">
+                        {/* Order info */}
+                        <div className="grid grid-cols-2 gap-3">
+                            {[['Billed To', order.customer_name || 'Customer', `Order #${order.id}`],
+                              ['Tailor / Shop', order.tailor_name, order.shop_name || ''],
+                              ['Issue Date', invoiceDate, ''],
+                              ['Delivery Date', deliveryDate, ''],
+                            ].map(([label, val, sub]) => (
+                                <div key={label} className="bg-gray-50 rounded-2xl p-3 border border-gray-100">
+                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">{label}</p>
+                                    <p className="text-sm font-bold text-gray-800">{val}</p>
+                                    {sub && <p className="text-xs text-gray-500 mt-0.5">{sub}</p>}
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Item row */}
+                        <div className="bg-gray-50 rounded-2xl border border-gray-100 overflow-hidden">
+                            <div className="grid grid-cols-[1fr_auto] text-[10px] font-bold uppercase tracking-wider text-gray-400 px-4 py-2.5 border-b border-gray-100">
+                                <span>Description</span><span>Amount</span>
+                            </div>
+                            <div className="grid grid-cols-[1fr_auto] px-4 py-3 items-center">
+                                <div>
+                                    <p className="text-sm font-bold text-gray-800">{order.product_name}</p>
+                                    {order.notes && <p className="text-xs text-gray-500 mt-0.5">{order.notes}</p>}
+                                </div>
+                                <span className="text-sm font-black text-gray-800">{fmt(totalAmt)}</span>
+                            </div>
+                        </div>
+
+                        {/* Summary */}
+                        <div className="bg-gray-50 rounded-2xl border border-gray-100 p-4 space-y-2">
+                            <div className="flex justify-between text-sm text-gray-600">
+                                <span>Subtotal</span>
+                                <span className="font-semibold">{fmt(totalAmt)}</span>
+                            </div>
+                            {hasDiscount && (
+                                <div className="flex justify-between text-sm text-emerald-600 font-semibold">
+                                    <span>🎉 Discount</span>
+                                    <span>- {fmt(discountAmt)}</span>
+                                </div>
+                            )}
+                            <div className="border-t border-gray-200 pt-2 flex justify-between items-center">
+                                <span className="text-sm font-bold text-gray-800">Total Payable</span>
+                                <span className="text-xl font-black text-indigo-600">{fmt(finalAmt)}</span>
+                            </div>
+                        </div>
+
+                        {/* Payment breakdown */}
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="bg-violet-50 rounded-2xl p-3.5 text-center border border-violet-100">
+                                <p className="text-[10px] font-bold text-violet-600 uppercase tracking-wider mb-1">Advance Paid</p>
+                                <p className="text-lg font-black text-violet-800">{fmt(advanceAmt)}</p>
+                            </div>
+                            <div className="bg-amber-50 rounded-2xl p-3.5 text-center border border-amber-100">
+                                <p className="text-[10px] font-bold text-amber-600 uppercase tracking-wider mb-1">Balance Due</p>
+                                <p className="text-lg font-black text-amber-800">{fmt(remainAmt)}</p>
+                            </div>
+                        </div>
+
+                        {/* Status badge */}
+                        <div className="flex items-center justify-center gap-2 bg-emerald-50 border border-emerald-100 rounded-2xl py-3">
+                            <span className="text-emerald-600 text-base">✓</span>
+                            <span className="text-emerald-700 font-bold text-sm">{order.current_status}</span>
+                        </div>
+
+                        {/* Footer note */}
+                        <p className="text-center text-xs text-gray-400">Thank you for choosing TailorHub ✂️</p>
+                    </div>
+                </div>
+
+                {/* Bottom action */}
+                <div className="flex-shrink-0 border-t border-gray-100 p-4">
+                    <button
+                        onClick={handlePrint}
+                        className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm py-3.5 rounded-2xl transition flex items-center justify-center gap-2 shadow-lg shadow-indigo-100"
+                    >
+                        🖨️ Print / Save as PDF
+                    </button>
+                </div>
+            </motion.div>
+        </motion.div>
+    );
+};
 
 const FeedbackModal = ({ order, onClose, onSuccess }) => {
     const [rating, setRating] = useState(5);
@@ -358,6 +671,7 @@ const OrdersTab = () => {
     const [historyModal, setHistoryModal] = useState(null);
     const [history, setHistory] = useState([]);
     const [feedbackModalOrder, setFeedbackModalOrder] = useState(null);
+    const [invoiceOrder, setInvoiceOrder] = useState(null);
 
     const fetchOrders = () => {
         setLoading(true);
@@ -448,7 +762,7 @@ const OrdersTab = () => {
                         <p className="text-xs text-gray-500">
                             Delivery: <span className="font-bold text-gray-800">{o.delivery_date ? new Date(o.delivery_date).toLocaleDateString() : 'TBD'}</span>
                         </p>
-                        <div className="flex gap-2">
+                        <div className="flex gap-2 flex-wrap">
                             {(o.current_status === 'Delivered' || o.current_status === 'Completed') && o.feedback_submitted === 0 && (
                                 <button
                                     onClick={() => setFeedbackModalOrder(o)}
@@ -457,7 +771,15 @@ const OrdersTab = () => {
                                     ⭐ Give Feedback
                                 </button>
                             )}
-                            <button onClick={() => handleViewHistory(o.id)} className="text-indigo-600 text-xs font-bold bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition">
+                            {(o.current_status === 'Delivered' || o.current_status === 'Completed') && (
+                                <button
+                                    onClick={() => setInvoiceOrder(o)}
+                                    className="text-indigo-700 text-xs font-bold bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-3 py-1.5 rounded-lg transition flex items-center gap-1"
+                                >
+                                    🧾 Invoice
+                                </button>
+                            )}
+                            <button onClick={() => handleViewHistory(o.id)} className="text-gray-600 text-xs font-bold bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg transition">
                                 Track Status
                             </button>
                         </div>
@@ -550,6 +872,15 @@ const OrdersTab = () => {
                             setFeedbackModalOrder(null);
                             fetchOrders();
                         }}
+                    />
+                )}
+            </AnimatePresence>
+
+            <AnimatePresence>
+                {invoiceOrder && (
+                    <InvoiceModal
+                        order={invoiceOrder}
+                        onClose={() => setInvoiceOrder(null)}
                     />
                 )}
             </AnimatePresence>
@@ -767,6 +1098,122 @@ const CustomerDashboardPage = () => {
         navigate('/');
     };
 
+    // ── Footer ──────────────────────────────────────────────────────────────
+    const DashboardFooter = () => (
+        <footer style={{
+            background: '#1a1a2e',
+            color: '#c9d1d9',
+            fontFamily: "'Inter', sans-serif",
+            marginTop: '2rem',
+        }}>
+            {/* Main grid */}
+            <div style={{
+                maxWidth: '100%',
+                padding: '36px 24px 24px',
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+                gap: '28px 20px',
+            }}>
+                {/* About */}
+                <div>
+                    <p style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.2px', color: '#8b949e', marginBottom: 12 }}>ABOUT</p>
+                    {[['Contact Us', 'mailto:support@tailorhub.in'], ['About TailorHub', '#'], ['Press', '#'], ['Careers', '#'], ['Corporate Info', '#']].map(([label, href]) => (
+                        <a key={label} href={href} style={{ display: 'block', fontSize: 12, color: '#c9d1d9', textDecoration: 'none', marginBottom: 8, lineHeight: 1.5 }}
+                           onMouseEnter={e => e.target.style.color='#ffffff'} onMouseLeave={e => e.target.style.color='#c9d1d9'}>
+                            {label}
+                        </a>
+                    ))}
+                </div>
+
+                {/* Quick Links */}
+                <div>
+                    <p style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.2px', color: '#8b949e', marginBottom: 12 }}>QUICK LINKS</p>
+                    {[['Browse Tailors', '/browse-deals'], ['My Orders', '#'], ['Active Offers', '#'], ['Book an Appointment', '#'], ['Track Order', '#']].map(([label, href]) => (
+                        <a key={label} href={href} style={{ display: 'block', fontSize: 12, color: '#c9d1d9', textDecoration: 'none', marginBottom: 8, lineHeight: 1.5 }}
+                           onMouseEnter={e => e.target.style.color='#ffffff'} onMouseLeave={e => e.target.style.color='#c9d1d9'}>
+                            {label}
+                        </a>
+                    ))}
+                </div>
+
+                {/* Help */}
+                <div>
+                    <p style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.2px', color: '#8b949e', marginBottom: 12 }}>HELP</p>
+                    {[['How It Works', '#'], ['Payments & Pricing', '#'], ['Cancellation Policy', '#'], ['FAQ', '#'], ['Dispute Resolution', '#']].map(([label, href]) => (
+                        <a key={label} href={href} style={{ display: 'block', fontSize: 12, color: '#c9d1d9', textDecoration: 'none', marginBottom: 8, lineHeight: 1.5 }}
+                           onMouseEnter={e => e.target.style.color='#ffffff'} onMouseLeave={e => e.target.style.color='#c9d1d9'}>
+                            {label}
+                        </a>
+                    ))}
+                </div>
+
+                {/* Consumer Policy */}
+                <div>
+                    <p style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.2px', color: '#8b949e', marginBottom: 12 }}>CONSUMER POLICY</p>
+                    {[['Return & Refunds', '#'], ['Terms of Use', '#'], ['Privacy Policy', '#'], ['Security', '#'], ['Sitemap', '#']].map(([label, href]) => (
+                        <a key={label} href={href} style={{ display: 'block', fontSize: 12, color: '#c9d1d9', textDecoration: 'none', marginBottom: 8, lineHeight: 1.5 }}
+                           onMouseEnter={e => e.target.style.color='#ffffff'} onMouseLeave={e => e.target.style.color='#c9d1d9'}>
+                            {label}
+                        </a>
+                    ))}
+                </div>
+
+                {/* Contact & Social */}
+                <div>
+                    <p style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.2px', color: '#8b949e', marginBottom: 12 }}>CONNECT WITH US</p>
+                    <p style={{ fontSize: 12, marginBottom: 6, lineHeight: 1.6 }}>✉️ <span style={{ color: '#6e8efc' }}>support@tailorhub.in</span></p>
+                    <p style={{ fontSize: 12, marginBottom: 6, lineHeight: 1.6 }}>📞 <span style={{ color: '#6e8efc' }}>+91-9999-000-111</span></p>
+                    <p style={{ fontSize: 12, marginBottom: 14, lineHeight: 1.6 }}>🕐 Mon–Sat, 9AM – 7PM IST</p>
+                    <p style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.2px', color: '#8b949e', marginBottom: 10 }}>SOCIAL</p>
+                    <div style={{ display: 'flex', gap: 10 }}>
+                        {[['📘', 'Facebook', 'https://facebook.com'], ['📸', 'Instagram', 'https://instagram.com'], ['▶️', 'YouTube', 'https://youtube.com'], ['🐦', 'Twitter', 'https://twitter.com']].map(([icon, name, href]) => (
+                            <a key={name} href={href} target="_blank" rel="noopener noreferrer" title={name}
+                               style={{ width: 32, height: 32, borderRadius: '50%', background: '#2d2d44', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, textDecoration: 'none', transition: 'background 0.2s' }}
+                               onMouseEnter={e => e.currentTarget.style.background='#4f46e5'}
+                               onMouseLeave={e => e.currentTarget.style.background='#2d2d44'}>
+                                {icon}
+                            </a>
+                        ))}
+                    </div>
+                </div>
+            </div>
+
+            {/* Divider */}
+            <div style={{ borderTop: '1px solid #2d2d44', margin: '0 24px' }} />
+
+            {/* Bottom bar */}
+            <div style={{
+                padding: '14px 24px 18px',
+                display: 'flex',
+                flexWrap: 'wrap',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 12,
+            }}>
+                {/* Brand */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 18 }}>✂️</span>
+                    <span style={{ fontSize: 14, fontWeight: 900, color: '#ffffff', letterSpacing: '-0.3px' }}>TailorHub</span>
+                </div>
+
+                {/* Quick bottom links */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 14px' }}>
+                    {['Become a Tailor', 'Advertise', 'Gift Cards', 'Help Center'].map(label => (
+                        <a key={label} href="#" style={{ fontSize: 11, color: '#8b949e', textDecoration: 'none' }}
+                           onMouseEnter={e => e.target.style.color='#ffffff'} onMouseLeave={e => e.target.style.color='#8b949e'}>
+                            {label}
+                        </a>
+                    ))}
+                </div>
+
+                {/* Copyright */}
+                <p style={{ fontSize: 11, color: '#8b949e', margin: 0 }}>
+                    © 2024–2026 TailorHub™ · All rights reserved
+                </p>
+            </div>
+        </footer>
+    );
+
     const handleTabChange = (tabId) => {
         setActiveTab(tabId);
         if (tabId !== 'home') {
@@ -823,6 +1270,7 @@ const CustomerDashboardPage = () => {
                         )}
                     </motion.div>
                 </AnimatePresence>
+                {activeTab === 'home' && <DashboardFooter />}
             </main>
 
             <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 shadow-lg z-10">
