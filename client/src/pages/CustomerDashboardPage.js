@@ -672,6 +672,18 @@ const OrdersTab = () => {
     const [history, setHistory] = useState([]);
     const [feedbackModalOrder, setFeedbackModalOrder] = useState(null);
     const [invoiceOrder, setInvoiceOrder] = useState(null);
+    const [filterDate, setFilterDate] = useState('');
+    const [filterMonth, setFilterMonth] = useState('');
+    const [filterYear, setFilterYear] = useState('');
+
+    const filteredOrders = orders.filter(o => {
+        if (!o.created_at) return true;
+        const d = new Date(o.created_at);
+        if (filterDate && d.getDate() !== Number(filterDate)) return false;
+        if (filterMonth && d.getMonth() + 1 !== Number(filterMonth)) return false;
+        if (filterYear && d.getFullYear() !== Number(filterYear)) return false;
+        return true;
+    });
 
     const fetchOrders = () => {
         setLoading(true);
@@ -710,6 +722,29 @@ const OrdersTab = () => {
         <div className="space-y-4">
             <h2 className="text-lg font-bold text-gray-800">My Orders</h2>
             
+            {!loading && orders.length > 0 && (
+                <div className="grid grid-cols-3 gap-2 bg-white p-3 rounded-2xl border border-gray-100 shadow-sm">
+                    <select className="w-full border-gray-200 rounded-xl text-sm p-2 focus:ring-indigo-400 focus:border-indigo-400 bg-gray-50 outline-none" value={filterDate} onChange={(e) => setFilterDate(e.target.value)}>
+                        <option value="">Date</option>
+                        {Array.from({ length: 31 }, (_, i) => i + 1).map(d => (
+                            <option key={d} value={d}>{String(d).padStart(2, '0')}</option>
+                        ))}
+                    </select>
+                    <select className="w-full border-gray-200 rounded-xl text-sm p-2 focus:ring-indigo-400 focus:border-indigo-400 bg-gray-50 outline-none" value={filterMonth} onChange={(e) => setFilterMonth(e.target.value)}>
+                        <option value="">Month</option>
+                        {['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map((m, i) => (
+                            <option key={i+1} value={i+1}>{m}</option>
+                        ))}
+                    </select>
+                    <select className="w-full border-gray-200 rounded-xl text-sm p-2 focus:ring-indigo-400 focus:border-indigo-400 bg-gray-50 outline-none" value={filterYear} onChange={(e) => setFilterYear(e.target.value)}>
+                        <option value="">Year</option>
+                        {[2024, 2025, 2026, 2027, 2028].map(y => (
+                            <option key={y} value={y}>{y}</option>
+                        ))}
+                    </select>
+                </div>
+            )}
+
             {loading && <p className="text-center text-gray-400 text-sm">Loading orders...</p>}
             
             {!loading && orders.length === 0 && (
@@ -720,7 +755,15 @@ const OrdersTab = () => {
                 </div>
             )}
 
-            {orders.map(o => (
+            {!loading && orders.length > 0 && filteredOrders.length === 0 && (
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8 flex flex-col items-center gap-3 text-center">
+                    <span className="text-4xl">🔍</span>
+                    <p className="text-gray-600 font-semibold">No orders found</p>
+                    <p className="text-gray-400 text-sm">Try adjusting your filters.</p>
+                </div>
+            )}
+
+            {filteredOrders.map(o => (
                 <div key={o.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 hover:shadow-md transition">
                     <div className="flex justify-between items-start mb-2">
                         <div>
@@ -1131,7 +1174,7 @@ const CustomerDashboardPage = () => {
                 <div>
                     <p style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.2px', color: '#8b949e', marginBottom: 12 }}>ABOUT</p>
                     {footerLink('Contact Us', '/help/contact-us')}
-                    {footerLink('About TailorHub', '/help/how-it-works')}
+                    {footerLink('About TailorHub', '/help/about-tailorhub')}
                     {footerLink('Press', '/help/contact-us')}
                     {footerLink('Careers', '/help/contact-us')}
                     {footerLink('Corporate Info', '/help/contact-us')}

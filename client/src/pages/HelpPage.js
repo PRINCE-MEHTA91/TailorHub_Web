@@ -151,6 +151,19 @@ const SECTIONS = {
       { q: '🕐 Support Hours', a: 'Monday to Saturday: 9:00 AM – 7:00 PM IST\nSunday & Public Holidays: Closed\nEmergency support (account security): 24×7 via email.' },
     ],
   },
+  'about-tailorhub': {
+    title: 'About TailorHub',
+    emoji: '🌟',
+    color: '#10b981',
+    gradient: 'linear-gradient(135deg,#10b981 0%,#047857 100%)',
+    intro: 'TailorHub is an innovative platform connecting skilled tailors with customers seeking perfectly fitted custom clothing.',
+    items: [
+      { q: '✨ Key Features & Functionality', a: '• Discover top-rated tailors in your city\n• Detailed tailor profiles with services, pricing, and portfolios\n• Easy online booking and measurement scheduling\n• Transparent pricing with special discount offers\n• Real-time order tracking (Cutting → Stitching → Trial → Delivered)\n• Built-in professional invoice generation\n• Integrated rating and review system' },
+      { q: '💎 Benefits for Customers', a: '• Convenience of finding trusted tailors from home\n• Guaranteed pricing transparency—no hidden fees\n• Dispute resolution support ensuring your satisfaction\n• Access to multiple tailoring specialties (bridal, bespoke suits, alterations, etc.)' },
+      { q: '🚀 Benefits for Tailors', a: '• Digital storefront to showcase work and attract new customers\n• Streamlined order and payment management\n• Easy to offer discounts and retain loyal customers\n• Tools to manage business growth and reputation' },
+      { q: '👨‍💻 Developer & Platform Info', a: 'TailorHub was developed by Prince Mehta. Dedicated to bringing traditional tailoring into the digital age with modern, user-friendly tech solutions.\n\nPlatform Icons:\n🏠 Home | ✂️ Tailors | 📦 Orders | 👤 Profile\n⚙️ How it Works | 💳 Payments | 🛡️ Security' },
+    ],
+  },
 };
 
 const NAV_LINKS = [
@@ -164,6 +177,7 @@ const NAV_LINKS = [
   { id: 'privacy-policy',      label: '🔒 Privacy Policy' },
   { id: 'security',            label: '🛡️ Security' },
   { id: 'contact-us',          label: '📬 Contact Us' },
+  { id: 'about-tailorhub',     label: '🌟 About TailorHub' },
 ];
 
 const FAQItem = ({ q, a, color, index }) => {
