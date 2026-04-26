@@ -1113,6 +1113,7 @@ const NAV_TABS = [
     { id: 'home',    label: 'Home',    icon: '🏠' },
     { id: 'tailors', label: 'Tailors', icon: '✂️' },
     { id: 'orders',  label: 'Orders',  icon: '📦' },
+    { id: 'chat',    label: 'Chat',    icon: '💬' },
     { id: 'profile', label: 'Profile', icon: '👤' },
 ];
 
@@ -1259,6 +1260,10 @@ const CustomerDashboardPage = () => {
     };
 
     const handleTabChange = (tabId) => {
+        if (tabId === 'chat') {
+            navigate('/chat');
+            return;
+        }
         setActiveTab(tabId);
         if (tabId !== 'home') {
             setSearchQuery('');
