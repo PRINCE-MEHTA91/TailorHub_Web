@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import PhoneInput from '../components/PhoneInput';
 
@@ -1781,6 +1781,7 @@ function FeedbackTab() {
 const NAV_TABS = [
   {id:'home',     icon:'🏠', label:'Home'},
   {id:'orders',   icon:'📋', label:'Orders'},
+  {id:'chat',     icon:'💬', label:'Chat'},
   {id:'feedback', icon:'⭐', label:'Feedback'},
   {id:'offers',   icon:'🔥', label:'Offers'},
   {id:'manage',   icon:'⚙️', label:'Manage'},
@@ -1791,7 +1792,15 @@ const NAV_TABS = [
 export default function TailorDashboardPage() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [activeTab, setActiveTab] = useState('home');
+
+  useEffect(() => {
+    if (location.state?.tab) {
+      setActiveTab(location.state.tab);
+      window.history.replaceState({}, '');
+    }
+  }, [location.state]);
 
   const API_URL_MAIN = process.env.REACT_APP_API_URL;
   const resolveImgMain = (p) => { if (!p) return null; return p.startsWith('http') ? p : `${API_URL_MAIN}${p}`; };
@@ -1891,6 +1900,7 @@ export default function TailorDashboardPage() {
                 {[
                   {id:'home',    icon:'🏠', label:'Dashboard Home',   desc:'Stats & recent orders'},
                   {id:'orders',  icon:'📋', label:'My Orders',        desc:'View & manage orders'},
+                  {id:'chat',    icon:'💬', label:'Messages',         desc:'Chat with customers', external:'/chat'},
                   {id:'feedback',icon:'⭐', label:'Feedback',         desc:'Customer reviews'},
                   {id:'offers',  icon:'🔥', label:'Manage Offers',    desc:'Create & edit promos'},
                   {id:'manage',  icon:'⚙️', label:'Management',       desc:'Portfolio & tools'},
@@ -1932,9 +1942,9 @@ export default function TailorDashboardPage() {
         </main>
 
         {/* Bottom Nav — full width on all screens */}
-        <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-stone-200 grid grid-cols-6 z-50 shadow-lg">
+        <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-stone-200 grid grid-cols-7 z-50 shadow-lg">
           {NAV_TABS.map(n=>(
-            <button key={n.id} onClick={()=>setActiveTab(n.id)}
+            <button key={n.id} onClick={() => n.id === 'chat' ? navigate('/chat') : setActiveTab(n.id)}
               className="flex flex-col items-center gap-0.5 py-2.5 transition-all">
               {activeTab===n.id && <div className="w-5 h-0.5 bg-orange-500 rounded-full mb-0.5"/>}
               <span className={`text-xl transition-transform ${activeTab===n.id?'scale-110':'scale-100'}`}>{n.icon}</span>

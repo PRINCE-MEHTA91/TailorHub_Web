@@ -213,6 +213,23 @@ db.getConnection((connErr, connection) => {
         if (tableErr) console.error('Error creating order_status_history table:', tableErr.message);
         else console.log('✅ order_status_history table ready');
     });
+
+    // Auto-create messages table for Chat feature
+    const createMessagesTable = `
+        CREATE TABLE IF NOT EXISTS messages (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            sender_id INT NOT NULL,
+            receiver_id INT NOT NULL,
+            message TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY (receiver_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+    `;
+    db.query(createMessagesTable, (tableErr) => {
+        if (tableErr) console.error('Error creating messages table:', tableErr.message);
+        else console.log('✅ messages table ready');
+    });
 });
 
 const transporter = nodemailer.createTransport({
@@ -1403,6 +1420,71 @@ app.get('/api/tailor-feedback/:tailorId', (req, res) => {
 });
 
 
-app.listen(PORT, () => {
-    console.log(`✅ Server running and listening on port ${PORT}`);
+// ── Chat endpoints ────────────────────────────────────────────────────────
+app.get('/api/chat/users', verifyToken, (req, res) => {
+    // Return users that the current user has chatted with
+    const sql = `
+        SELECT DISTINCT u.id, u.full_name, u.role, 
+            (SELECT message FROM messages WHERE (sender_id = u.id AND receiver_id = ?) OR (sender_id = ? AND receiver_id = u.id) ORDER BY created_at DESC LIMIT 1) as last_message,
+            (SELECT created_at FROM messages WHERE (sender_id = u.id AND receiver_id = ?) OR (sender_id = ? AND receiver_id = u.id) ORDER BY created_at DESC LIMIT 1) as last_message_time
+        FROM users u
+        INNER JOIN messages m ON (m.sender_id = u.id AND m.receiver_id = ?) OR (m.receiver_id = u.id AND m.sender_id = ?)
+        WHERE u.id != ?
+        ORDER BY last_message_time DESC
+    `;
+    db.query(sql, [req.userId, req.userId, req.userId, req.userId, req.userId, req.userId, req.userId], (err, results) => {
+        if (err) return res.status(500).json({ message: 'Server error', error: err.message });
+        res.json({ users: results });
+    });
+});
+
+app.get('/api/chat/search-users', verifyToken, (req, res) => {
+    const { query } = req.query;
+    if (!query) return res.json({ users: [] });
+    // Search for users to start a new chat (customers search tailors, tailors search customers)
+    const searchRole = req.userRole === 'tailor' ? 'customer' : 'tailor';
+    const sql = `
+        SELECT id, full_name, email, role 
+        FROM users 
+        WHERE role = ? AND (full_name LIKE ? OR email LIKE ?)
+        LIMIT 10
+    `;
+    db.query(sql, [searchRole, `%${query}%`, `%${query}%`], (err, results) => {
+        if (err) return res.status(500).json({ message: 'Server error' });
+        res.json({ users: results });
+    });
+});
+
+app.get('/api/chat/:userId', verifyToken, (req, res) => {
+    const { userId } = req.params;
+    const sql = `
+        SELECT * FROM messages 
+        WHERE (sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?)
+        ORDER BY created_at ASC
+    `;
+    db.query(sql, [req.userId, userId, userId, req.userId], (err, results) => {
+        if (err) return res.status(500).json({ message: 'Server error' });
+        res.json({ messages: results });
+    });
+});
+
+app.post('/api/chat/:userId', verifyToken, (req, res) => {
+    const { userId } = req.params;
+    const { message } = req.body;
+    if (!message || !message.trim()) return res.status(400).json({ message: 'Message is required' });
+    
+    const sql = 'INSERT INTO messages (sender_id, receiver_id, message) VALUES (?, ?, ?)';
+    db.query(sql, [req.userId, userId, message.trim()], (err, result) => {
+        if (err) return res.status(500).json({ message: 'Server error' });
+        
+        // Fetch the inserted message to return
+        db.query('SELECT * FROM messages WHERE id = ?', [result.insertId], (err2, results) => {
+            if (err2 || results.length === 0) return res.status(500).json({ message: 'Server error' });
+            res.status(201).json({ message: results[0] });
+        });
+    });
+});
+
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`✅ Server is running on port ${PORT}`);
 });
