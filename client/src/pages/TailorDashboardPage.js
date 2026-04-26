@@ -300,6 +300,7 @@ function OrderCreateForm({ API_URL_O, newOrder, setNewOrder, createErr, creating
 /* ── Orders Tab ── */
 function OrdersTab() {
   const API_URL_O = process.env.REACT_APP_API_URL;
+  const navigate = useNavigate();
   const [filter, setFilter] = useState('All');
   const filters = ['All', 'Order Placed', 'Cutting', 'Stitching', 'Trial Ready', 'Completed', 'Delivered'];
   const [orders, setOrders] = useState([]);
@@ -546,7 +547,16 @@ function OrdersTab() {
           <div className="p-4 cursor-pointer" onClick={() => { setSelectedOrder(o); setStatusUpdate({ status: o.current_status, note: '', delivery_date: o.delivery_date ? new Date(o.delivery_date).toISOString().split('T')[0] : '' }); }}>
             <div className="flex justify-between items-start mb-2">
               <div>
-                <p className="text-sm font-black text-stone-800">{o.customer_name}</p>
+                <p 
+                  className="text-sm font-black text-stone-800 hover:text-indigo-600 cursor-pointer transition flex items-center gap-1 w-max"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigate(`/chat?customerId=${o.customer_id}`);
+                  }}
+                  title="Chat with customer"
+                >
+                  {o.customer_name} <span className="text-[10px]">💬</span>
+                </p>
                 <p className="text-xs text-stone-500">Ord #{o.id} · {o.product_name}</p>
               </div>
               <div className="flex flex-col items-end gap-2">

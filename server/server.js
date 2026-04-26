@@ -1422,17 +1422,18 @@ app.get('/api/tailor-feedback/:tailorId', (req, res) => {
 
 // ── Chat endpoints ────────────────────────────────────────────────────────
 app.get('/api/chat/users', verifyToken, (req, res) => {
-    // Return users that the current user has chatted with
+    const isTailor = req.userRole === 'tailor';
+    const orderJoinCond = isTailor ? 'o.tailor_id = ? AND o.customer_id = u.id' : 'o.customer_id = ? AND o.tailor_id = u.id';
+    
     const sql = `
         SELECT DISTINCT u.id, u.full_name, u.role, 
             (SELECT message FROM messages WHERE (sender_id = u.id AND receiver_id = ?) OR (sender_id = ? AND receiver_id = u.id) ORDER BY created_at DESC LIMIT 1) as last_message,
             (SELECT created_at FROM messages WHERE (sender_id = u.id AND receiver_id = ?) OR (sender_id = ? AND receiver_id = u.id) ORDER BY created_at DESC LIMIT 1) as last_message_time
         FROM users u
-        INNER JOIN messages m ON (m.sender_id = u.id AND m.receiver_id = ?) OR (m.receiver_id = u.id AND m.sender_id = ?)
-        WHERE u.id != ?
-        ORDER BY last_message_time DESC
+        INNER JOIN orders o ON ${orderJoinCond}
+        ORDER BY last_message_time DESC, u.full_name ASC
     `;
-    db.query(sql, [req.userId, req.userId, req.userId, req.userId, req.userId, req.userId, req.userId], (err, results) => {
+    db.query(sql, [req.userId, req.userId, req.userId, req.userId, req.userId], (err, results) => {
         if (err) return res.status(500).json({ message: 'Server error', error: err.message });
         res.json({ users: results });
     });
@@ -1441,15 +1442,18 @@ app.get('/api/chat/users', verifyToken, (req, res) => {
 app.get('/api/chat/search-users', verifyToken, (req, res) => {
     const { query } = req.query;
     if (!query) return res.json({ users: [] });
-    // Search for users to start a new chat (customers search tailors, tailors search customers)
-    const searchRole = req.userRole === 'tailor' ? 'customer' : 'tailor';
+    
+    const isTailor = req.userRole === 'tailor';
+    const orderJoinCond = isTailor ? 'o.tailor_id = ? AND o.customer_id = u.id' : 'o.customer_id = ? AND o.tailor_id = u.id';
+    
     const sql = `
-        SELECT id, full_name, email, role 
-        FROM users 
-        WHERE role = ? AND (full_name LIKE ? OR email LIKE ?)
+        SELECT DISTINCT u.id, u.full_name, u.email, u.role 
+        FROM users u
+        INNER JOIN orders o ON ${orderJoinCond}
+        WHERE u.full_name LIKE ? OR u.email LIKE ?
         LIMIT 10
     `;
-    db.query(sql, [searchRole, `%${query}%`, `%${query}%`], (err, results) => {
+    db.query(sql, [req.userId, `%${query}%`, `%${query}%`], (err, results) => {
         if (err) return res.status(500).json({ message: 'Server error' });
         res.json({ users: results });
     });
