@@ -666,6 +666,7 @@ const CustomerProfileTab = ({ user, onLogout }) => {
 
 const OrdersTab = () => {
     const API_URL_O = process.env.REACT_APP_API_URL;
+    const navigate = useNavigate();
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
     const [historyModal, setHistoryModal] = useState(null);
@@ -768,7 +769,18 @@ const OrdersTab = () => {
                     <div className="flex justify-between items-start mb-2">
                         <div>
                             <p className="text-sm font-bold text-gray-800">{o.product_name}</p>
-                            <p className="text-xs text-gray-500">Tailor: <span className="font-semibold">{o.tailor_name} {o.shop_name ? `(${o.shop_name})` : ''}</span></p>
+                            <p className="text-xs text-gray-500">
+                                Tailor: <span 
+                                    className="font-semibold hover:text-indigo-600 cursor-pointer transition inline-flex items-center gap-1"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        navigate(`/chat?customerId=${o.tailor_id}`);
+                                    }}
+                                    title="Chat with tailor"
+                                >
+                                    {o.tailor_name} {o.shop_name ? `(${o.shop_name})` : ''} <span className="text-[10px]">💬</span>
+                                </span>
+                            </p>
                             <p className="text-[10px] text-gray-400 mt-0.5">Order ID: #{o.id}</p>
                         </div>
                         <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${sc[o.current_status]||sc['Completed']}`}>

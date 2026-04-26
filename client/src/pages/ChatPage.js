@@ -1,8 +1,26 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import Header from '../components/Header';
+
+const TAILOR_TABS = [
+  {id:'home',     icon:'🏠', label:'Home'},
+  {id:'orders',   icon:'📋', label:'Orders'},
+  {id:'chat',     icon:'💬', label:'Chat'},
+  {id:'feedback', icon:'⭐', label:'Feedback'},
+  {id:'offers',   icon:'🔥', label:'Offers'},
+  {id:'manage',   icon:'⚙️', label:'Manage'},
+  {id:'profile',  icon:'👤', label:'Profile'},
+];
+
+const CUSTOMER_TABS = [
+    { id: 'home',    label: 'Home',    icon: '🏠' },
+    { id: 'tailors', label: 'Tailors', icon: '✂️' },
+    { id: 'orders',  label: 'Orders',  icon: '📦' },
+    { id: 'chat',    label: 'Chat',    icon: '💬' },
+    { id: 'profile', label: 'Profile', icon: '👤' },
+];
 
 const ChatPage = () => {
     const { user } = useAuth();
@@ -18,6 +36,9 @@ const ChatPage = () => {
     const [loadingUsers, setLoadingUsers] = useState(true);
     const [loadingMessages, setLoadingMessages] = useState(false);
     
+    const [searchParams] = useSearchParams();
+    const urlCustomerId = searchParams.get('customerId');
+    
     const messagesEndRef = useRef(null);
 
     const scrollToBottom = () => {
@@ -27,6 +48,15 @@ const ChatPage = () => {
     useEffect(() => {
         fetchChatUsers();
     }, []);
+
+    useEffect(() => {
+        if (users.length > 0 && urlCustomerId && !selectedUser) {
+            const foundUser = users.find(u => String(u.id) === String(urlCustomerId));
+            if (foundUser) {
+                selectUser(foundUser);
+            }
+        }
+    }, [users, urlCustomerId, selectedUser]);
 
     useEffect(() => {
         if (selectedUser) {
@@ -135,8 +165,16 @@ const ChatPage = () => {
         }
     };
 
+    const handleNavClick = (tabId) => {
+        if (tabId === 'chat') return;
+        const targetPath = user?.role === 'tailor' ? '/tailor/dashboard' : '/customer/dashboard';
+        navigate(targetPath, { state: { tab: tabId } });
+    };
+
+    const navTabs = user?.role === 'customer' ? CUSTOMER_TABS : TAILOR_TABS;
+
     return (
-        <div className="bg-stone-50 min-h-screen flex flex-col font-inter">
+        <div className="bg-stone-50 min-h-screen flex flex-col font-inter pb-20">
             <Header />
             
             <div className="flex-1 max-w-6xl w-full mx-auto p-4 md:p-6 lg:p-8 flex flex-col md:flex-row gap-6 mt-16 lg:mt-20 h-[calc(100vh-80px)]">
@@ -303,6 +341,42 @@ const ChatPage = () => {
                     )}
                 </div>
             </div>
+
+            {/* Bottom Nav */}
+            <nav className={`fixed bottom-0 left-0 right-0 bg-white shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-50 ${user?.role === 'tailor' ? 'grid grid-cols-7 border-t border-stone-200' : 'flex border-t border-gray-100'}`}>
+                {navTabs.map((tab) => {
+                    const isActive = tab.id === 'chat';
+                    if (user?.role === 'tailor') {
+                        return (
+                            <button key={tab.id} onClick={() => handleNavClick(tab.id)}
+                                className="flex flex-col items-center gap-0.5 py-2.5 transition-all">
+                                {isActive && <div className="w-5 h-0.5 bg-orange-500 rounded-full mb-0.5" />}
+                                <span className={`text-xl transition-transform ${isActive ? 'scale-110' : 'scale-100'}`}>{tab.icon}</span>
+                                <span className={`text-[10px] font-bold ${isActive ? 'text-orange-500' : 'text-stone-400'}`}>{tab.label}</span>
+                            </button>
+                        );
+                    } else {
+                        return (
+                            <button key={tab.id} onClick={() => handleNavClick(tab.id)}
+                                className="flex-1 flex flex-col items-center justify-center py-3 relative transition-colors"
+                            >
+                                {isActive && (
+                                    <motion.div
+                                        layoutId="customer-tab-indicator"
+                                        className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-indigo-600 rounded-full"
+                                    />
+                                )}
+                                <span className={`text-2xl transition-transform ${isActive ? 'scale-110' : 'scale-100'}`}>
+                                    {tab.icon}
+                                </span>
+                                <span className={`text-xs mt-1 font-medium transition-colors ${isActive ? 'text-indigo-600' : 'text-gray-400'}`}>
+                                    {tab.label}
+                                </span>
+                            </button>
+                        );
+                    }
+                })}
+            </nav>
         </div>
     );
 };
