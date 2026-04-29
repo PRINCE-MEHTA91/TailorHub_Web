@@ -9,6 +9,8 @@ process.on('unhandledRejection', (reason) => {
 });
 
 const express = require('express');
+const http = require('http');
+const { Server: SocketIOServer } = require('socket.io');
 const cors = require('cors');
 const mysql = require('mysql2');
 const bcrypt = require('bcryptjs');
@@ -21,9 +23,19 @@ const path = require('path');
 const fs = require('fs');
 
 const app = express();
+const httpServer = http.createServer(app);
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET;
 const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:3001';
+
+// ── Socket.IO real-time server ──────────────────────────────────────────────
+const io = new SocketIOServer(httpServer, {
+    cors: {
+        origin: [CLIENT_URL, 'http://localhost:3001', 'http://127.0.0.1:3001'],
+        credentials: true,
+    },
+    connectionStateRecovery: {},
+});
 
 app.use(cors({
     origin: [CLIENT_URL, 'http://localhost:3001', 'http://127.0.0.1:3001'],
@@ -275,8 +287,13 @@ const verifyToken = (req, res, next) => {
     if (!token) return res.status(401).json({ message: 'Not authenticated' });
     jwt.verify(token, JWT_SECRET, (err, decoded) => {
         if (err) return res.status(401).json({ message: 'Invalid or expired token' });
-        req.userId = decoded.id;
-        next();
+        // Fetch role from DB so req.userRole is always available
+        db.query('SELECT id, role FROM users WHERE id = ?', [decoded.id], (dbErr, results) => {
+            if (dbErr || results.length === 0) return res.status(500).json({ message: 'Server error' });
+            req.userId = decoded.id;
+            req.userRole = results[0].role;
+            next();
+        });
     });
 };
 
@@ -1439,6 +1456,29 @@ app.get('/api/chat/users', verifyToken, (req, res) => {
     });
 });
 
+// ── GET /api/chat/user/:userId — Look up a single user's info (fallback for first-time chat from Orders) ──
+app.get('/api/chat/user/:userId', verifyToken, (req, res) => {
+    const { userId } = req.params;
+    const isTailor = req.userRole === 'tailor';
+    const orderJoinCond = isTailor
+        ? 'o.tailor_id = ? AND o.customer_id = u.id'
+        : 'o.customer_id = ? AND o.tailor_id = u.id';
+
+    // Only return the user if there's an order relationship (security check)
+    const sql = `
+        SELECT DISTINCT u.id, u.full_name, u.role
+        FROM users u
+        INNER JOIN orders o ON ${orderJoinCond}
+        WHERE u.id = ?
+        LIMIT 1
+    `;
+    db.query(sql, [req.userId, userId], (err, results) => {
+        if (err) return res.status(500).json({ message: 'Server error' });
+        if (results.length === 0) return res.status(404).json({ message: 'User not found or no order relationship' });
+        res.json({ user: { ...results[0], last_message: null } });
+    });
+});
+
 app.get('/api/chat/search-users', verifyToken, (req, res) => {
     const { query } = req.query;
     if (!query) return res.json({ users: [] });
@@ -1489,6 +1529,93 @@ app.post('/api/chat/:userId', verifyToken, (req, res) => {
     });
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅ Server is running on port ${PORT}`);
+// ═══════════════════════════════════════════════════════════════
+// SOCKET.IO — REAL-TIME CHAT
+// ═══════════════════════════════════════════════════════════════
+
+// Track online users: userId → Set of socketIds
+const onlineUsers = new Map();
+
+io.use((socket, next) => {
+    // Authenticate socket using JWT from cookie or handshake auth
+    const token = socket.handshake.auth?.token ||
+                  socket.handshake.headers?.cookie?.split(';')
+                      .find(c => c.trim().startsWith('token='))?.split('=')[1];
+    if (!token) return next(new Error('Not authenticated'));
+
+    jwt.verify(token, JWT_SECRET, (err, decoded) => {
+        if (err) return next(new Error('Invalid token'));
+        db.query('SELECT id, full_name, role FROM users WHERE id = ?', [decoded.id], (dbErr, rows) => {
+            if (dbErr || rows.length === 0) return next(new Error('User not found'));
+            socket.userId   = rows[0].id;
+            socket.userRole = rows[0].role;
+            socket.userName = rows[0].full_name;
+            next();
+        });
+    });
+});
+
+io.on('connection', (socket) => {
+    const userId = socket.userId;
+    console.log(`🔌 Socket connected: user ${userId} (${socket.userName})`);
+
+    // Join personal room so we can target this user precisely
+    socket.join(`user_${userId}`);
+
+    // Track online status
+    if (!onlineUsers.has(userId)) onlineUsers.set(userId, new Set());
+    onlineUsers.get(userId).add(socket.id);
+    io.emit('online_users', [...onlineUsers.keys()]);
+
+    // ── Send a message in real-time + persist to MySQL ──────────
+    socket.on('send_message', ({ receiverId, message }) => {
+        if (!receiverId || !message?.trim()) return;
+
+        const text = message.trim();
+        const sql = 'INSERT INTO messages (sender_id, receiver_id, message) VALUES (?, ?, ?)';
+
+        db.query(sql, [userId, receiverId, text], (err, result) => {
+            if (err) {
+                console.error('❌ Message save error:', err.message);
+                socket.emit('message_error', { error: 'Failed to save message' });
+                return;
+            }
+
+            db.query('SELECT * FROM messages WHERE id = ?', [result.insertId], (err2, rows) => {
+                if (err2 || rows.length === 0) return;
+                const savedMsg = rows[0];
+
+                // Emit to sender (confirmation)
+                socket.emit('receive_message', savedMsg);
+
+                // Emit to receiver's room (real-time delivery)
+                socket.to(`user_${receiverId}`).emit('receive_message', savedMsg);
+
+                console.log(`💬 Message ${savedMsg.id}: user ${userId} → user ${receiverId}`);
+            });
+        });
+    });
+
+    // ── Typing indicators ────────────────────────────────────────
+    socket.on('typing_start', ({ receiverId }) => {
+        socket.to(`user_${receiverId}`).emit('typing_start', { senderId: userId });
+    });
+    socket.on('typing_stop', ({ receiverId }) => {
+        socket.to(`user_${receiverId}`).emit('typing_stop', { senderId: userId });
+    });
+
+    // ── Disconnect ───────────────────────────────────────────────
+    socket.on('disconnect', () => {
+        const set = onlineUsers.get(userId);
+        if (set) {
+            set.delete(socket.id);
+            if (set.size === 0) onlineUsers.delete(userId);
+        }
+        io.emit('online_users', [...onlineUsers.keys()]);
+        console.log(`🔌 Socket disconnected: user ${userId}`);
+    });
+});
+
+httpServer.listen(PORT, '0.0.0.0', () => {
+    console.log(`✅ Server is running on port ${PORT} (HTTP + Socket.IO)`);
 });
