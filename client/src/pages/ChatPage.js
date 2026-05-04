@@ -29,6 +29,29 @@ function getCookie(name) {
   return document.cookie.split(';').map(c => c.trim()).find(c => c.startsWith(name + '='))?.split('=')[1] || null;
 }
 
+/* ── helper: format a date label for chat separators ── */
+function formatDateLabel(dateStr) {
+  const d = new Date(dateStr);
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+
+  const sameDay = (a, b) =>
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate();
+
+  if (sameDay(d, today)) return 'Today';
+  if (sameDay(d, yesterday)) return 'Yesterday';
+  return d.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+/* ── helper: get YYYY-MM-DD key from a date string ── */
+function dayKey(dateStr) {
+  const d = new Date(dateStr);
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+
 const ChatPage = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -48,6 +71,8 @@ const ChatPage = () => {
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [typingUsers, setTypingUsers] = useState({});
+  const [activeMenu, setActiveMenu] = useState(null); // msg id with open menu
+  const [editingMsg, setEditingMsg] = useState(null);  // { id, text }
 
   const messagesEndRef = useRef(null);
   const autoOpenedRef = useRef(null);
@@ -88,13 +113,21 @@ const ChatPage = () => {
         ((msg.sender_id === currentUser.id) || (msg.receiver_id === currentUser.id));
       if (isRelevant) {
         setMessages(prev => {
-          // Avoid duplicates (optimistic + real)
           if (prev.find(m => m.id === msg.id)) return prev;
           return [...prev, msg];
         });
       }
-      // Refresh sidebar to update last message
       fetchChatUsers(false);
+    });
+
+    /* Real-time delete */
+    sock.on('message_deleted', ({ id }) => {
+      setMessages(prev => prev.filter(m => m.id !== id));
+    });
+
+    /* Real-time edit */
+    sock.on('message_updated', (updated) => {
+      setMessages(prev => prev.map(m => m.id === updated.id ? updated : m));
     });
 
     /* Online users list */
@@ -211,15 +244,9 @@ const ChatPage = () => {
   const handleSend = (e) => {
     e.preventDefault();
     if (!newMessage.trim() || !selectedUser || !socket) return;
-
-    // Stop typing indicator
     socket.emit('typing_stop', { receiverId: selectedUser.id });
     clearTimeout(typingTimerRef.current);
-
-    socket.emit('send_message', {
-      receiverId: selectedUser.id,
-      message: newMessage.trim(),
-    });
+    socket.emit('send_message', { receiverId: selectedUser.id, message: newMessage.trim() });
     setNewMessage('');
   };
 
@@ -232,6 +259,31 @@ const ChatPage = () => {
     typingTimerRef.current = setTimeout(() => {
       socket.emit('typing_stop', { receiverId: selectedUser.id });
     }, 1500);
+  };
+
+  /* ── Delete message ── */
+  const handleDeleteMsg = async (msgId) => {
+    setActiveMenu(null);
+    await fetch(`${API_URL}/api/chat/message/${msgId}`, { method: 'DELETE', credentials: 'include' });
+  };
+
+  /* ── Start editing ── */
+  const handleStartEdit = (msg) => {
+    setActiveMenu(null);
+    setEditingMsg({ id: msg.id, text: msg.message });
+  };
+
+  /* ── Submit edit ── */
+  const handleSubmitEdit = async (e) => {
+    e.preventDefault();
+    if (!editingMsg || !editingMsg.text.trim()) return;
+    await fetch(`${API_URL}/api/chat/message/${editingMsg.id}`, {
+      method: 'PUT',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: editingMsg.text.trim() }),
+    });
+    setEditingMsg(null);
   };
 
   /* ── Nav ── */
@@ -388,18 +440,73 @@ const ChatPage = () => {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {messages.map((msg) => {
+                    {messages.map((msg, idx) => {
                       const isMine = msg.sender_id === user.id;
+                      const menuOpen = activeMenu === msg.id;
+                      const currentDay = dayKey(msg.created_at);
+                      const prevDay = idx > 0 ? dayKey(messages[idx - 1].created_at) : null;
+                      const showDateSep = idx === 0 || currentDay !== prevDay;
                       return (
-                        <motion.div key={msg.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-                          className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
-                          <div className={`max-w-[75%] rounded-2xl px-4 py-2.5 shadow-sm ${isMine ? 'bg-indigo-600 text-white rounded-br-none' : 'bg-white border border-stone-100 text-stone-800 rounded-bl-none'}`}>
-                            <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.message}</p>
-                            <p className={`text-[9px] mt-1 text-right ${isMine ? 'text-indigo-200' : 'text-stone-400'}`}>
-                              {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            </p>
-                          </div>
-                        </motion.div>
+                        <React.Fragment key={msg.id}>
+                          {/* ── Date separator ── */}
+                          {showDateSep && (
+                            <div className="flex items-center gap-3 my-4">
+                              <div className="flex-1 h-px bg-stone-200" />
+                              <span className="text-[10px] font-bold text-stone-400 bg-stone-100 px-3 py-1 rounded-full whitespace-nowrap tracking-wide">
+                                {formatDateLabel(msg.created_at)}
+                              </span>
+                              <div className="flex-1 h-px bg-stone-200" />
+                            </div>
+                          )}
+                          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                            className={`flex ${isMine ? 'justify-end' : 'justify-start'} relative`}
+                            onClick={() => setActiveMenu(null)}>
+                            <div
+                              className={`relative max-w-[75%] rounded-2xl px-4 py-2.5 shadow-sm cursor-pointer select-none
+                                ${isMine ? 'bg-indigo-600 text-white rounded-br-none' : 'bg-white border border-stone-100 text-stone-800 rounded-bl-none'}`}
+                              onClick={(e) => { e.stopPropagation(); if (isMine) setActiveMenu(menuOpen ? null : msg.id); }}
+                            >
+                              {editingMsg?.id === msg.id ? (
+                                <form onSubmit={handleSubmitEdit} className="flex gap-2 items-center" onClick={e => e.stopPropagation()}>
+                                  <input
+                                    autoFocus
+                                    value={editingMsg.text}
+                                    onChange={e => setEditingMsg(prev => ({ ...prev, text: e.target.value }))}
+                                    className="flex-1 bg-indigo-500 text-white placeholder-indigo-300 rounded-lg px-2 py-1 text-sm outline-none border border-indigo-400 min-w-[120px]"
+                                  />
+                                  <button type="submit" className="text-xs bg-white text-indigo-700 font-bold px-2 py-1 rounded-lg">Save</button>
+                                  <button type="button" onClick={() => setEditingMsg(null)} className="text-xs text-indigo-200">✕</button>
+                                </form>
+                              ) : (
+                                <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.message}</p>
+                              )}
+                              <p className={`text-[9px] mt-1 text-right ${isMine ? 'text-indigo-200' : 'text-stone-400'}`}>
+                                {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                {msg.is_edited ? ' · edited' : ''}
+                              </p>
+                              {/* Context menu */}
+                              {isMine && menuOpen && (
+                                <div
+                                  className="absolute bottom-full mb-1 right-0 bg-white rounded-xl shadow-xl border border-stone-100 z-50 overflow-hidden min-w-[130px]"
+                                  onClick={e => e.stopPropagation()}
+                                >
+                                  <button
+                                    onClick={() => handleStartEdit(msg)}
+                                    className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-stone-700 hover:bg-indigo-50 hover:text-indigo-600 transition font-medium"
+                                  >
+                                    ✏️ Edit
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteMsg(msg.id)}
+                                    className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 transition font-medium"
+                                  >
+                                    🗑️ Delete
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </motion.div>
+                        </React.Fragment>
                       );
                     })}
                     <AnimatePresence>

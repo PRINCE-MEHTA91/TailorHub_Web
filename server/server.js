@@ -240,7 +240,13 @@ db.getConnection((connErr, connection) => {
     `;
     db.query(createMessagesTable, (tableErr) => {
         if (tableErr) console.error('Error creating messages table:', tableErr.message);
-        else console.log('✅ messages table ready');
+        else {
+            console.log('✅ messages table ready');
+            // Soft-migrate: add is_edited column if not exists
+            db.query('ALTER TABLE messages ADD COLUMN is_edited TINYINT(1) NOT NULL DEFAULT 0', (err) => {
+                if (err && err.code !== 'ER_DUP_FIELDNAME') console.warn('messages is_edited migration warning:', err.message);
+            });
+        }
     });
 });
 
@@ -1525,6 +1531,49 @@ app.post('/api/chat/:userId', verifyToken, (req, res) => {
         db.query('SELECT * FROM messages WHERE id = ?', [result.insertId], (err2, results) => {
             if (err2 || results.length === 0) return res.status(500).json({ message: 'Server error' });
             res.status(201).json({ message: results[0] });
+        });
+    });
+});
+
+// ── DELETE /api/chat/message/:id — Delete own message ──────────────────────
+app.delete('/api/chat/message/:id', verifyToken, (req, res) => {
+    const { id } = req.params;
+    // First verify the message belongs to the requester
+    db.query('SELECT sender_id, receiver_id FROM messages WHERE id = ?', [id], (err, rows) => {
+        if (err) return res.status(500).json({ message: 'Server error' });
+        if (rows.length === 0) return res.status(404).json({ message: 'Message not found' });
+        if (rows[0].sender_id !== req.userId) return res.status(403).json({ message: 'Not allowed' });
+        const receiverId = rows[0].receiver_id;
+        db.query('DELETE FROM messages WHERE id = ?', [id], (err2) => {
+            if (err2) return res.status(500).json({ message: 'Server error' });
+            // Real-time: notify both parties via Socket.IO
+            io.to(`user_${req.userId}`).emit('message_deleted', { id: Number(id) });
+            io.to(`user_${receiverId}`).emit('message_deleted', { id: Number(id) });
+            res.json({ message: 'Message deleted' });
+        });
+    });
+});
+
+// ── PUT /api/chat/message/:id — Edit own message ────────────────────────────
+app.put('/api/chat/message/:id', verifyToken, (req, res) => {
+    const { id } = req.params;
+    const { message } = req.body;
+    if (!message || !message.trim()) return res.status(400).json({ message: 'Message is required' });
+    db.query('SELECT sender_id, receiver_id FROM messages WHERE id = ?', [id], (err, rows) => {
+        if (err) return res.status(500).json({ message: 'Server error' });
+        if (rows.length === 0) return res.status(404).json({ message: 'Message not found' });
+        if (rows[0].sender_id !== req.userId) return res.status(403).json({ message: 'Not allowed' });
+        const receiverId = rows[0].receiver_id;
+        db.query('UPDATE messages SET message = ?, is_edited = 1 WHERE id = ?', [message.trim(), id], (err2) => {
+            if (err2) return res.status(500).json({ message: 'Server error' });
+            db.query('SELECT * FROM messages WHERE id = ?', [id], (err3, results) => {
+                if (err3 || results.length === 0) return res.status(500).json({ message: 'Server error' });
+                const updated = results[0];
+                // Real-time: notify both parties
+                io.to(`user_${req.userId}`).emit('message_updated', updated);
+                io.to(`user_${receiverId}`).emit('message_updated', updated);
+                res.json({ message: updated });
+            });
         });
     });
 });
