@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import Header from '../components/Header';
 import { io } from 'socket.io-client';
+import EmojiPicker from 'emoji-picker-react';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
 
@@ -73,6 +74,8 @@ const ChatPage = () => {
   const [typingUsers, setTypingUsers] = useState({});
   const [activeMenu, setActiveMenu] = useState(null); // msg id with open menu
   const [editingMsg, setEditingMsg] = useState(null);  // { id, text }
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const emojiPickerRef = useRef(null);
 
   const messagesEndRef = useRef(null);
   const autoOpenedRef = useRef(null);
@@ -83,6 +86,18 @@ const ChatPage = () => {
   /* ── scroll ── */
   const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   useEffect(() => { scrollToBottom(); }, [messages]);
+
+  /* ── Close emoji picker on outside click ── */
+  useEffect(() => {
+    if (!showEmojiPicker) return;
+    const handler = (e) => {
+      if (emojiPickerRef.current && !emojiPickerRef.current.contains(e.target)) {
+        setShowEmojiPicker(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showEmojiPicker]);
 
   /* ── Socket.IO connection ── */
   useEffect(() => {
@@ -528,19 +543,61 @@ const ChatPage = () => {
 
               {/* Input */}
               <div className="p-4 bg-white border-t border-stone-100">
-                <form onSubmit={handleSend} className="flex gap-2">
-                  <input
-                    type="text"
-                    value={newMessage}
-                    onChange={handleTyping}
-                    placeholder="Type a message..."
-                    className="flex-1 border border-stone-200 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 transition bg-stone-50"
-                  />
-                  <button type="submit" disabled={!newMessage.trim() || !connected}
-                    className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-2xl px-6 font-bold flex items-center justify-center transition shadow-md shadow-indigo-200">
-                    ➤
-                  </button>
-                </form>
+                {/* Emoji picker popup */}
+                <div className="relative" ref={emojiPickerRef}>
+                  <AnimatePresence>
+                    {showEmojiPicker && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                        transition={{ duration: 0.15 }}
+                        className="absolute bottom-full mb-2 left-0 z-50 shadow-2xl rounded-2xl overflow-hidden"
+                      >
+                        <EmojiPicker
+                          onEmojiClick={(emojiData) => {
+                            setNewMessage(prev => prev + emojiData.emoji);
+                            setShowEmojiPicker(false);
+                          }}
+                          skinTonesDisabled
+                          searchDisabled={false}
+                          height={380}
+                          width={320}
+                          previewConfig={{ showPreview: false }}
+                        />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  <form onSubmit={handleSend} className="flex gap-2 items-center">
+                    {/* Emoji toggle button */}
+                    <button
+                      type="button"
+                      onClick={() => setShowEmojiPicker(prev => !prev)}
+                      className={`flex-shrink-0 w-10 h-10 flex items-center justify-center rounded-full text-xl transition-all ${
+                        showEmojiPicker
+                          ? 'bg-indigo-100 text-indigo-600 scale-110'
+                          : 'hover:bg-stone-100 text-stone-400 hover:text-stone-600'
+                      }`}
+                      title="Emoji"
+                    >
+                      😊
+                    </button>
+
+                    <input
+                      type="text"
+                      value={newMessage}
+                      onChange={handleTyping}
+                      onFocus={() => setShowEmojiPicker(false)}
+                      placeholder="Type a message..."
+                      className="flex-1 border border-stone-200 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 transition bg-stone-50"
+                    />
+                    <button type="submit" disabled={!newMessage.trim() || !connected}
+                      className="flex-shrink-0 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-2xl px-5 py-3 font-bold flex items-center justify-center transition shadow-md shadow-indigo-200">
+                      ➤
+                    </button>
+                  </form>
+                </div>
                 {!connected && <p className="text-xs text-amber-600 mt-1.5 text-center">⚠️ Reconnecting to real-time server...</p>}
               </div>
             </>
