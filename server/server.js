@@ -246,6 +246,16 @@ db.getConnection((connErr, connection) => {
             db.query('ALTER TABLE messages ADD COLUMN is_edited TINYINT(1) NOT NULL DEFAULT 0', (err) => {
                 if (err && err.code !== 'ER_DUP_FIELDNAME') console.warn('messages is_edited migration warning:', err.message);
             });
+            // Soft-migrate: add file attachment columns
+            db.query('ALTER TABLE messages ADD COLUMN file_url TEXT DEFAULT NULL', (err) => {
+                if (err && err.code !== 'ER_DUP_FIELDNAME') console.warn('messages file_url migration warning:', err.message);
+            });
+            db.query('ALTER TABLE messages ADD COLUMN file_type VARCHAR(50) DEFAULT NULL', (err) => {
+                if (err && err.code !== 'ER_DUP_FIELDNAME') console.warn('messages file_type migration warning:', err.message);
+            });
+            db.query('ALTER TABLE messages ADD COLUMN file_name VARCHAR(255) DEFAULT NULL', (err) => {
+                if (err && err.code !== 'ER_DUP_FIELDNAME') console.warn('messages file_name migration warning:', err.message);
+            });
         }
     });
 });
@@ -482,6 +492,39 @@ const upload = multer({
         cb(null, true);
     }
 });
+
+// ── Chat file upload multer (images + documents) ─────────────────────────────
+const chatFileStorage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        const dir = path.join(__dirname, 'uploads', 'chat');
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        cb(null, dir);
+    },
+    filename: (req, file, cb) => {
+        const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
+        cb(null, 'chat_' + req.userId + '_' + Date.now() + '_' + safeName);
+    }
+});
+const ALLOWED_CHAT_TYPES = [
+    'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml',
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'text/plain',
+];
+const chatUpload = multer({
+    storage: chatFileStorage,
+    limits: { fileSize: 15 * 1024 * 1024 }, // 15 MB max
+    fileFilter: (req, file, cb) => {
+        if (!ALLOWED_CHAT_TYPES.includes(file.mimetype)) {
+            return cb(new Error('File type not allowed. Allowed: images, PDF, Word, Excel, TXT.'));
+        }
+        cb(null, true);
+    }
+});
+
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Handle multer errors (file too large, wrong type, etc.)
@@ -1449,16 +1492,20 @@ app.get('/api/chat/users', verifyToken, (req, res) => {
     const orderJoinCond = isTailor ? 'o.tailor_id = ? AND o.customer_id = u.id' : 'o.customer_id = ? AND o.tailor_id = u.id';
     
     const sql = `
-        SELECT DISTINCT u.id, u.full_name, u.role, 
+        SELECT DISTINCT u.id, u.full_name, u.role,
+            COALESCE(tp.profile_img, cp.profile_img) AS profile_img,
             (SELECT message FROM messages WHERE (sender_id = u.id AND receiver_id = ?) OR (sender_id = ? AND receiver_id = u.id) ORDER BY created_at DESC LIMIT 1) as last_message,
             (SELECT created_at FROM messages WHERE (sender_id = u.id AND receiver_id = ?) OR (sender_id = ? AND receiver_id = u.id) ORDER BY created_at DESC LIMIT 1) as last_message_time
         FROM users u
         INNER JOIN orders o ON ${orderJoinCond}
+        LEFT JOIN tailor_profiles tp ON tp.user_id = u.id AND u.role = 'tailor'
+        LEFT JOIN customer_profiles cp ON cp.user_id = u.id AND u.role = 'customer'
         ORDER BY last_message_time DESC, u.full_name ASC
     `;
     db.query(sql, [req.userId, req.userId, req.userId, req.userId, req.userId], (err, results) => {
         if (err) return res.status(500).json({ message: 'Server error', error: err.message });
-        res.json({ users: results });
+        const users = results.map(u => ({ ...u, profile_img: normalizeImgPath(u.profile_img) }));
+        res.json({ users });
     });
 });
 
@@ -1472,16 +1519,20 @@ app.get('/api/chat/user/:userId', verifyToken, (req, res) => {
 
     // Only return the user if there's an order relationship (security check)
     const sql = `
-        SELECT DISTINCT u.id, u.full_name, u.role
+        SELECT DISTINCT u.id, u.full_name, u.role,
+            COALESCE(tp.profile_img, cp.profile_img) AS profile_img
         FROM users u
         INNER JOIN orders o ON ${orderJoinCond}
+        LEFT JOIN tailor_profiles tp ON tp.user_id = u.id AND u.role = 'tailor'
+        LEFT JOIN customer_profiles cp ON cp.user_id = u.id AND u.role = 'customer'
         WHERE u.id = ?
         LIMIT 1
     `;
     db.query(sql, [req.userId, userId], (err, results) => {
         if (err) return res.status(500).json({ message: 'Server error' });
         if (results.length === 0) return res.status(404).json({ message: 'User not found or no order relationship' });
-        res.json({ user: { ...results[0], last_message: null } });
+        const u = results[0];
+        res.json({ user: { ...u, profile_img: normalizeImgPath(u.profile_img), last_message: null } });
     });
 });
 
@@ -1493,15 +1544,19 @@ app.get('/api/chat/search-users', verifyToken, (req, res) => {
     const orderJoinCond = isTailor ? 'o.tailor_id = ? AND o.customer_id = u.id' : 'o.customer_id = ? AND o.tailor_id = u.id';
     
     const sql = `
-        SELECT DISTINCT u.id, u.full_name, u.email, u.role 
+        SELECT DISTINCT u.id, u.full_name, u.email, u.role,
+            COALESCE(tp.profile_img, cp.profile_img) AS profile_img
         FROM users u
         INNER JOIN orders o ON ${orderJoinCond}
+        LEFT JOIN tailor_profiles tp ON tp.user_id = u.id AND u.role = 'tailor'
+        LEFT JOIN customer_profiles cp ON cp.user_id = u.id AND u.role = 'customer'
         WHERE u.full_name LIKE ? OR u.email LIKE ?
         LIMIT 10
     `;
     db.query(sql, [req.userId, `%${query}%`, `%${query}%`], (err, results) => {
         if (err) return res.status(500).json({ message: 'Server error' });
-        res.json({ users: results });
+        const users = results.map(u => ({ ...u, profile_img: normalizeImgPath(u.profile_img) }));
+        res.json({ users });
     });
 });
 
@@ -1516,6 +1571,16 @@ app.get('/api/chat/:userId', verifyToken, (req, res) => {
         if (err) return res.status(500).json({ message: 'Server error' });
         res.json({ messages: results });
     });
+});
+
+// ── POST /api/chat/upload — Upload a file attachment for chat ─────────────────
+// MUST be defined BEFORE the wildcard POST /api/chat/:userId to avoid route collision
+app.post('/api/chat/upload', verifyToken, chatUpload.single('file'), handleUploadError, (req, res) => {
+    if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
+    const fileUrl = `/uploads/chat/${req.file.filename}`;
+    const fileType = req.file.mimetype;
+    const fileName = req.file.originalname;
+    res.json({ fileUrl, fileType, fileName });
 });
 
 app.post('/api/chat/:userId', verifyToken, (req, res) => {
@@ -1617,13 +1682,15 @@ io.on('connection', (socket) => {
     io.emit('online_users', [...onlineUsers.keys()]);
 
     // ── Send a message in real-time + persist to MySQL ──────────
-    socket.on('send_message', ({ receiverId, message }) => {
-        if (!receiverId || !message?.trim()) return;
+    socket.on('send_message', ({ receiverId, message, fileUrl, fileType, fileName }) => {
+        const hasText  = message && message.trim();
+        const hasFile  = fileUrl && fileType;
+        if (!receiverId || (!hasText && !hasFile)) return;
 
-        const text = message.trim();
-        const sql = 'INSERT INTO messages (sender_id, receiver_id, message) VALUES (?, ?, ?)';
+        const text = hasText ? message.trim() : (fileName || 'Attachment');
+        const sql = 'INSERT INTO messages (sender_id, receiver_id, message, file_url, file_type, file_name) VALUES (?, ?, ?, ?, ?, ?)';
 
-        db.query(sql, [userId, receiverId, text], (err, result) => {
+        db.query(sql, [userId, receiverId, text, fileUrl || null, fileType || null, fileName || null], (err, result) => {
             if (err) {
                 console.error('❌ Message save error:', err.message);
                 socket.emit('message_error', { error: 'Failed to save message' });
@@ -1640,7 +1707,7 @@ io.on('connection', (socket) => {
                 // Emit to receiver's room (real-time delivery)
                 socket.to(`user_${receiverId}`).emit('receive_message', savedMsg);
 
-                console.log(`💬 Message ${savedMsg.id}: user ${userId} → user ${receiverId}`);
+                console.log(`💬 Message ${savedMsg.id}: user ${userId} → user ${receiverId}${hasFile ? ' [file: ' + fileName + ']' : ''}`);
             });
         });
     });

@@ -53,6 +53,36 @@ function dayKey(dateStr) {
   return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 }
 
+/* ── UserAvatar: shows profile image or initials fallback ── */
+function UserAvatar({ user, size = 'md', isOnlineDot = false, onlineClass = '' }) {
+  const sizeClasses = size === 'lg' ? 'w-12 h-12 text-lg' : size === 'sm' ? 'w-8 h-8 text-sm' : 'w-10 h-10 text-base';
+  const dotSize     = size === 'lg' ? 'w-3.5 h-3.5' : 'w-2.5 h-2.5';
+  const imgSrc = user?.profile_img
+    ? (user.profile_img.startsWith('http') ? user.profile_img : `${API_URL}${user.profile_img}`)
+    : null;
+
+  return (
+    <div className="relative flex-shrink-0">
+      {imgSrc ? (
+        <img
+          src={imgSrc}
+          alt={user?.full_name || 'User'}
+          className={`${sizeClasses} rounded-full object-cover border-2 border-white shadow-sm`}
+          onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
+        />
+      ) : null}
+      <div
+        className={`${sizeClasses} rounded-full bg-gradient-to-br from-indigo-100 to-purple-100 text-indigo-800 font-black flex items-center justify-center border-2 border-white shadow-sm ${imgSrc ? 'hidden' : ''}`}
+      >
+        {user?.full_name?.charAt(0).toUpperCase()}
+      </div>
+      {isOnlineDot && (
+        <div className={`absolute bottom-0 right-0 ${dotSize} rounded-full border-2 border-white ${onlineClass}`} />
+      )}
+    </div>
+  );
+}
+
 const ChatPage = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -75,7 +105,10 @@ const ChatPage = () => {
   const [activeMenu, setActiveMenu] = useState(null); // msg id with open menu
   const [editingMsg, setEditingMsg] = useState(null);  // { id, text }
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [attachedFile, setAttachedFile] = useState(null); // { file, preview, name, type }
+  const [uploadingFile, setUploadingFile] = useState(false);
   const emojiPickerRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   const messagesEndRef = useRef(null);
   const autoOpenedRef = useRef(null);
@@ -255,13 +288,64 @@ const ChatPage = () => {
     }
   };
 
-  /* ── Send message via Socket.IO ── */
-  const handleSend = (e) => {
+  /* ── Handle file selection ── */
+  const handleFileSelect = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const isImage = file.type.startsWith('image/');
+    const preview = isImage ? URL.createObjectURL(file) : null;
+    setAttachedFile({ file, preview, name: file.name, type: file.type });
+    // Reset the input so the same file can be re-selected
+    e.target.value = '';
+  };
+
+  /* ── Remove attached file ── */
+  const removeAttachedFile = () => {
+    if (attachedFile?.preview) URL.revokeObjectURL(attachedFile.preview);
+    setAttachedFile(null);
+  };
+
+  /* ── Send message via Socket.IO (with optional file) ── */
+  const handleSend = async (e) => {
     e.preventDefault();
-    if (!newMessage.trim() || !selectedUser || !socket) return;
+    if ((!newMessage.trim() && !attachedFile) || !selectedUser || !socket) return;
+
     socket.emit('typing_stop', { receiverId: selectedUser.id });
     clearTimeout(typingTimerRef.current);
-    socket.emit('send_message', { receiverId: selectedUser.id, message: newMessage.trim() });
+
+    if (attachedFile) {
+      setUploadingFile(true);
+      try {
+        const formData = new FormData();
+        formData.append('file', attachedFile.file);
+        const res = await fetch(`${API_URL}/api/chat/upload`, {
+          method: 'POST',
+          credentials: 'include',
+          body: formData,
+        });
+        if (!res.ok) {
+          const err = await res.json();
+          alert('Upload failed: ' + (err.message || 'Unknown error'));
+          setUploadingFile(false);
+          return;
+        }
+        const { fileUrl, fileType, fileName } = await res.json();
+        socket.emit('send_message', {
+          receiverId: selectedUser.id,
+          message: newMessage.trim() || '',
+          fileUrl,
+          fileType,
+          fileName,
+        });
+        removeAttachedFile();
+      } catch (err) {
+        alert('Upload failed. Please try again.');
+      } finally {
+        setUploadingFile(false);
+      }
+    } else {
+      socket.emit('send_message', { receiverId: selectedUser.id, message: newMessage.trim() });
+    }
     setNewMessage('');
   };
 
@@ -352,12 +436,12 @@ const ChatPage = () => {
                 {searchResults.map(u => (
                   <button key={u.id} onClick={() => selectUser(u)}
                     className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-stone-50 transition text-left">
-                    <div className="relative">
-                      <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-700 font-bold flex items-center justify-center flex-shrink-0">
-                        {u.full_name?.charAt(0).toUpperCase()}
-                      </div>
-                      {isOnline(u.id) && <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white" />}
-                    </div>
+                    <UserAvatar
+                      user={u}
+                      size="sm"
+                      isOnlineDot={isOnline(u.id)}
+                      onlineClass={isOnline(u.id) ? 'bg-green-500' : ''}
+                    />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-bold text-stone-800 truncate">{u.full_name}</p>
                       <p className="text-xs text-stone-500 capitalize">{u.role}</p>
@@ -384,12 +468,12 @@ const ChatPage = () => {
                 {users.map(u => (
                   <button key={u.id} onClick={() => selectUser(u)}
                     className={`w-full flex items-center gap-3 p-4 transition text-left ${selectedUser?.id === u.id ? 'bg-indigo-50 border-r-2 border-indigo-500' : 'hover:bg-stone-50'}`}>
-                    <div className="relative flex-shrink-0">
-                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-100 to-purple-100 text-indigo-800 font-black text-lg flex items-center justify-center border-2 border-white shadow-sm">
-                        {u.full_name?.charAt(0).toUpperCase()}
-                      </div>
-                      <div className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white ${isOnline(u.id) ? 'bg-green-500' : 'bg-stone-300'}`} />
-                    </div>
+                    <UserAvatar
+                      user={u}
+                      size="lg"
+                      isOnlineDot={true}
+                      onlineClass={isOnline(u.id) ? 'bg-green-500' : 'bg-stone-300'}
+                    />
                     <div className="flex-1 min-w-0">
                       <div className="flex justify-between items-baseline mb-0.5">
                         <p className="text-sm font-bold text-stone-800 truncate">{u.full_name}</p>
@@ -424,12 +508,12 @@ const ChatPage = () => {
               {/* Chat Header */}
               <div className="px-6 py-4 border-b border-stone-100 flex items-center gap-4 bg-white shadow-sm">
                 <button onClick={() => setSelectedUser(null)} className="md:hidden w-8 h-8 flex items-center justify-center rounded-full hover:bg-stone-100 text-stone-600">←</button>
-                <div className="relative">
-                  <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-700 font-bold flex items-center justify-center">
-                    {selectedUser.full_name?.charAt(0).toUpperCase()}
-                  </div>
-                  <div className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white ${isOnline(selectedUser.id) ? 'bg-green-500' : 'bg-stone-300'}`} />
-                </div>
+                <UserAvatar
+                  user={selectedUser}
+                  size="md"
+                  isOnlineDot={true}
+                  onlineClass={isOnline(selectedUser.id) ? 'bg-green-500' : 'bg-stone-300'}
+                />
                 <div className="flex-1">
                   <h3 className="font-black text-stone-800">{selectedUser.full_name}</h3>
                   <p className={`text-[10px] font-bold uppercase tracking-wider ${isOnline(selectedUser.id) ? 'text-green-600' : 'text-stone-400'}`}>
@@ -493,7 +577,50 @@ const ChatPage = () => {
                                   <button type="button" onClick={() => setEditingMsg(null)} className="text-xs text-indigo-200">✕</button>
                                 </form>
                               ) : (
-                                <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.message}</p>
+                                <>
+                                  {/* ── File / Image Attachment ── */}
+                                  {msg.file_url && (
+                                    <div className="mb-1.5">
+                                      {msg.file_type?.startsWith('image/') ? (
+                                        <a href={`${API_URL}${msg.file_url}`} target="_blank" rel="noreferrer">
+                                          <img
+                                            src={`${API_URL}${msg.file_url}`}
+                                            alt={msg.file_name || 'Image'}
+                                            className="max-w-[220px] max-h-[200px] rounded-xl object-cover border border-white/20 shadow cursor-pointer hover:opacity-90 transition"
+                                          />
+                                        </a>
+                                      ) : (
+                                        <a
+                                          href={`${API_URL}${msg.file_url}`}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          download={msg.file_name}
+                                          className={`flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium transition ${
+                                            isMine
+                                              ? 'bg-indigo-500 hover:bg-indigo-400 text-white'
+                                              : 'bg-stone-100 hover:bg-stone-200 text-stone-700'
+                                          }`}
+                                        >
+                                          <span className="text-lg">
+                                            {msg.file_type === 'application/pdf' ? '📄' :
+                                             msg.file_type?.includes('word') ? '📝' :
+                                             msg.file_type?.includes('excel') || msg.file_type?.includes('sheet') ? '📊' :
+                                             '📎'}
+                                          </span>
+                                          <span className="truncate max-w-[150px]">{msg.file_name || 'Attachment'}</span>
+                                          <span className="text-xs opacity-70 flex-shrink-0">↓</span>
+                                        </a>
+                                      )}
+                                    </div>
+                                  )}
+                                  {/* Text part (caption or standalone message) */}
+                                  {msg.message && !(!msg.file_url) && msg.file_url && !msg.message.match(/^Attachment$|^[a-zA-Z0-9._\-\s]+\.[a-zA-Z]{2,5}$/) && (
+                                    <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.message}</p>
+                                  )}
+                                  {!msg.file_url && (
+                                    <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.message}</p>
+                                  )}
+                                </>
                               )}
                               <p className={`text-[9px] mt-1 text-right ${isMine ? 'text-indigo-200' : 'text-stone-400'}`}>
                                 {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -543,6 +670,30 @@ const ChatPage = () => {
 
               {/* Input */}
               <div className="p-4 bg-white border-t border-stone-100">
+                {/* Attached file preview */}
+                {attachedFile && (
+                  <div className="mb-3 flex items-center gap-3 p-3 bg-indigo-50 rounded-2xl border border-indigo-100">
+                    {attachedFile.preview ? (
+                      <img src={attachedFile.preview} alt="preview" className="w-12 h-12 rounded-xl object-cover border border-indigo-200" />
+                    ) : (
+                      <div className="w-12 h-12 rounded-xl bg-indigo-100 flex items-center justify-center text-2xl">
+                        {attachedFile.type === 'application/pdf' ? '📄' :
+                         attachedFile.type?.includes('word') ? '📝' :
+                         attachedFile.type?.includes('excel') || attachedFile.type?.includes('sheet') ? '📊' : '📎'}
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-indigo-800 truncate">{attachedFile.name}</p>
+                      <p className="text-xs text-indigo-500">{(attachedFile.file.size / 1024).toFixed(1)} KB</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={removeAttachedFile}
+                      className="w-7 h-7 flex items-center justify-center rounded-full bg-white text-stone-400 hover:text-red-500 hover:bg-red-50 border border-stone-200 transition text-sm flex-shrink-0"
+                    >✕</button>
+                  </div>
+                )}
+
                 {/* Emoji picker popup */}
                 <div className="relative" ref={emojiPickerRef}>
                   <AnimatePresence>
@@ -569,6 +720,16 @@ const ChatPage = () => {
                     )}
                   </AnimatePresence>
 
+                  {/* Hidden file input */}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    id="chat-file-input"
+                    accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
+                    onChange={handleFileSelect}
+                    className="hidden"
+                  />
+
                   <form onSubmit={handleSend} className="flex gap-2 items-center">
                     {/* Emoji toggle button */}
                     <button
@@ -584,17 +745,37 @@ const ChatPage = () => {
                       😊
                     </button>
 
+                    {/* Attachment button */}
+                    <button
+                      type="button"
+                      onClick={() => { setShowEmojiPicker(false); fileInputRef.current?.click(); }}
+                      className={`flex-shrink-0 w-10 h-10 flex items-center justify-center rounded-full text-lg transition-all ${
+                        attachedFile
+                          ? 'bg-indigo-100 text-indigo-600 scale-110'
+                          : 'hover:bg-stone-100 text-stone-400 hover:text-stone-600'
+                      }`}
+                      title="Attach image or document"
+                      disabled={uploadingFile}
+                    >
+                      📎
+                    </button>
+
                     <input
                       type="text"
                       value={newMessage}
                       onChange={handleTyping}
                       onFocus={() => setShowEmojiPicker(false)}
-                      placeholder="Type a message..."
+                      placeholder={attachedFile ? 'Add a caption (optional)...' : 'Type a message...'}
                       className="flex-1 border border-stone-200 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 transition bg-stone-50"
                     />
-                    <button type="submit" disabled={!newMessage.trim() || !connected}
-                      className="flex-shrink-0 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-2xl px-5 py-3 font-bold flex items-center justify-center transition shadow-md shadow-indigo-200">
-                      ➤
+                    <button
+                      type="submit"
+                      disabled={(!newMessage.trim() && !attachedFile) || !connected || uploadingFile}
+                      className="flex-shrink-0 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-2xl px-5 py-3 font-bold flex items-center justify-center transition shadow-md shadow-indigo-200 min-w-[44px]"
+                    >
+                      {uploadingFile
+                        ? <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        : '➤'}
                     </button>
                   </form>
                 </div>
