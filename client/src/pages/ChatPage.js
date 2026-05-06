@@ -397,7 +397,7 @@ const ChatPage = () => {
 
   /* ──────────────────────────── RENDER ──────────────────────────── */
   return (
-    <div className="bg-stone-50 min-h-screen flex flex-col font-inter pb-20">
+    <div className="h-screen overflow-hidden flex flex-col bg-stone-50 font-inter">
       <Header />
 
       {/* Connection status badge */}
@@ -406,7 +406,7 @@ const ChatPage = () => {
         {connected ? 'Connected' : 'Reconnecting...'}
       </div>
 
-      <div className="flex-1 max-w-6xl w-full mx-auto p-4 md:p-6 flex flex-col md:flex-row gap-6 mt-16 lg:mt-20 h-[calc(100vh-80px)]">
+      <div className="flex-1 overflow-hidden max-w-6xl w-full mx-auto px-4 md:px-6 flex flex-col md:flex-row gap-4" style={{ marginTop: '64px', paddingTop: '16px', paddingBottom: '4px', height: 'calc(100vh - 64px - 65px)' }}>
 
         {/* ── Sidebar ── */}
         <div className={`w-full md:w-1/3 bg-white rounded-3xl shadow-sm border border-stone-200 flex flex-col overflow-hidden ${selectedUser ? 'hidden md:flex' : 'flex'}`}>
