@@ -1176,6 +1176,68 @@ app.post('/api/orders', verifyToken, requireRole('tailor'), async (req, res) => 
     }
 });
 
+// ── GET /api/tailor/dashboard-stats — Real-time home tab stats for a tailor ──
+app.get('/api/tailor/dashboard-stats', verifyToken, requireRole('tailor'), async (req, res) => {
+    try {
+        const uid = req.userId;
+
+        // 1. Order counts and earnings in one query
+        const [orderStats] = await db.promise().query(`
+            SELECT
+                COUNT(*) AS total_orders,
+                SUM(CASE WHEN current_status NOT IN ('Completed','Delivered') THEN 1 ELSE 0 END) AS pending_count,
+                SUM(CASE WHEN current_status IN ('Completed','Delivered') THEN 1 ELSE 0 END) AS completed_count,
+                SUM(COALESCE(final_amount, total_amount)) AS total_earnings
+            FROM orders
+            WHERE tailor_id = ?
+        `, [uid]);
+
+        // 2. Tailor profile for completion %
+        const [profileRows] = await db.promise().query(`
+            SELECT tp.phone, tp.shop_name, tp.profile_img, tp.bio, tp.experience,
+                   tp.specialities, tp.timings, tp.city,
+                   u.avg_rating, u.total_reviews
+            FROM users u
+            LEFT JOIN tailor_profiles tp ON tp.user_id = u.id
+            WHERE u.id = ?
+        `, [uid]);
+
+        const profile = profileRows[0] || {};
+
+        // Compute profile completion (out of 8 key fields)
+        const fields = [profile.phone, profile.shop_name, profile.profile_img, profile.bio,
+                        profile.experience, profile.specialities, profile.timings, profile.city];
+        const filled = fields.filter(f => f && f !== '[]' && f !== '{}').length;
+        const profileCompletion = Math.round((filled / fields.length) * 100);
+
+        // 3. Recent 5 orders
+        const [recentOrders] = await db.promise().query(`
+            SELECT o.id, o.product_name, o.current_status, o.delivery_date,
+                   COALESCE(o.final_amount, o.total_amount) AS amount,
+                   u.full_name AS customer_name
+            FROM orders o
+            JOIN users u ON o.customer_id = u.id
+            WHERE o.tailor_id = ?
+            ORDER BY o.created_at DESC
+            LIMIT 5
+        `, [uid]);
+
+        const stats = orderStats[0] || {};
+        res.json({
+            pendingCount:      Number(stats.pending_count) || 0,
+            completedCount:    Number(stats.completed_count) || 0,
+            totalEarnings:     parseFloat(stats.total_earnings) || 0,
+            avgRating:         parseFloat(profile.avg_rating) || 0,
+            totalReviews:      Number(profile.total_reviews) || 0,
+            profileCompletion,
+            recentOrders,
+        });
+    } catch (err) {
+        console.error('/api/tailor/dashboard-stats error:', err);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
 // ── GET /api/orders/tailor — Get all orders for the logged in tailor ──
 app.get('/api/orders/tailor', verifyToken, requireRole('tailor'), (req, res) => {
     const sql = `

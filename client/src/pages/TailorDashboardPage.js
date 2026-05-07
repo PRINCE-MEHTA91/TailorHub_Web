@@ -58,18 +58,48 @@ function Toggle({ checked, onChange }) {
 /* ── Home Tab ── */
 function HomeTab({ user }) {
   const navigate = useNavigate();
+  const [loading, setLoading] = React.useState(true);
+  const [dashStats, setDashStats] = React.useState(null);
+
+  React.useEffect(() => {
+    fetch(`${API_URL}/api/tailor/dashboard-stats`, { credentials: 'include' })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setDashStats(d); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, []);
+
+  const fmt = (n) => {
+    if (!n) return '₹0';
+    if (n >= 100000) return `₹${(n / 100000).toFixed(1)}L`;
+    if (n >= 1000) return `₹${(n / 1000).toFixed(1)}k`;
+    return `₹${Number(n).toLocaleString('en-IN')}`;
+  };
+
+  const pending   = dashStats?.pendingCount   ?? 0;
+  const completed = dashStats?.completedCount ?? 0;
+  const earnings  = dashStats?.totalEarnings  ?? 0;
+  const rating    = dashStats?.avgRating       ?? 0;
+  const profPct   = dashStats?.profileCompletion ?? 0;
+  const recentOrders = dashStats?.recentOrders ?? [];
+
   const stats = [
-    {label:'Pending Jobs',value:'3',icon:'⏳',ic:'text-amber-600',bg:'bg-amber-50',path:'/tailor/pending-jobs'},
-    {label:'Completed',  value:'28',icon:'✅',ic:'text-green-600', bg:'bg-green-50', path:'/tailor/completed'},
-    {label:'Earnings',   value:'₹14.2k',icon:'💰',ic:'text-emerald-600',bg:'bg-emerald-50',path:'/tailor/earnings'},
-    {label:'Rating',     value:'4.8★',icon:'🏆',ic:'text-yellow-600',bg:'bg-yellow-50',path:null},
+    { label: 'Pending Jobs', value: loading ? '…' : String(pending),     icon: '⏳', ic: 'text-amber-600',   bg: 'bg-amber-50',   path: '/tailor/pending-jobs' },
+    { label: 'Completed',    value: loading ? '…' : String(completed),    icon: '✅', ic: 'text-green-600',   bg: 'bg-green-50',   path: '/tailor/completed'    },
+    { label: 'Earnings',     value: loading ? '…' : fmt(earnings),        icon: '💰', ic: 'text-emerald-600', bg: 'bg-emerald-50', path: '/tailor/earnings'     },
+    { label: 'Rating',       value: loading ? '…' : (rating > 0 ? `${rating.toFixed(1)}★` : 'No ratings'), icon: '🏆', ic: 'text-yellow-600', bg: 'bg-yellow-50', path: null },
   ];
-  const orders = [
-    {id:'#1042',customer:'Riya Sharma',item:'Lehenga (Bridal)',status:'In Progress',due:'Feb 28',amount:'₹4,500'},
-    {id:'#1041',customer:'Arun Mehta', item:'Sherwani',        status:'Pending',    due:'Mar 2', amount:'₹3,200'},
-    {id:'#1040',customer:'Priya Patel',item:'Blouse (Silk)',   status:'Completed',  due:'Feb 22',amount:'₹800'},
-  ];
-  const sc = {'In Progress':'bg-blue-100 text-blue-700','Pending':'bg-amber-100 text-amber-700','Completed':'bg-green-100 text-green-700'};
+
+  const sc = {
+    'Order Placed': 'bg-stone-100 text-stone-700',
+    'Cutting':      'bg-blue-100 text-blue-700',
+    'Stitching':    'bg-indigo-100 text-indigo-700',
+    'Trial Ready':  'bg-amber-100 text-amber-700',
+    'Completed':    'bg-green-100 text-green-700',
+    'Delivered':    'bg-emerald-100 text-emerald-700',
+    'In Progress':  'bg-blue-100 text-blue-700',
+    'Pending':      'bg-amber-100 text-amber-700',
+  };
+
   const hour = new Date().getHours();
   const greet = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
 
@@ -81,17 +111,23 @@ function HomeTab({ user }) {
         <div className="absolute -bottom-8 -left-8 w-32 h-32 rounded-full bg-white/[0.06]"/>
         <p className="text-orange-200 text-xs font-semibold relative z-10">{greet} 👋</p>
         <h2 className="text-white font-black text-2xl mt-1 relative z-10" style={{fontFamily:'Sora,sans-serif'}}>{user?.full_name?.split(' ')[0]}</h2>
-        <p className="text-orange-100 text-sm mt-1 relative z-10">You have <span className="font-black text-white">3 pending jobs</span> today.</p>
+        <p className="text-orange-100 text-sm mt-1 relative z-10">
+          You have{' '}
+          <span className="font-black text-white">
+            {loading ? '…' : `${pending} pending job${pending !== 1 ? 's' : ''}`}
+          </span>{' '}
+          today.
+        </p>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-2 gap-2.5">
-        {stats.map(s=>(
-          <div key={s.label} onClick={()=>s.path&&navigate(s.path)}
-            className={`${s.bg} border border-stone-200 rounded-2xl p-3.5 flex items-center gap-3 shadow-sm ${s.path?'cursor-pointer hover:shadow-md':''} transition-all`}>
+        {stats.map(s => (
+          <div key={s.label} onClick={() => s.path && navigate(s.path)}
+            className={`${s.bg} border border-stone-200 rounded-2xl p-3.5 flex items-center gap-3 shadow-sm ${s.path ? 'cursor-pointer hover:shadow-md' : ''} transition-all`}>
             <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-lg flex-shrink-0 shadow-sm">{s.icon}</div>
             <div>
-              <div className={`font-black text-xl leading-none ${s.ic}`} style={{fontFamily:'Sora,sans-serif'}}>{s.value}</div>
+              <div className={`font-black text-xl leading-none ${s.ic} ${loading ? 'animate-pulse' : ''}`} style={{fontFamily:'Sora,sans-serif'}}>{s.value}</div>
               <div className="text-stone-400 text-[11px] mt-0.5">{s.label}</div>
             </div>
           </div>
@@ -105,30 +141,58 @@ function HomeTab({ user }) {
           <div className="flex-1">
             <div className="text-xs font-bold text-stone-700 mb-1.5">Profile Completion</div>
             <div className="bg-stone-100 rounded-full h-1.5 overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-orange-400 to-amber-400 rounded-full" style={{width:'82%'}}/>
+              <div
+                className="h-full bg-gradient-to-r from-orange-400 to-amber-400 rounded-full transition-all duration-700"
+                style={{ width: loading ? '0%' : `${profPct}%` }}
+              />
             </div>
           </div>
-          <div className="text-orange-500 font-black text-sm flex-shrink-0">82%</div>
+          <div className={`font-black text-sm flex-shrink-0 ${profPct >= 80 ? 'text-green-500' : profPct >= 50 ? 'text-orange-500' : 'text-red-500'}`}>
+            {loading ? '…' : `${profPct}%`}
+          </div>
         </div>
       </SectionCard>
 
       {/* Recent Orders */}
       <SectionCard>
         <SectionHeader icon="📋" title="Recent Orders"/>
-        <div className="divide-y divide-stone-50">
-          {orders.map(o=>(
-            <div key={o.id} className="flex items-center justify-between px-4 py-3">
-              <div>
-                <p className="text-sm font-bold text-stone-800">{o.customer}</p>
-                <p className="text-xs text-stone-400">{o.id} · {o.item}</p>
+        {loading ? (
+          <div className="divide-y divide-stone-50">
+            {[1,2,3].map(i => (
+              <div key={i} className="flex items-center justify-between px-4 py-3 animate-pulse">
+                <div className="space-y-1.5">
+                  <div className="h-3 w-28 bg-stone-100 rounded-full"/>
+                  <div className="h-2.5 w-20 bg-stone-100 rounded-full"/>
+                </div>
+                <div className="space-y-1.5 items-end flex flex-col">
+                  <div className="h-3 w-16 bg-stone-100 rounded-full"/>
+                  <div className="h-2.5 w-12 bg-stone-100 rounded-full"/>
+                </div>
               </div>
-              <div className="text-right">
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${sc[o.status]}`}>{o.status}</span>
-                <p className="text-xs text-stone-400 mt-1">Due {o.due}</p>
+            ))}
+          </div>
+        ) : recentOrders.length === 0 ? (
+          <div className="px-4 py-6 text-center text-stone-400 text-sm">No orders yet. Create your first order!</div>
+        ) : (
+          <div className="divide-y divide-stone-50">
+            {recentOrders.map(o => (
+              <div key={o.id} className="flex items-center justify-between px-4 py-3">
+                <div>
+                  <p className="text-sm font-bold text-stone-800">{o.customer_name}</p>
+                  <p className="text-xs text-stone-400">#{o.id} · {o.product_name}</p>
+                </div>
+                <div className="text-right">
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${sc[o.current_status] || 'bg-stone-100 text-stone-600'}`}>
+                    {o.current_status}
+                  </span>
+                  <p className="text-xs text-stone-400 mt-1">
+                    {o.delivery_date ? `Due ${new Date(o.delivery_date).toLocaleDateString('en-IN', { day:'numeric', month:'short' })}` : 'TBD'}
+                  </p>
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </SectionCard>
     </div>
   );
