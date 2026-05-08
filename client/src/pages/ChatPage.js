@@ -56,7 +56,7 @@ function dayKey(dateStr) {
 /* ── UserAvatar: shows profile image or initials fallback ── */
 function UserAvatar({ user, size = 'md', isOnlineDot = false, onlineClass = '' }) {
   const sizeClasses = size === 'lg' ? 'w-12 h-12 text-lg' : size === 'sm' ? 'w-8 h-8 text-sm' : 'w-10 h-10 text-base';
-  const dotSize     = size === 'lg' ? 'w-3.5 h-3.5' : 'w-2.5 h-2.5';
+  const dotSize = size === 'lg' ? 'w-3.5 h-3.5' : 'w-2.5 h-2.5';
   const imgSrc = user?.profile_img
     ? (user.profile_img.startsWith('http') ? user.profile_img : `${API_URL}${user.profile_img}`)
     : null;
@@ -224,7 +224,7 @@ const ChatPage = () => {
         }
       }
     } catch (e) { console.error('fetchUserById error', e); }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /* ── Auto-open chat from URL param ── */
@@ -241,7 +241,7 @@ const ChatPage = () => {
       // User has orders but no prior chats — fetch directly
       fetchUserById(urlCustomerId);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [users, urlCustomerId, loadingUsers, fetchUserById]);
 
 
@@ -406,7 +406,20 @@ const ChatPage = () => {
         {connected ? 'Connected' : 'Reconnecting...'}
       </div>
 
-      <div className="flex-1 overflow-hidden max-w-6xl w-full mx-auto px-4 md:px-6 flex flex-col md:flex-row gap-4" style={{ marginTop: '64px', paddingTop: '16px', paddingBottom: '4px', height: 'calc(100vh - 64px - 65px)' }}>
+      <div
+        className="max-w-6xl w-full mx-auto px-4 md:px-6 flex flex-col md:flex-row gap-4"
+        style={{
+          position: 'fixed',
+          top: '64px',
+          bottom: '65px',
+          left: 0,
+          right: 0,
+          margin: '0 auto',
+          paddingTop: '6px',
+          paddingBottom: '6px',
+          overflow: 'hidden',
+        }}
+      >
 
         {/* ── Sidebar ── */}
         <div className={`w-full md:w-1/3 bg-white rounded-3xl shadow-sm border border-stone-200 flex flex-col overflow-hidden ${selectedUser ? 'hidden md:flex' : 'flex'}`}>
@@ -527,7 +540,7 @@ const ChatPage = () => {
               </div>
 
               {/* Messages */}
-              <div className="flex-1 overflow-y-auto p-6 bg-stone-50/50">
+              <div className="flex-1 overflow-y-auto p-6 bg-stone-50/50" style={{ minHeight: 0 }}>
                 {loadingMessages ? (
                   <div className="flex justify-center py-10">
                     <span className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
@@ -582,7 +595,12 @@ const ChatPage = () => {
                                   {msg.file_url && (
                                     <div className="mb-1.5">
                                       {msg.file_type?.startsWith('image/') ? (
-                                        <a href={`${API_URL}${msg.file_url}`} target="_blank" rel="noreferrer">
+                                        <a
+                                          href={`${API_URL}${msg.file_url}`}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          onClick={(e) => e.stopPropagation()}
+                                        >
                                           <img
                                             src={`${API_URL}${msg.file_url}`}
                                             alt={msg.file_name || 'Image'}
@@ -595,17 +613,17 @@ const ChatPage = () => {
                                           target="_blank"
                                           rel="noreferrer"
                                           download={msg.file_name}
-                                          className={`flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium transition ${
-                                            isMine
-                                              ? 'bg-indigo-500 hover:bg-indigo-400 text-white'
-                                              : 'bg-stone-100 hover:bg-stone-200 text-stone-700'
-                                          }`}
+                                          onClick={(e) => e.stopPropagation()}
+                                          className={`flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium transition ${isMine
+                                            ? 'bg-indigo-500 hover:bg-indigo-400 text-white'
+                                            : 'bg-stone-100 hover:bg-stone-200 text-stone-700'
+                                            }`}
                                         >
                                           <span className="text-lg">
                                             {msg.file_type === 'application/pdf' ? '📄' :
-                                             msg.file_type?.includes('word') ? '📝' :
-                                             msg.file_type?.includes('excel') || msg.file_type?.includes('sheet') ? '📊' :
-                                             '📎'}
+                                              msg.file_type?.includes('word') ? '📝' :
+                                                msg.file_type?.includes('excel') || msg.file_type?.includes('sheet') ? '📊' :
+                                                  '📎'}
                                           </span>
                                           <span className="truncate max-w-[150px]">{msg.file_name || 'Attachment'}</span>
                                           <span className="text-xs opacity-70 flex-shrink-0">↓</span>
@@ -678,8 +696,8 @@ const ChatPage = () => {
                     ) : (
                       <div className="w-12 h-12 rounded-xl bg-indigo-100 flex items-center justify-center text-2xl">
                         {attachedFile.type === 'application/pdf' ? '📄' :
-                         attachedFile.type?.includes('word') ? '📝' :
-                         attachedFile.type?.includes('excel') || attachedFile.type?.includes('sheet') ? '📊' : '📎'}
+                          attachedFile.type?.includes('word') ? '📝' :
+                            attachedFile.type?.includes('excel') || attachedFile.type?.includes('sheet') ? '📊' : '📎'}
                       </div>
                     )}
                     <div className="flex-1 min-w-0">
@@ -735,11 +753,10 @@ const ChatPage = () => {
                     <button
                       type="button"
                       onClick={() => setShowEmojiPicker(prev => !prev)}
-                      className={`flex-shrink-0 w-10 h-10 flex items-center justify-center rounded-full text-xl transition-all ${
-                        showEmojiPicker
-                          ? 'bg-indigo-100 text-indigo-600 scale-110'
-                          : 'hover:bg-stone-100 text-stone-400 hover:text-stone-600'
-                      }`}
+                      className={`flex-shrink-0 w-10 h-10 flex items-center justify-center rounded-full text-xl transition-all ${showEmojiPicker
+                        ? 'bg-indigo-100 text-indigo-600 scale-110'
+                        : 'hover:bg-stone-100 text-stone-400 hover:text-stone-600'
+                        }`}
                       title="Emoji"
                     >
                       😊
@@ -749,11 +766,10 @@ const ChatPage = () => {
                     <button
                       type="button"
                       onClick={() => { setShowEmojiPicker(false); fileInputRef.current?.click(); }}
-                      className={`flex-shrink-0 w-10 h-10 flex items-center justify-center rounded-full text-lg transition-all ${
-                        attachedFile
-                          ? 'bg-indigo-100 text-indigo-600 scale-110'
-                          : 'hover:bg-stone-100 text-stone-400 hover:text-stone-600'
-                      }`}
+                      className={`flex-shrink-0 w-10 h-10 flex items-center justify-center rounded-full text-lg transition-all ${attachedFile
+                        ? 'bg-indigo-100 text-indigo-600 scale-110'
+                        : 'hover:bg-stone-100 text-stone-400 hover:text-stone-600'
+                        }`}
                       title="Attach image or document"
                       disabled={uploadingFile}
                     >
