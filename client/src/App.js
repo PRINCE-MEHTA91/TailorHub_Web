@@ -23,6 +23,7 @@ import BookingPage from './pages/BookingPage';
 import BrowseTailorsDealsPage from './pages/BrowseTailorsDealsPage';
 import HelpPage from './pages/HelpPage';
 import ChatPage from './pages/ChatPage';
+import NotificationsPage from './pages/NotificationsPage';
 
 const SmartHomeRoute = () => {
   const { user, loading } = useAuth();
@@ -59,6 +60,7 @@ function App() {
 
           <Route path="/dashboard" element={<PrivateRoute><DashboardPage /></PrivateRoute>} />
           <Route path="/chat" element={<PrivateRoute><ChatPage /></PrivateRoute>} />
+          <Route path="/notifications" element={<PrivateRoute><NotificationsPage /></PrivateRoute>} />
 
           <Route path="/tailor/pending-jobs" element={<PrivateRoute role="tailor"><PendingJobsPage /></PrivateRoute>} />
           <Route path="/tailor/completed" element={<PrivateRoute role="tailor"><CompletedOrdersPage /></PrivateRoute>} />

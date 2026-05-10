@@ -258,6 +258,25 @@ db.getConnection((connErr, connection) => {
             });
         }
     });
+
+    // Auto-create notifications table
+    db.query(`
+        CREATE TABLE IF NOT EXISTS notifications (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT NOT NULL,
+            type VARCHAR(60) DEFAULT 'system',
+            title VARCHAR(255) NOT NULL,
+            body TEXT DEFAULT NULL,
+            action_url VARCHAR(255) DEFAULT NULL,
+            action_label VARCHAR(100) DEFAULT NULL,
+            is_read TINYINT(1) NOT NULL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+    `, (tableErr) => {
+        if (tableErr) console.error('Error creating notifications table:', tableErr.message);
+        else console.log('✅ notifications table ready');
+    });
 });
 
 const transporter = nodemailer.createTransport({
@@ -1426,6 +1445,29 @@ app.put('/api/orders/:id/status', verifyToken, requireRole('tailor'), (req, res)
             db.query('INSERT INTO order_status_history (order_id, status, note) VALUES (?, ?, ?)', [orderId, status, note || null], (histErr) => {
                 if (histErr) return res.status(500).json({ message: 'Updated order but failed to log history' });
 
+                // ── Insert in-app notification for the customer ──
+                const notifType = status === 'Completed' ? 'order_completed'
+                                : status === 'Delivered' ? 'order_delivered'
+                                : 'order_update';
+                const notifTitle = `Order "${orderInfo.product_name}" → ${status}`;
+                const notifBody  = note ? `Note from tailor: ${note}` : `Your order status was updated by ${orderInfo.tailor_name}.`;
+                
+                db.query(
+                    'INSERT INTO notifications (user_id, type, title, body, action_url, action_label) VALUES (?, ?, ?, ?, ?, ?)',
+                    [orderInfo.customer_id, notifType, notifTitle, notifBody, '/customer/orders', 'View Orders'],
+                    (notifErr, notifRes) => { 
+                        if (notifErr) console.warn('Notification insert warning:', notifErr.message); 
+                        else {
+                            // Emit real-time socket event (IOC)
+                            db.query('SELECT * FROM notifications WHERE id = ?', [notifRes.insertId], (err, rows) => {
+                                if (!err && rows.length > 0) {
+                                    io.to(`user_${orderInfo.customer_id}`).emit('new_notification', rows[0]);
+                                }
+                            });
+                        }
+                    }
+                );
+
                 // Send email to customer
                 if (orderInfo.customer_email) {
                     const mailOptions = {
@@ -1706,7 +1748,36 @@ app.put('/api/chat/message/:id', verifyToken, (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════
+// NOTIFICATIONS ENDPOINTS
+// ═══════════════════════════════════════════════════════════════
+
+app.get('/api/notifications', verifyToken, (req, res) => {
+    const sql = 'SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 50';
+    db.query(sql, [req.userId], (err, results) => {
+        if (err) return res.status(500).json({ message: 'Server error' });
+        res.json({ notifications: results });
+    });
+});
+
+app.post('/api/notifications/mark-all-read', verifyToken, (req, res) => {
+    const sql = 'UPDATE notifications SET is_read = 1 WHERE user_id = ? AND is_read = 0';
+    db.query(sql, [req.userId], (err) => {
+        if (err) return res.status(500).json({ message: 'Server error' });
+        res.json({ message: 'All notifications marked as read' });
+    });
+});
+
+app.post('/api/notifications/:id/read', verifyToken, (req, res) => {
+    const sql = 'UPDATE notifications SET is_read = 1 WHERE id = ? AND user_id = ?';
+    db.query(sql, [req.params.id, req.userId], (err) => {
+        if (err) return res.status(500).json({ message: 'Server error' });
+        res.json({ message: 'Notification marked as read' });
+    });
+});
+
+// ═══════════════════════════════════════════════════════════════
 // SOCKET.IO — REAL-TIME CHAT
+
 // ═══════════════════════════════════════════════════════════════
 
 // Track online users: userId → Set of socketIds

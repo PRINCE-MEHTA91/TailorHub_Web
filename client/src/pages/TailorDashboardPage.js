@@ -1856,7 +1856,7 @@ const NAV_TABS = [
   {id:'home',     icon:'🏠', label:'Home'},
   {id:'orders',   icon:'📋', label:'Orders'},
   {id:'chat',     icon:'💬', label:'Chat'},
-  {id:'feedback', icon:'⭐', label:'Feedback'},
+  {id:'notifications', icon:'🔔', label:'Notifs'},
   {id:'offers',   icon:'🔥', label:'Offers'},
   {id:'manage',   icon:'⚙️', label:'Manage'},
   {id:'profile',  icon:'👤', label:'Profile'},
@@ -1926,7 +1926,10 @@ export default function TailorDashboardPage() {
             <span className="text-[10px] font-bold bg-orange-50 text-orange-600 border border-orange-200 px-2 py-0.5 rounded-full">Tailor</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="relative w-9 h-9 bg-stone-50 border border-stone-200 rounded-full flex items-center justify-center overflow-hidden">
+            <div 
+              onClick={() => navigate('/notifications')}
+              className="relative w-9 h-9 bg-stone-50 border border-stone-200 rounded-full flex items-center justify-center overflow-hidden cursor-pointer hover:bg-stone-100 transition-colors"
+            >
               <span className="text-lg">🔔</span>
               <span className="absolute top-1.5 right-2 w-1.5 h-1.5 bg-red-500 rounded-full border border-white"/>
             </div>
@@ -2016,9 +2019,13 @@ export default function TailorDashboardPage() {
         </main>
 
         {/* Bottom Nav — full width on all screens */}
-        <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-stone-200 grid grid-cols-7 z-50 shadow-lg">
+        <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-stone-200 grid z-50 shadow-lg" style={{ gridTemplateColumns: `repeat(${NAV_TABS.length}, minmax(0, 1fr))` }}>
           {NAV_TABS.map(n=>(
-            <button key={n.id} onClick={() => n.id === 'chat' ? navigate('/chat') : setActiveTab(n.id)}
+            <button key={n.id} onClick={() => {
+              if (n.id === 'chat') navigate('/chat');
+              else if (n.id === 'notifications') navigate('/notifications');
+              else setActiveTab(n.id);
+            }}
               className="flex flex-col items-center gap-0.5 py-2.5 transition-all">
               {activeTab===n.id && <div className="w-5 h-0.5 bg-orange-500 rounded-full mb-0.5"/>}
               <span className={`text-xl transition-transform ${activeTab===n.id?'scale-110':'scale-100'}`}>{n.icon}</span>
