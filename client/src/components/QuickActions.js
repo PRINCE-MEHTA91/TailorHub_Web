@@ -23,14 +23,14 @@ const actions = [
     label: 'New Arrivals',
     gradient: 'qa-emerald',
     desc: 'Just added',
-    path: null,
+    path: '/collections?tab=arrivals',
   },
   {
     icon: '📈',
     label: 'Trending',
     gradient: 'qa-violet',
     desc: 'This week',
-    path: null,
+    path: '/collections?tab=trending',
   },
 ];
 
