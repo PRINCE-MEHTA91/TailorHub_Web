@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import Header from '../components/Header';
-import CustomerBottomNav from '../components/CustomerBottomNav';
 
 const API_URL = process.env.REACT_APP_API_URL;
 
@@ -32,11 +30,20 @@ const BrowseTailorsDealsPage = () => {
   }, []);
 
   return (
-    <div className="bg-stone-50 min-h-screen pb-20 font-poppins">
-      <Header />
+    <div className="bg-stone-50 min-h-screen pb-10 font-poppins">
       
       {/* Premium Header Banner */}
-      <div className="bg-gradient-to-br from-indigo-900 via-indigo-800 to-indigo-900 text-white pt-10 pb-16 px-6 relative overflow-hidden shadow-xl rounded-b-[40px]">
+      <div className="bg-gradient-to-br from-indigo-900 via-indigo-800 to-indigo-900 text-white pt-16 pb-16 px-6 relative overflow-hidden shadow-xl rounded-b-[40px]">
+        {/* Back Button */}
+        <button 
+          onClick={() => navigate(-1)}
+          className="absolute top-6 left-6 z-20 w-10 h-10 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center text-white transition-all border border-white/10"
+        >
+          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+
         <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-pulse" />
         <div className="absolute -bottom-10 -left-10 w-72 h-72 bg-purple-500 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-pulse" style={{ animationDelay: '2s'}} />
         
@@ -171,8 +178,6 @@ const BrowseTailorsDealsPage = () => {
           </div>
         )}
       </main>
-      
-      <CustomerBottomNav activeTab="tailors" />
     </div>
   );
 };

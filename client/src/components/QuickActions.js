@@ -8,7 +8,7 @@ const actions = [
     label: 'Categories',
     gradient: 'qa-amber',
     desc: '50+ types',
-    path: null,
+    path: '/categories',
   },
   {
     icon: '🔥',
