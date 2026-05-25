@@ -133,7 +133,7 @@ export default function NotificationsPage() {
       >
         <div className="flex items-center gap-3">
           <button
-            onClick={() => navigate(dashboardPath)}
+            onClick={() => navigate(-1)}
             style={{ background: 'rgba(255,255,255,0.08)' }}
             className="w-9 h-9 rounded-xl flex items-center justify-center text-white/70 hover:text-white hover:bg-white/15 transition"
           >
@@ -299,7 +299,7 @@ export default function NotificationsPage() {
         className="fixed bottom-0 left-0 right-0 px-5 py-3 flex items-center justify-center gap-3"
       >
         <button
-          onClick={() => navigate(dashboardPath)}
+          onClick={() => navigate(-1)}
           style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}
           className="flex items-center gap-2 text-white text-sm font-bold px-6 py-3 rounded-2xl shadow-lg hover:opacity-90 active:scale-95 transition"
         >

@@ -29,7 +29,7 @@ const ArrivalsAndTrendingPage = () => {
       .then(r => r.ok ? r.json() : null)
       .then(data => {
         if (data?.tailors) {
-          // Shuffle or slice for demo purposes to simulate different lists
+         
           setTailors(data.tailors);
         }
       })
@@ -38,8 +38,8 @@ const ArrivalsAndTrendingPage = () => {
   }, []);
 
   const displayedTailors = activeTab === 'arrivals' 
-    ? [...tailors].reverse().slice(0, 5) // Mock new arrivals
-    : [...tailors].sort((a, b) => (b.rating || 5) - (a.rating || 5)).slice(0, 5); // Mock trending
+    ? [...tailors].reverse().slice(0, 5) 
+    : [...tailors].sort((a, b) => (b.rating || 5) - (a.rating || 5)).slice(0, 5); 
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -58,10 +58,10 @@ const ArrivalsAndTrendingPage = () => {
   return (
     <div className="bg-stone-50 min-h-screen pb-10 font-poppins">
       
-      {/* Dynamic Header */}
+     
       <div className={`pt-16 pb-16 px-6 relative overflow-hidden shadow-xl rounded-b-[40px] transition-colors duration-500 ${activeTab === 'arrivals' ? 'bg-gradient-to-br from-emerald-800 to-teal-900' : 'bg-gradient-to-br from-violet-900 to-purple-900'}`}>
         
-        {/* Back Button */}
+      
         <button 
           onClick={() => navigate(-1)}
           className="absolute top-6 left-6 z-20 w-10 h-10 bg-white/20 hover:bg-white/30 backdrop-blur-md rounded-full flex items-center justify-center text-white transition-all"
@@ -103,7 +103,7 @@ const ArrivalsAndTrendingPage = () => {
       </div>
 
       <main className="max-w-4xl mx-auto px-4 -mt-8 relative z-20">
-        {/* Custom Tabs */}
+      
         <div className="bg-white rounded-2xl shadow-lg p-2 flex mb-8 max-w-sm mx-auto md:mx-0 relative">
           <div className="absolute inset-0 rounded-2xl bg-white shadow-inner" />
           <button 
@@ -147,7 +147,7 @@ const ArrivalsAndTrendingPage = () => {
                     onClick={() => navigate(`/tailor-profile/${tailor.id}`)}
                   >
                     <div className="p-6 flex items-start gap-5 relative">
-                      {/* Decorative elements based on tab */}
+                     
                       {activeTab === 'arrivals' && (
                         <div className="absolute top-4 right-4 bg-emerald-100 text-emerald-700 text-[10px] font-black px-2 py-1 rounded-lg uppercase tracking-wider">New</div>
                       )}

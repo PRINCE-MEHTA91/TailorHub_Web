@@ -242,6 +242,10 @@ db.getConnection((connErr, connection) => {
         if (tableErr) console.error('Error creating messages table:', tableErr.message);
         else {
             console.log('✅ messages table ready');
+            // Soft-migrate: add is_read column if not exists
+            db.query('ALTER TABLE messages ADD COLUMN is_read TINYINT(1) NOT NULL DEFAULT 0', (err) => {
+                if (err && err.code !== 'ER_DUP_FIELDNAME') console.warn('messages is_read migration warning:', err.message);
+            });
             // Soft-migrate: add is_edited column if not exists
             db.query('ALTER TABLE messages ADD COLUMN is_edited TINYINT(1) NOT NULL DEFAULT 0', (err) => {
                 if (err && err.code !== 'ER_DUP_FIELDNAME') console.warn('messages is_edited migration warning:', err.message);
@@ -1599,14 +1603,15 @@ app.get('/api/chat/users', verifyToken, (req, res) => {
         SELECT DISTINCT u.id, u.full_name, u.role,
             COALESCE(tp.profile_img, cp.profile_img) AS profile_img,
             (SELECT message FROM messages WHERE (sender_id = u.id AND receiver_id = ?) OR (sender_id = ? AND receiver_id = u.id) ORDER BY created_at DESC LIMIT 1) as last_message,
-            (SELECT created_at FROM messages WHERE (sender_id = u.id AND receiver_id = ?) OR (sender_id = ? AND receiver_id = u.id) ORDER BY created_at DESC LIMIT 1) as last_message_time
+            (SELECT created_at FROM messages WHERE (sender_id = u.id AND receiver_id = ?) OR (sender_id = ? AND receiver_id = u.id) ORDER BY created_at DESC LIMIT 1) as last_message_time,
+            (SELECT COUNT(*) FROM messages WHERE sender_id = u.id AND receiver_id = ? AND is_read = 0) as unread_count
         FROM users u
         INNER JOIN orders o ON ${orderJoinCond}
         LEFT JOIN tailor_profiles tp ON tp.user_id = u.id AND u.role = 'tailor'
         LEFT JOIN customer_profiles cp ON cp.user_id = u.id AND u.role = 'customer'
         ORDER BY last_message_time DESC, u.full_name ASC
     `;
-    db.query(sql, [req.userId, req.userId, req.userId, req.userId, req.userId], (err, results) => {
+    db.query(sql, [req.userId, req.userId, req.userId, req.userId, req.userId, req.userId], (err, results) => {
         if (err) return res.status(500).json({ message: 'Server error', error: err.message });
         const users = results.map(u => ({ ...u, profile_img: normalizeImgPath(u.profile_img) }));
         res.json({ users });
@@ -1673,6 +1678,16 @@ app.get('/api/chat/:userId', verifyToken, (req, res) => {
     `;
     db.query(sql, [req.userId, userId, userId, req.userId], (err, results) => {
         if (err) return res.status(500).json({ message: 'Server error' });
+
+        // Once messages are fetched, mark them as read
+        const markReadSql = 'UPDATE messages SET is_read = 1 WHERE receiver_id = ? AND sender_id = ? AND is_read = 0';
+        db.query(markReadSql, [req.userId, userId], (updateErr) => {
+            if (updateErr) {
+                console.error("Failed to mark messages as read:", updateErr);
+                // Don't block the response for this, just log it
+            }
+        });
+
         res.json({ messages: results });
     });
 });

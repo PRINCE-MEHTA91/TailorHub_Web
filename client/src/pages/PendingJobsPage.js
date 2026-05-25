@@ -27,7 +27,7 @@ export default function PendingJobsPage() {
     return (
         <div className="min-h-screen bg-gray-50">
             <header className="bg-white border-b border-gray-100 px-5 py-4 flex items-center gap-3 sticky top-0 z-10 shadow-sm">
-                <button onClick={() => navigate('/dashboard/tailor')}
+                <button onClick={() => navigate(-1)}
                     className="w-9 h-9 flex items-center justify-center rounded-xl bg-gray-100 hover:bg-gray-200 transition-colors text-xl font-bold text-gray-600">
                     ‹
                 </button>
