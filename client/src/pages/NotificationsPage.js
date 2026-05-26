@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { io } from 'socket.io-client';
 
-const API_URL = process.env.REACT_APP_API_URL;
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
 
 const NOTIF_ICONS = {
   order_placed:    { icon: '📦', bg: 'bg-blue-100',   ring: 'ring-blue-200',   text: 'text-blue-700'   },
@@ -53,6 +54,7 @@ export default function NotificationsPage() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
   const [unreadCount, setUnreadCount] = useState(0);
+  const socketRef = useRef(null);
 
   const fetchNotifications = useCallback(async () => {
     try {
@@ -72,6 +74,33 @@ export default function NotificationsPage() {
   useEffect(() => {
     fetchNotifications();
   }, [fetchNotifications]);
+
+  /* ── Real-time socket: listen for new notifications ── */
+  useEffect(() => {
+    const token = document.cookie
+      .split(';')
+      .map(c => c.trim())
+      .find(c => c.startsWith('token='))
+      ?.split('=')[1] || null;
+
+    const sock = io(API_URL, {
+      withCredentials: true,
+      auth: { token },
+      transports: ['websocket', 'polling'],
+    });
+    socketRef.current = sock;
+
+    sock.on('new_notification', (notif) => {
+      setNotifications(prev => {
+        // Avoid duplicates
+        if (prev.find(n => n.id === notif.id)) return prev;
+        return [notif, ...prev];
+      });
+      setUnreadCount(prev => prev + 1);
+    });
+
+    return () => sock.disconnect();
+  }, []);
 
   const markAllRead = async () => {
     try {

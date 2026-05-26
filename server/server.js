@@ -1856,6 +1856,30 @@ io.on('connection', (socket) => {
                 socket.to(`user_${receiverId}`).emit('receive_message', savedMsg);
 
                 console.log(`💬 Message ${savedMsg.id}: user ${userId} → user ${receiverId}${hasFile ? ' [file: ' + fileName + ']' : ''}`);
+
+                // ── Create in-app notification for the receiver ──────────────
+                const notifTitle = `New message from ${socket.userName}`;
+                const rawBody = hasFile
+                    ? (hasText ? text : `📎 ${fileName || 'File attachment'}`)
+                    : text;
+                const notifBody = rawBody.length > 120 ? rawBody.slice(0, 117) + '...' : rawBody;
+
+                db.query(
+                    'INSERT INTO notifications (user_id, type, title, body, action_url, action_label) VALUES (?, ?, ?, ?, ?, ?)',
+                    [receiverId, 'new_message', notifTitle, notifBody, '/chat', 'Open Chat'],
+                    (notifErr, notifRes) => {
+                        if (notifErr) {
+                            console.warn('⚠️  Chat notification insert warning:', notifErr.message);
+                            return;
+                        }
+                        // Emit real-time notification to receiver
+                        db.query('SELECT * FROM notifications WHERE id = ?', [notifRes.insertId], (nErr, nRows) => {
+                            if (!nErr && nRows.length > 0) {
+                                io.to(`user_${receiverId}`).emit('new_notification', nRows[0]);
+                            }
+                        });
+                    }
+                );
             });
         });
     });
