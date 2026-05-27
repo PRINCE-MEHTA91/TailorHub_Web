@@ -61,8 +61,12 @@ export default function NotificationsPage() {
       const res = await fetch(`${API_URL}/api/notifications`, { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
-        setNotifications(data.notifications || []);
-        setUnreadCount((data.notifications || []).filter(n => !n.is_read).length);
+        const notifs = data.notifications || [];
+        setNotifications(notifs);
+        const count = notifs.filter(n => !n.is_read).length;
+        setUnreadCount(count);
+        // Sync Header badge
+        window.dispatchEvent(new CustomEvent('tailorhub_notif_count', { detail: count }));
       }
     } catch (err) {
       console.error('Failed to load notifications:', err);
@@ -110,6 +114,8 @@ export default function NotificationsPage() {
       });
       setNotifications(prev => prev.map(n => ({ ...n, is_read: 1 })));
       setUnreadCount(0);
+      // Sync Header badge to 0
+      window.dispatchEvent(new CustomEvent('tailorhub_notif_count', { detail: 0 }));
     } catch (err) {
       console.error('Failed to mark all read:', err);
     }
@@ -133,8 +139,13 @@ export default function NotificationsPage() {
   const handleNotificationClick = (notif) => {
     if (!notif.is_read) markOneRead(notif.id);
     // Navigate based on type
-    if (notif.type === 'new_message') navigate('/chat');
-    else if (notif.action_url) navigate(notif.action_url);
+    if (notif.type === 'new_message' || notif.action_url === '/chat') {
+      navigate('/chat');
+    } else if (notif.action_url === '/customer/orders') {
+      navigate('/customer/dashboard', { state: { tab: 'orders' } });
+    } else if (notif.action_url) {
+      navigate(notif.action_url);
+    }
   };
 
   const filtered = filter === 'all'

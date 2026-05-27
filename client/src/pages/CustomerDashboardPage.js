@@ -7,6 +7,9 @@ import Header from '../components/Header';
 import SearchBar from '../components/SearchBar';
 import SearchResults from '../components/SearchResults';
 import IndexPage from './IndexPage';
+import { io } from 'socket.io-client';
+
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
 
 // ── Professional Invoice Modal ──────────────────────────────────────────────
 const InvoiceModal = ({ order, onClose }) => {
@@ -943,7 +946,6 @@ const OrdersTab = () => {
     );
 };
 
-const API_URL = process.env.REACT_APP_API_URL;
 const catEmojiMap = {
     Bridal: '👰', Suits: '🤵', Kurta: '🧥', Blouses: '✂️', 'Kids Wear': '🧒', Alterations: '🔧',
 };
@@ -1122,11 +1124,12 @@ const CategoryResults = ({ category, onBack }) => {
 };
 
 const NAV_TABS = [
-    { id: 'home',    label: 'Home',    icon: '🏠' },
-    { id: 'tailors', label: 'Tailors', icon: '✂️' },
-    { id: 'orders',  label: 'Orders',  icon: '📦' },
-    { id: 'chat',    label: 'Chat',    icon: '💬' },
-    { id: 'profile', label: 'Profile', icon: '👤' },
+    { id: 'home',          label: 'Home',    icon: '🏠' },
+    { id: 'tailors',       label: 'Tailors', icon: '✂️' },
+    { id: 'orders',        label: 'Orders',  icon: '📦' },
+    { id: 'chat',          label: 'Chat',    icon: '💬' },
+    { id: 'notifications', label: 'Alerts',  icon: '🔔' },
+    { id: 'profile',       label: 'Profile', icon: '👤' },
 ];
 
 const CustomerDashboardPage = () => {
@@ -1136,6 +1139,44 @@ const CustomerDashboardPage = () => {
     const [activeTab, setActiveTab] = useState('home');
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedCategory, setSelectedCategory] = useState(null);
+    const [unreadNotifCount, setUnreadNotifCount] = useState(0);
+    const dashSocketRef = useRef(null);
+
+    // Fetch initial unread notification count
+    useEffect(() => {
+        if (!user) return;
+        fetch(`${API_URL}/api/notifications`, { credentials: 'include' })
+            .then(res => res.ok ? res.json() : null)
+            .then(data => {
+                if (data?.notifications) {
+                    setUnreadNotifCount(data.notifications.filter(n => !n.is_read).length);
+                }
+            })
+            .catch(() => {});
+    }, [user]);
+
+    // Real-time: listen for new notifications via socket
+    useEffect(() => {
+        if (!user) return;
+        const token = document.cookie
+            .split(';')
+            .map(c => c.trim())
+            .find(c => c.startsWith('token='))
+            ?.split('=')[1] || null;
+
+        const sock = io(API_URL, {
+            withCredentials: true,
+            auth: { token },
+            transports: ['websocket', 'polling'],
+        });
+        dashSocketRef.current = sock;
+        sock.on('new_notification', () => {
+            setUnreadNotifCount(prev => prev + 1);
+            // Sync Header badge via custom window event (no extra socket needed in Header)
+            window.dispatchEvent(new CustomEvent('tailorhub_new_notification'));
+        });
+        return () => sock.disconnect();
+    }, [user]);
 
     useEffect(() => {
         if (location.state?.tab) {
@@ -1276,6 +1317,13 @@ const CustomerDashboardPage = () => {
             navigate('/chat');
             return;
         }
+        if (tabId === 'notifications') {
+            setUnreadNotifCount(0); // optimistically clear badge
+            // Tell Header to also clear its badge
+            window.dispatchEvent(new CustomEvent('tailorhub_notif_count', { detail: 0 }));
+            navigate('/notifications');
+            return;
+        }
         setActiveTab(tabId);
         if (tabId !== 'home') {
             setSearchQuery('');
@@ -1306,9 +1354,10 @@ const CustomerDashboardPage = () => {
                     )}
                 </div>
             );
-            case 'tailors': { navigate('/browse-deals'); return null; }
+            case 'tailors': return null;
             case 'orders': return <OrdersTab />;
             case 'profile': return <CustomerProfileTab user={user} onLogout={handleLogout} />;
+            case 'notifications': return null;
             default: return null;
         }
     };
@@ -1338,6 +1387,7 @@ const CustomerDashboardPage = () => {
                 <div className="w-full flex">
                     {NAV_TABS.map((tab) => {
                         const isActive = activeTab === tab.id;
+                        const showBadge = tab.id === 'notifications' && unreadNotifCount > 0;
                         return (
                             <button
                                 key={tab.id}
@@ -1350,8 +1400,32 @@ const CustomerDashboardPage = () => {
                                         className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-indigo-600 rounded-full"
                                     />
                                 )}
-                                <span className={`text-2xl transition-transform ${isActive ? 'scale-110' : 'scale-100'}`}>
-                                    {tab.icon}
+                                <span style={{ position: 'relative', display: 'inline-block' }}>
+                                    <span className={`text-2xl transition-transform ${isActive ? 'scale-110' : 'scale-100'}`} style={{ display: 'block' }}>
+                                        {tab.icon}
+                                    </span>
+                                    {showBadge && (
+                                        <span style={{
+                                            position: 'absolute',
+                                            top: '-4px',
+                                            right: '-6px',
+                                            background: 'linear-gradient(135deg,#ef4444,#dc2626)',
+                                            color: '#fff',
+                                            fontSize: unreadNotifCount > 9 ? '8px' : '10px',
+                                            fontWeight: 800,
+                                            minWidth: unreadNotifCount > 9 ? '18px' : '15px',
+                                            height: '15px',
+                                            borderRadius: '999px',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            padding: '0 3px',
+                                            border: '2px solid #fff',
+                                            boxShadow: '0 1px 4px rgba(239,68,68,0.5)',
+                                        }}>
+                                            {unreadNotifCount > 99 ? '99+' : unreadNotifCount}
+                                        </span>
+                                    )}
                                 </span>
                                 <span className={`text-xs mt-1 font-medium transition-colors ${isActive ? 'text-indigo-600' : 'text-gray-400'}`}>
                                     {tab.label}

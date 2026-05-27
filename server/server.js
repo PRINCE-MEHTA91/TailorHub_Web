@@ -1407,7 +1407,7 @@ app.put('/api/orders/:id/status', verifyToken, requireRole('tailor'), (req, res)
     
     // First, verify order belongs to tailor and fetch associated names and emails
     const verifySql = `
-        SELECT o.id, o.product_name, u.email AS customer_email, u.full_name AS customer_name, t.full_name AS tailor_name
+        SELECT o.id, o.customer_id, o.product_name, u.email AS customer_email, u.full_name AS customer_name, t.full_name AS tailor_name
         FROM orders o
         JOIN users u ON o.customer_id = u.id
         JOIN users t ON o.tailor_id = t.id

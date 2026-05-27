@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import PhoneInput from '../components/PhoneInput';
+import { io } from 'socket.io-client';
 
 const API_URL = process.env.REACT_APP_API_URL;
 
@@ -1896,6 +1897,41 @@ export default function TailorDashboardPage() {
 
   const handleLogout = async () => { await logout(); navigate('/'); };
 
+  // ── Notification count ──────────────────────────────────────────
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  const refreshNotifCount = useCallback(() => {
+    fetch(`${API_URL_MAIN}/api/notifications`, { credentials: 'include' })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.notifications) {
+          setUnreadCount(data.notifications.filter(n => !n.is_read).length);
+        }
+      })
+      .catch(() => {});
+  }, [API_URL_MAIN]);
+
+  useEffect(() => { refreshNotifCount(); }, [refreshNotifCount]);
+
+  useEffect(() => {
+    const token = document.cookie
+      .split(';').map(c => c.trim())
+      .find(c => c.startsWith('token='))?.split('=')[1] || null;
+    const sock = io(API_URL_MAIN, {
+      withCredentials: true,
+      auth: { token },
+      transports: ['websocket', 'polling'],
+    });
+    sock.on('new_notification', () => setUnreadCount(prev => prev + 1));
+    window.addEventListener('focus', refreshNotifCount);
+    return () => { sock.disconnect(); window.removeEventListener('focus', refreshNotifCount); };
+  }, [API_URL_MAIN, refreshNotifCount]);
+
+  const handleNotifClick = () => {
+    setUnreadCount(0);
+    navigate('/notifications');
+  };
+
   const renderTab = () => {
     const props = { user, onLogout:handleLogout };
     switch(activeTab) {
@@ -1926,12 +1962,34 @@ export default function TailorDashboardPage() {
             <span className="text-[10px] font-bold bg-orange-50 text-orange-600 border border-orange-200 px-2 py-0.5 rounded-full">Tailor</span>
           </div>
           <div className="flex items-center gap-2">
-            <div 
-              onClick={() => navigate('/notifications')}
-              className="relative w-9 h-9 bg-stone-50 border border-stone-200 rounded-full flex items-center justify-center overflow-hidden cursor-pointer hover:bg-stone-100 transition-colors"
+            {/* Bell with live count */}
+            <div
+              onClick={handleNotifClick}
+              className="relative w-9 h-9 bg-stone-50 border border-stone-200 rounded-full flex items-center justify-center overflow-visible cursor-pointer hover:bg-stone-100 transition-colors"
             >
               <span className="text-lg">🔔</span>
-              <span className="absolute top-1.5 right-2 w-1.5 h-1.5 bg-red-500 rounded-full border border-white"/>
+              {unreadCount > 0 && (
+                <span style={{
+                  position: 'absolute',
+                  top: '-4px',
+                  right: '-4px',
+                  background: '#ef4444',
+                  color: '#fff',
+                  fontSize: '10px',
+                  fontWeight: 800,
+                  minWidth: '17px',
+                  height: '17px',
+                  borderRadius: '999px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '0 3px',
+                  border: '2px solid #fff',
+                  pointerEvents: 'none',
+                }}>
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              )}
             </div>
             <div className="w-9 h-9 bg-orange-500 rounded-full flex items-center justify-center text-white font-black text-sm overflow-hidden">
               {sidebarProfileImg
@@ -2020,18 +2078,44 @@ export default function TailorDashboardPage() {
 
         {/* Bottom Nav — full width on all screens */}
         <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-stone-200 grid z-50 shadow-lg" style={{ gridTemplateColumns: `repeat(${NAV_TABS.length}, minmax(0, 1fr))` }}>
-          {NAV_TABS.map(n=>(
-            <button key={n.id} onClick={() => {
-              if (n.id === 'chat') navigate('/chat');
-              else if (n.id === 'notifications') navigate('/notifications');
-              else setActiveTab(n.id);
-            }}
-              className="flex flex-col items-center gap-0.5 py-2.5 transition-all">
-              {activeTab===n.id && <div className="w-5 h-0.5 bg-orange-500 rounded-full mb-0.5"/>}
-              <span className={`text-xl transition-transform ${activeTab===n.id?'scale-110':'scale-100'}`}>{n.icon}</span>
-              <span className={`text-[10px] font-bold ${activeTab===n.id?'text-orange-500':'text-stone-400'}`}>{n.label}</span>
-            </button>
-          ))}
+          {NAV_TABS.map(n => {
+            const isNotif = n.id === 'notifications';
+            return (
+              <button key={n.id} onClick={() => {
+                if (n.id === 'chat') navigate('/chat');
+                else if (isNotif) handleNotifClick();
+                else setActiveTab(n.id);
+              }}
+                className="flex flex-col items-center gap-0.5 py-2.5 transition-all">
+                {activeTab === n.id && <div className="w-5 h-0.5 bg-orange-500 rounded-full mb-0.5"/>}
+                <span style={{ position: 'relative', display: 'inline-block' }}>
+                  <span className={`text-xl transition-transform ${activeTab === n.id ? 'scale-110' : 'scale-100'}`} style={{ display: 'block' }}>{n.icon}</span>
+                  {isNotif && unreadCount > 0 && (
+                    <span style={{
+                      position: 'absolute',
+                      top: '-4px',
+                      right: '-6px',
+                      background: '#ef4444',
+                      color: '#fff',
+                      fontSize: unreadCount > 9 ? '8px' : '10px',
+                      fontWeight: 800,
+                      minWidth: unreadCount > 9 ? '18px' : '15px',
+                      height: '15px',
+                      borderRadius: '999px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: '0 3px',
+                      border: '2px solid #fff',
+                    }}>
+                      {unreadCount > 99 ? '99+' : unreadCount}
+                    </span>
+                  )}
+                </span>
+                <span className={`text-[10px] font-bold ${activeTab === n.id ? 'text-orange-500' : 'text-stone-400'}`}>{n.label}</span>
+              </button>
+            );
+          })}
         </nav>
 
       </div>
