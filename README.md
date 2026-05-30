@@ -66,38 +66,70 @@ TailorHub uses Role-Based Access Control to ensure that users can only access th
 
 This RBAC system ensures that the platform is not only functional but also secure and intuitive for all user types.
 
-## How to run the project
+## Live Deployment
+
+*   **Frontend (Vercel):** [https://tailor-hub-web-client.vercel.app](https://tailor-hub-web-client.vercel.app)
+*   **Backend (Render):** [https://tailorhub-web.onrender.com](https://tailorhub-web.onrender.com)
+
+## Technology Stack
+
+*   **Frontend:** React, Tailwind CSS, Framer Motion
+*   **Backend:** Node.js, Express.js, Socket.IO
+*   **Database:** PostgreSQL (hosted on Neon)
+*   **Authentication:** JWT (JSON Web Tokens)
+
+## How to run the project locally
 
 ### Prerequisites
 
 *   [Node.js](https://nodejs.org/) installed on your machine.
+*   A [Neon](https://neon.tech/) account for the PostgreSQL database.
 
-### Installation
+### Installation & Setup
 
-1.  Clone the repository or download the source code.
-2.  Open a terminal in the project directory.
-3.  Install the backend dependencies by running the following command:
-
+1.  **Clone the repository:**
     ```bash
-    npm install express cors
+    git clone https://github.com/PRINCE-MEHTA91/TailorHub_web.git
+    cd TailorHub_web
+    ```
+
+2.  **Install dependencies:**
+    This project is structured as a monorepo. Install dependencies for both client and server:
+    ```bash
+    npm run install:client
+    npm run install:server
+    ```
+
+3.  **Environment Variables:**
+    
+    **Backend (`server/.env`):**
+    Create a `.env` file in the `server` directory and add your Neon connection string and Gmail SMTP details:
+    ```env
+    PORT=3000
+    JWT_SECRET=your_super_secret_jwt_key
+    DATABASE_URL=postgresql://your_user:your_password@ep-your-endpoint.aws.neon.tech/neondb?sslmode=require
+    EMAIL_USER=your_gmail@gmail.com
+    EMAIL_PASS=your_gmail_app_password
+    CLIENT_URL=http://localhost:3001
+    ```
+
+    **Frontend (`client/.env`):**
+    Create a `.env` file in the `client` directory:
+    ```env
+    PORT=3001
+    REACT_APP_API_URL=http://localhost:3000
     ```
 
 ### Running the Application
 
-1.  **Start the backend server:**
+You can start both the frontend and backend servers simultaneously from the root directory:
 
-    Open a terminal in the project directory and run the following command:
+```bash
+npm run dev
+```
 
-    ```bash
-    npm start
-    ```
+*   The frontend will be available at `http://localhost:3001`
+*   The backend will be available at `http://localhost:3000`
 
-    The server will start on `http://localhost:3000`. You will see the message "Server is running on http://localhost:3000" in the console.
-
-2.  **Open the frontend:**
-
-    Open the `index.html` file in your web browser.
-
-### How it Works
-
-When you click on any of the buttons in the application, a request is sent to the backend server. The server logs the button click to the console. You can see these logs in the terminal where the server is running. You can also see a confirmation message in the browser's developer console.
+### Database Initialization
+The backend server is designed to automatically create the necessary PostgreSQL tables (`users`, `tailor_profiles`, `orders`, etc.) when it connects to your Neon database for the first time. Simply ensure your `DATABASE_URL` is correct before starting the server.
