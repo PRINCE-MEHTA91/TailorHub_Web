@@ -1,39 +1,49 @@
 require('dotenv').config();
-const mysql = require('mysql2');
+const { Pool } = require('pg');
 
-const db = mysql.createConnection({
-    host: process.env.DB_HOST,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME,
-    port: process.env.DB_PORT || 3306,
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false },
 });
 
-db.connect((err) => {
-    if (err) { console.error('Connection failed:', err); process.exit(1); }
-    console.log('Connected OK');
+async function main() {
+    const client = await pool.connect();
+    try {
+        console.log('Connected to PostgreSQL (Neon).');
 
-    // Get full table description
-    db.query("DESCRIBE users", (e1, rows) => {
-        console.log('\n=== DESCRIBE users ===');
-        console.log(JSON.stringify(rows, null, 2));
+        // Get full table column description
+        const colRes = await client.query(`
+            SELECT column_name, data_type, is_nullable, column_default
+            FROM information_schema.columns
+            WHERE table_name = 'users' AND table_schema = 'public'
+            ORDER BY ordinal_position
+        `);
+        console.log('\n=== users TABLE COLUMNS ===');
+        console.log(JSON.stringify(colRes.rows, null, 2));
 
         // Try the exact same INSERT as server.js
-        db.query(
-            "INSERT INTO users (full_name, email, password) VALUES (?, ?, ?)",
-            ['TestUser', 'diag2_' + Date.now() + '@x.com', 'pwd'],
-            (e2, r2) => {
-                console.log('\n=== INSERT result ===');
-                if (e2) {
-                    console.log('ERROR code:', e2.code);
-                    console.log('ERROR sqlMessage:', e2.sqlMessage);
-                    console.log('ERROR errno:', e2.errno);
-                } else {
-                    console.log('SUCCESS insertId:', r2.insertId);
-                    db.query("DELETE FROM users WHERE id=?", [r2.insertId], () => { });
-                }
-                db.end();
-            }
-        );
-    });
-});
+        try {
+            const insertRes = await client.query(
+                'INSERT INTO users (full_name, email, password) VALUES ($1, $2, $3) RETURNING id',
+                ['TestUser', 'diag2_' + Date.now() + '@x.com', 'pwd']
+            );
+            console.log('\n=== INSERT result ===');
+            console.log('SUCCESS insertId:', insertRes.rows[0].id);
+            await client.query('DELETE FROM users WHERE id = $1', [insertRes.rows[0].id]);
+        } catch (insertErr) {
+            console.log('\n=== INSERT result ===');
+            console.log('ERROR code:', insertErr.code);
+            console.log('ERROR message:', insertErr.message);
+        }
+
+        process.exit(0);
+    } catch (err) {
+        console.error('Connection error:', err.message);
+        process.exit(1);
+    } finally {
+        client.release();
+        await pool.end();
+    }
+}
+
+main();

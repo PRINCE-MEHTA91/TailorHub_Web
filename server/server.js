@@ -12,7 +12,7 @@ const express = require('express');
 const http = require('http');
 const { Server: SocketIOServer } = require('socket.io');
 const cors = require('cors');
-const mysql = require('mysql2');
+const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
@@ -31,258 +31,233 @@ const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:3001';
 // ── Socket.IO real-time server ──────────────────────────────────────────────
 const io = new SocketIOServer(httpServer, {
     cors: {
-        origin: [CLIENT_URL, 'http://localhost:3001', 'http://127.0.0.1:3001'],
+        origin: (origin, callback) => {
+            // Allow any localhost / 127.0.0.1 port (dev), or the configured CLIENT_URL (prod)
+            if (!origin || /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin) || origin === CLIENT_URL) {
+                callback(null, true);
+            } else {
+                callback(new Error('Not allowed by CORS'));
+            }
+        },
         credentials: true,
     },
     connectionStateRecovery: {},
 });
 
 app.use(cors({
-    origin: [CLIENT_URL, 'http://localhost:3001', 'http://127.0.0.1:3001'],
+    origin: (origin, callback) => {
+        if (!origin || /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin) || origin === CLIENT_URL) {
+            callback(null, true);
+        } else {
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
     credentials: true
 }));
 app.use(express.json({ limit: '10mb' }));
 app.use(cookieParser());
 app.use(express.static(__dirname));
 
-console.log(`⏳ Attempting to connect to MySQL database at host: ${process.env.DB_HOST}`);
+// ── PostgreSQL Pool (Neon) ──────────────────────────────────────────────────
+console.log('⏳ Attempting to connect to PostgreSQL database (Neon)...');
 
-const db = mysql.createPool({
-    host: process.env.DB_HOST,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME,
-    port: process.env.DB_PORT || 3306,
-    waitForConnections: true,
-    connectionLimit: 10,
-    queueLimit: 0,
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false },
 });
 
-// Test pool connectivity + auto-create tables on startup
-db.getConnection((connErr, connection) => {
-    if (connErr) {
-        console.error('❌ DB connection error: Failed to connect to MySQL.');
-        console.error('❌ Exact Error Message:', connErr.message);
-        console.error('❌ Exact Error Code:', connErr.code);
-        return;
+// ── Auto-create tables on startup ──────────────────────────────────────────
+async function initDB() {
+    const client = await pool.connect();
+    try {
+        console.log('✅ Connected successfully to PostgreSQL database (Neon)');
+
+        // ── users ──────────────────────────────────────────────────────────
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS users (
+                id               SERIAL PRIMARY KEY,
+                full_name        VARCHAR(255) NOT NULL,
+                email            VARCHAR(255) NOT NULL UNIQUE,
+                password         VARCHAR(255) NOT NULL,
+                role             VARCHAR(20)  NOT NULL DEFAULT 'customer'
+                                     CHECK (role IN ('customer', 'tailor')),
+                avg_rating       DECIMAL(3,2) DEFAULT 0.00,
+                total_reviews    INT          DEFAULT 0,
+                reset_token      VARCHAR(255) DEFAULT NULL,
+                reset_token_expiry TIMESTAMP  DEFAULT NULL,
+                created_at       TIMESTAMP    DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+        console.log('✅ users table ready');
+
+        // ── tailor_profiles ────────────────────────────────────────────────
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS tailor_profiles (
+                id             SERIAL PRIMARY KEY,
+                user_id        INT          NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+                phone          VARCHAR(20)  DEFAULT '',
+                whatsapp       VARCHAR(20)  DEFAULT '',
+                instagram      VARCHAR(100) DEFAULT '',
+                street         VARCHAR(255) DEFAULT '',
+                city           VARCHAR(100) DEFAULT '',
+                state          VARCHAR(100) DEFAULT '',
+                pin            VARCHAR(10)  DEFAULT '',
+                products       JSONB        DEFAULT NULL,
+                gallery        JSONB        DEFAULT NULL,
+                profile_img    TEXT         DEFAULT NULL,
+                shop_name      VARCHAR(255) DEFAULT '',
+                tagline        VARCHAR(255) DEFAULT '',
+                bio            TEXT,
+                experience     VARCHAR(100) DEFAULT '',
+                specialities   JSONB        DEFAULT NULL,
+                timings        JSONB        DEFAULT NULL,
+                deals          JSONB        DEFAULT NULL,
+                price_listings JSONB        DEFAULT NULL,
+                latitude       DECIMAL(10,7) DEFAULT NULL,
+                longitude      DECIMAL(10,7) DEFAULT NULL,
+                updated_at     TIMESTAMP    DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+        console.log('✅ tailor_profiles table ready');
+
+        // ── customer_profiles ──────────────────────────────────────────────
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS customer_profiles (
+                id          SERIAL PRIMARY KEY,
+                user_id     INT         NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+                phone       VARCHAR(20)  DEFAULT '',
+                whatsapp    VARCHAR(20)  DEFAULT '',
+                street      VARCHAR(255) DEFAULT '',
+                city        VARCHAR(100) DEFAULT '',
+                state       VARCHAR(100) DEFAULT '',
+                pin         VARCHAR(10)  DEFAULT '',
+                profile_img TEXT         DEFAULT NULL,
+                updated_at  TIMESTAMP    DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+        console.log('✅ customer_profiles table ready');
+
+        // ── offers ─────────────────────────────────────────────────────────
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS offers (
+                id            SERIAL PRIMARY KEY,
+                tailor_id     INT          NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                title         VARCHAR(255) NOT NULL,
+                description   TEXT         DEFAULT NULL,
+                discount      VARCHAR(100) NOT NULL,
+                discount_type VARCHAR(10)  NOT NULL DEFAULT 'percent'
+                                  CHECK (discount_type IN ('percent', 'flat')),
+                start_date    DATE         NOT NULL,
+                end_date      DATE         NOT NULL,
+                created_at    TIMESTAMP    DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+        console.log('✅ offers table ready');
+
+        // ── orders ─────────────────────────────────────────────────────────
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS orders (
+                id               SERIAL PRIMARY KEY,
+                tailor_id        INT            NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                customer_id      INT            NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                product_name     VARCHAR(255)   NOT NULL,
+                total_amount     DECIMAL(10,2)  NOT NULL DEFAULT 0,
+                advance_payment  DECIMAL(10,2)  NOT NULL DEFAULT 0,
+                discount_amount  DECIMAL(10,2)  NOT NULL DEFAULT 0,
+                final_amount     DECIMAL(10,2)  DEFAULT NULL,
+                remaining_amount DECIMAL(10,2)  GENERATED ALWAYS AS
+                                     (COALESCE(final_amount, total_amount) - advance_payment) STORED,
+                delivery_date    DATE           DEFAULT NULL,
+                current_status   VARCHAR(100)   NOT NULL DEFAULT 'Order Placed',
+                notes            TEXT           DEFAULT NULL,
+                offer_id         INT            DEFAULT NULL,
+                created_at       TIMESTAMP      DEFAULT CURRENT_TIMESTAMP,
+                updated_at       TIMESTAMP      DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+        console.log('✅ orders table ready');
+
+        // ── order_status_history ───────────────────────────────────────────
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS order_status_history (
+                id         SERIAL PRIMARY KEY,
+                order_id   INT          NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+                status     VARCHAR(100) NOT NULL,
+                note       TEXT         DEFAULT NULL,
+                updated_at TIMESTAMP    DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+        console.log('✅ order_status_history table ready');
+
+        // ── messages ───────────────────────────────────────────────────────
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS messages (
+                id          SERIAL PRIMARY KEY,
+                sender_id   INT         NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                receiver_id INT         NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                message     TEXT        NOT NULL,
+                is_read     BOOLEAN     NOT NULL DEFAULT FALSE,
+                is_edited   BOOLEAN     NOT NULL DEFAULT FALSE,
+                file_url    TEXT        DEFAULT NULL,
+                file_type   VARCHAR(50) DEFAULT NULL,
+                file_name   VARCHAR(255) DEFAULT NULL,
+                created_at  TIMESTAMP   DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+        console.log('✅ messages table ready');
+
+        // ── notifications ──────────────────────────────────────────────────
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS notifications (
+                id           SERIAL PRIMARY KEY,
+                user_id      INT          NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                type         VARCHAR(60)  DEFAULT 'system',
+                title        VARCHAR(255) NOT NULL,
+                body         TEXT         DEFAULT NULL,
+                action_url   VARCHAR(255) DEFAULT NULL,
+                action_label VARCHAR(100) DEFAULT NULL,
+                is_read      BOOLEAN      NOT NULL DEFAULT FALSE,
+                created_at   TIMESTAMP    DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+        console.log('✅ notifications table ready');
+
+        // ── feedbacks ──────────────────────────────────────────────────────
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS feedbacks (
+                id          SERIAL PRIMARY KEY,
+                order_id    INT  NOT NULL UNIQUE,
+                customer_id INT  NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                tailor_id   INT  NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                rating      INT  NOT NULL CHECK (rating >= 1 AND rating <= 5),
+                message     TEXT,
+                created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+        console.log('✅ feedbacks table ready');
+
+        // ── products ───────────────────────────────────────────────────────
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS products (
+                id          SERIAL PRIMARY KEY,
+                name        VARCHAR(255) NOT NULL,
+                description TEXT,
+                price       DECIMAL(10,2) NOT NULL,
+                image_url   VARCHAR(255)
+            )
+        `);
+        console.log('✅ products table ready');
+
+    } catch (err) {
+        console.error('❌ DB initialisation error:', err.message);
+    } finally {
+        client.release();
     }
-    console.log('✅ Connected successfully to MySQL database (pool)');
-    connection.release();
+}
 
-    // Auto-create tailor_profiles table if it doesn't exist
-    const createProfileTable = `
-        CREATE TABLE IF NOT EXISTS tailor_profiles (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            user_id INT NOT NULL UNIQUE,
-            phone VARCHAR(20) DEFAULT '',
-            whatsapp VARCHAR(20) DEFAULT '',
-            instagram VARCHAR(100) DEFAULT '',
-            street VARCHAR(255) DEFAULT '',
-            city VARCHAR(100) DEFAULT '',
-            state VARCHAR(100) DEFAULT '',
-            pin VARCHAR(10) DEFAULT '',
-            products JSON DEFAULT NULL,
-            gallery JSON DEFAULT NULL,
-            profile_img TEXT DEFAULT NULL,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        )
-    `;
-    db.query(createProfileTable, (tableErr) => {
-        if (tableErr) console.error('Error creating tailor_profiles table:', tableErr.message);
-        else console.log('✅ tailor_profiles table ready');
-    });
+initDB();
 
-    // ── Soft-migrate: add new profile columns if they don't exist yet ──────────
-    const newCols = [
-        `ALTER TABLE tailor_profiles ADD COLUMN shop_name VARCHAR(255) DEFAULT ''`,
-        `ALTER TABLE tailor_profiles ADD COLUMN tagline VARCHAR(255) DEFAULT ''`,
-        `ALTER TABLE tailor_profiles ADD COLUMN bio TEXT`,
-        `ALTER TABLE tailor_profiles ADD COLUMN experience VARCHAR(100) DEFAULT ''`,
-        `ALTER TABLE tailor_profiles ADD COLUMN specialities JSON DEFAULT NULL`,
-        `ALTER TABLE tailor_profiles ADD COLUMN timings JSON DEFAULT NULL`,
-        `ALTER TABLE tailor_profiles ADD COLUMN deals JSON DEFAULT NULL`,
-        `ALTER TABLE tailor_profiles ADD COLUMN price_listings JSON DEFAULT NULL`,
-        `ALTER TABLE tailor_profiles ADD COLUMN latitude DECIMAL(10,7) DEFAULT NULL`,
-        `ALTER TABLE tailor_profiles ADD COLUMN longitude DECIMAL(10,7) DEFAULT NULL`,
-    ];
-    newCols.forEach(sql => {
-        db.query(sql, (err) => {
-            if (err && err.code !== 'ER_DUP_FIELDNAME') console.warn('Column migration warning:', err.message);
-        });
-    });
-
-    // Auto-create customer_profiles table if it doesn't exist
-    const createCustomerProfileTable = `
-        CREATE TABLE IF NOT EXISTS customer_profiles (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            user_id INT NOT NULL UNIQUE,
-            phone VARCHAR(20) DEFAULT '',
-            whatsapp VARCHAR(20) DEFAULT '',
-            street VARCHAR(255) DEFAULT '',
-            city VARCHAR(100) DEFAULT '',
-            state VARCHAR(100) DEFAULT '',
-            pin VARCHAR(10) DEFAULT '',
-            profile_img TEXT DEFAULT NULL,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        )
-    `;
-    db.query(createCustomerProfileTable, (tableErr) => {
-        if (tableErr) console.error('Error creating customer_profiles table:', tableErr.message);
-        else {
-            console.log('✅ customer_profiles table ready');
-            // Soft-migrate: add profile_img if it doesn't exist yet
-            db.query(`ALTER TABLE customer_profiles ADD COLUMN profile_img TEXT DEFAULT NULL`, (err) => {
-                if (err && err.code !== 'ER_DUP_FIELDNAME') console.warn('customer_profiles profile_img migration warning:', err.message);
-            });
-        }
-    });
-
-    // Auto-create offers table
-    const createOffersTable = `
-        CREATE TABLE IF NOT EXISTS offers (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            tailor_id INT NOT NULL,
-            title VARCHAR(255) NOT NULL,
-            description TEXT DEFAULT NULL,
-            discount VARCHAR(100) NOT NULL,
-            discount_type ENUM('percent','flat') DEFAULT 'percent',
-            start_date DATE NOT NULL,
-            end_date DATE NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (tailor_id) REFERENCES users(id) ON DELETE CASCADE
-        )
-    `;
-    db.query(createOffersTable, (tableErr) => {
-        if (tableErr) console.error('Error creating offers table:', tableErr.message);
-        else console.log('✅ offers table ready');
-    });
-
-    // Auto-create orders table
-    const createOrdersTable = `
-        CREATE TABLE IF NOT EXISTS orders (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            tailor_id INT NOT NULL,
-            customer_id INT NOT NULL,
-            product_name VARCHAR(255) NOT NULL,
-            total_amount DECIMAL(10,2) NOT NULL DEFAULT 0,
-            advance_payment DECIMAL(10,2) NOT NULL DEFAULT 0,
-            discount_amount DECIMAL(10,2) NOT NULL DEFAULT 0,
-            final_amount DECIMAL(10,2) DEFAULT NULL,
-            remaining_amount DECIMAL(10,2) GENERATED ALWAYS AS (COALESCE(final_amount, total_amount) - advance_payment) STORED,
-            delivery_date DATE DEFAULT NULL,
-            current_status VARCHAR(100) NOT NULL DEFAULT 'Order Placed',
-            notes TEXT DEFAULT NULL,
-            offer_id INT DEFAULT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            FOREIGN KEY (tailor_id) REFERENCES users(id) ON DELETE CASCADE,
-            FOREIGN KEY (customer_id) REFERENCES users(id) ON DELETE CASCADE
-        )
-    `;
-    db.query(createOrdersTable, (tableErr) => {
-        if (tableErr) console.error('Error creating orders table:', tableErr.message);
-        else {
-            console.log('✅ orders table ready');
-            db.query('ALTER TABLE orders ADD COLUMN notes TEXT DEFAULT NULL', (err) => {
-                if (err && err.code !== 'ER_DUP_FIELDNAME') console.warn('Order notes migration warning:', err.message);
-            });
-            db.query("ALTER TABLE orders ADD COLUMN current_status VARCHAR(100) NOT NULL DEFAULT 'Order Placed'", (err) => {
-                if (err && err.code !== 'ER_DUP_FIELDNAME') console.warn('Order status migration warning:', err.message);
-            });
-            // Discount / offer columns
-            db.query('ALTER TABLE orders ADD COLUMN offer_id INT DEFAULT NULL', (err) => {
-                if (err && err.code !== 'ER_DUP_FIELDNAME') console.warn('Order offer_id migration warning:', err.message);
-            });
-            db.query('ALTER TABLE orders ADD COLUMN discount_amount DECIMAL(10,2) NOT NULL DEFAULT 0', (err) => {
-                if (err && err.code !== 'ER_DUP_FIELDNAME') console.warn('Order discount_amount migration warning:', err.message);
-            });
-            db.query('ALTER TABLE orders ADD COLUMN final_amount DECIMAL(10,2) DEFAULT NULL', (err) => {
-                if (err && err.code !== 'ER_DUP_FIELDNAME') console.warn('Order final_amount migration warning:', err.message);
-            });
-            // Fix remaining amount generation for existing tables
-            db.query('ALTER TABLE orders DROP COLUMN remaining_amount', () => {
-                db.query('ALTER TABLE orders ADD COLUMN remaining_amount DECIMAL(10,2) GENERATED ALWAYS AS (COALESCE(final_amount, total_amount) - advance_payment) STORED', (err) => {
-                    if (err && err.code !== 'ER_DUP_FIELDNAME') console.warn('Order remaining_amount migration warning:', err.message);
-                });
-            });
-        }
-    });
-
-    // Auto-create order_status_history table
-    const createOrderStatusHistoryTable = `
-        CREATE TABLE IF NOT EXISTS order_status_history (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            order_id INT NOT NULL,
-            status VARCHAR(100) NOT NULL,
-            note TEXT DEFAULT NULL,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE
-        )
-    `;
-    db.query(createOrderStatusHistoryTable, (tableErr) => {
-        if (tableErr) console.error('Error creating order_status_history table:', tableErr.message);
-        else console.log('✅ order_status_history table ready');
-    });
-
-    // Auto-create messages table for Chat feature
-    const createMessagesTable = `
-        CREATE TABLE IF NOT EXISTS messages (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            sender_id INT NOT NULL,
-            receiver_id INT NOT NULL,
-            message TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE,
-            FOREIGN KEY (receiver_id) REFERENCES users(id) ON DELETE CASCADE
-        )
-    `;
-    db.query(createMessagesTable, (tableErr) => {
-        if (tableErr) console.error('Error creating messages table:', tableErr.message);
-        else {
-            console.log('✅ messages table ready');
-            // Soft-migrate: add is_read column if not exists
-            db.query('ALTER TABLE messages ADD COLUMN is_read TINYINT(1) NOT NULL DEFAULT 0', (err) => {
-                if (err && err.code !== 'ER_DUP_FIELDNAME') console.warn('messages is_read migration warning:', err.message);
-            });
-            // Soft-migrate: add is_edited column if not exists
-            db.query('ALTER TABLE messages ADD COLUMN is_edited TINYINT(1) NOT NULL DEFAULT 0', (err) => {
-                if (err && err.code !== 'ER_DUP_FIELDNAME') console.warn('messages is_edited migration warning:', err.message);
-            });
-            // Soft-migrate: add file attachment columns
-            db.query('ALTER TABLE messages ADD COLUMN file_url TEXT DEFAULT NULL', (err) => {
-                if (err && err.code !== 'ER_DUP_FIELDNAME') console.warn('messages file_url migration warning:', err.message);
-            });
-            db.query('ALTER TABLE messages ADD COLUMN file_type VARCHAR(50) DEFAULT NULL', (err) => {
-                if (err && err.code !== 'ER_DUP_FIELDNAME') console.warn('messages file_type migration warning:', err.message);
-            });
-            db.query('ALTER TABLE messages ADD COLUMN file_name VARCHAR(255) DEFAULT NULL', (err) => {
-                if (err && err.code !== 'ER_DUP_FIELDNAME') console.warn('messages file_name migration warning:', err.message);
-            });
-        }
-    });
-
-    // Auto-create notifications table
-    db.query(`
-        CREATE TABLE IF NOT EXISTS notifications (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            user_id INT NOT NULL,
-            type VARCHAR(60) DEFAULT 'system',
-            title VARCHAR(255) NOT NULL,
-            body TEXT DEFAULT NULL,
-            action_url VARCHAR(255) DEFAULT NULL,
-            action_label VARCHAR(100) DEFAULT NULL,
-            is_read TINYINT(1) NOT NULL DEFAULT 0,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        )
-    `, (tableErr) => {
-        if (tableErr) console.error('Error creating notifications table:', tableErr.message);
-        else console.log('✅ notifications table ready');
-    });
-});
-
+// ── Nodemailer ──────────────────────────────────────────────────────────────
 const transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
@@ -301,7 +276,9 @@ transporter.verify((err) => {
     }
 });
 
-// Safely parse a MySQL JSON field which may already be a parsed object
+// ── Helpers ─────────────────────────────────────────────────────────────────
+
+// Safely parse a PostgreSQL JSONB field which may already be a parsed object
 const safeParseJSON = (val, fallback = []) => {
     if (val === null || val === undefined) return fallback;
     if (typeof val === 'object') return val;
@@ -311,45 +288,48 @@ const safeParseJSON = (val, fallback = []) => {
 // Normalize profile_img: strip any http://.../ prefix, keep only /uploads/... or null
 const normalizeImgPath = (img) => {
     if (!img) return null;
-    // If a full URL was accidentally stored, strip everything up to /uploads/
     const match = img.match(/(\/uploads\/[^?#]+)/);
     if (match) return match[1];
-    // If it's already a relative /uploads/... path
     if (img.startsWith('/uploads/')) return img;
-    // If it starts with http but has no /uploads/ segment, return as-is (external URL)
     if (img.startsWith('http')) return img;
     return img;
 };
 
-const verifyToken = (req, res, next) => {
+// ── Middleware ───────────────────────────────────────────────────────────────
+
+const verifyToken = async (req, res, next) => {
     const token = req.cookies.token;
     if (!token) return res.status(401).json({ message: 'Not authenticated' });
-    jwt.verify(token, JWT_SECRET, (err, decoded) => {
+    jwt.verify(token, JWT_SECRET, async (err, decoded) => {
         if (err) return res.status(401).json({ message: 'Invalid or expired token' });
-        // Fetch role from DB so req.userRole is always available
-        db.query('SELECT id, role FROM users WHERE id = ?', [decoded.id], (dbErr, results) => {
-            if (dbErr || results.length === 0) return res.status(500).json({ message: 'Server error' });
+        try {
+            const result = await pool.query('SELECT id, role FROM users WHERE id = $1', [decoded.id]);
+            if (result.rows.length === 0) return res.status(500).json({ message: 'Server error' });
             req.userId = decoded.id;
-            req.userRole = results[0].role;
+            req.userRole = result.rows[0].role;
             next();
-        });
+        } catch (dbErr) {
+            return res.status(500).json({ message: 'Server error' });
+        }
     });
 };
 
 // Role-guard middleware — usage: requireRole('tailor') or requireRole('customer')
-const requireRole = (role) => (req, res, next) => {
+const requireRole = (role) => async (req, res, next) => {
     const token = req.cookies.token;
     if (!token) return res.status(401).json({ message: 'Not authenticated' });
-    jwt.verify(token, JWT_SECRET, (err, decoded) => {
+    jwt.verify(token, JWT_SECRET, async (err, decoded) => {
         if (err) return res.status(401).json({ message: 'Invalid or expired token' });
-        const sql = 'SELECT id, role FROM users WHERE id = ?';
-        db.query(sql, [decoded.id], (dbErr, results) => {
-            if (dbErr || results.length === 0) return res.status(500).json({ message: 'Server error' });
-            if (results[0].role !== role) return res.status(403).json({ message: `Access denied. ${role} role required.` });
+        try {
+            const result = await pool.query('SELECT id, role FROM users WHERE id = $1', [decoded.id]);
+            if (result.rows.length === 0) return res.status(500).json({ message: 'Server error' });
+            if (result.rows[0].role !== role) return res.status(403).json({ message: `Access denied. ${role} role required.` });
             req.userId = decoded.id;
-            req.userRole = results[0].role;
+            req.userRole = result.rows[0].role;
             next();
-        });
+        } catch (dbErr) {
+            return res.status(500).json({ message: 'Server error' });
+        }
     });
 };
 
@@ -363,7 +343,11 @@ const setTokenCookie = (res, userId) => {
     });
 };
 
-app.post('/api/auth/signup', (req, res) => {
+// ═══════════════════════════════════════════════════════════════
+// AUTH ENDPOINTS
+// ═══════════════════════════════════════════════════════════════
+
+app.post('/api/auth/signup', async (req, res) => {
     const { full_name, email, password, role } = req.body;
     if (!full_name || !email || !password) {
         return res.status(400).json({ message: 'All fields are required' });
@@ -374,45 +358,49 @@ app.post('/api/auth/signup', (req, res) => {
     const validRoles = ['customer', 'tailor'];
     const userRole = validRoles.includes(role) ? role : 'customer';
     const hashedPassword = bcrypt.hashSync(password, 10);
-    const sql = 'INSERT INTO users (full_name, email, password, role) VALUES (?, ?, ?, ?)';
-    db.query(sql, [full_name, email, hashedPassword, userRole], (err) => {
-        if (err) {
-            console.error('Signup DB error:', err);
-            if (err.code === 'ER_DUP_ENTRY') {
-                return res.status(409).json({ message: 'Email already in use' });
-            }
-            return res.status(500).json({ message: 'Error creating account' });
-        }
+    try {
+        await pool.query(
+            'INSERT INTO users (full_name, email, password, role) VALUES ($1, $2, $3, $4)',
+            [full_name, email, hashedPassword, userRole]
+        );
         res.status(201).json({ message: 'Account created successfully' });
-    });
+    } catch (err) {
+        console.error('Signup DB error:', err);
+        if (err.code === '23505') {
+            return res.status(409).json({ message: 'Email already in use' });
+        }
+        return res.status(500).json({ message: 'Error creating account' });
+    }
 });
 
-app.post('/api/auth/login', (req, res) => {
+app.post('/api/auth/login', async (req, res) => {
     const { email, password } = req.body;
     if (!email || !password) {
         return res.status(400).json({ message: 'Email and password are required' });
     }
-    const sql = 'SELECT * FROM users WHERE email = ?';
-    db.query(sql, [email], (err, results) => {
-        if (err) return res.status(500).json({ message: 'Server error' });
-        if (results.length === 0) {
+    try {
+        const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+        if (result.rows.length === 0) {
             return res.status(401).json({ message: 'Invalid email or password' });
         }
-        const user = results[0];
+        const user = result.rows[0];
         const valid = bcrypt.compareSync(password, user.password);
         if (!valid) return res.status(401).json({ message: 'Invalid email or password' });
         setTokenCookie(res, user.id);
         res.json({ message: 'Login successful', user: { id: user.id, full_name: user.full_name, email: user.email, role: user.role } });
-    });
+    } catch (err) {
+        return res.status(500).json({ message: 'Server error' });
+    }
 });
 
-app.get('/api/auth/me', verifyToken, (req, res) => {
-    const sql = 'SELECT id, full_name, email, role FROM users WHERE id = ?';
-    db.query(sql, [req.userId], (err, results) => {
-        if (err) return res.status(500).json({ message: 'Server error' });
-        if (results.length === 0) return res.status(404).json({ message: 'User not found' });
-        res.json({ user: results[0] });
-    });
+app.get('/api/auth/me', verifyToken, async (req, res) => {
+    try {
+        const result = await pool.query('SELECT id, full_name, email, role FROM users WHERE id = $1', [req.userId]);
+        if (result.rows.length === 0) return res.status(404).json({ message: 'User not found' });
+        res.json({ user: result.rows[0] });
+    } catch (err) {
+        return res.status(500).json({ message: 'Server error' });
+    }
 });
 
 app.post('/api/auth/logout', (req, res) => {
@@ -420,50 +408,51 @@ app.post('/api/auth/logout', (req, res) => {
     res.json({ message: 'Logged out successfully' });
 });
 
-app.post('/api/auth/forgot-password', (req, res) => {
+app.post('/api/auth/forgot-password', async (req, res) => {
     const { email } = req.body;
     if (!email) return res.status(400).json({ message: 'Email is required' });
-    const sql = 'SELECT * FROM users WHERE email = ?';
-    db.query(sql, [email], (err, results) => {
-        if (err) return res.status(500).json({ message: 'Server error' });
-        if (results.length === 0) {
+    try {
+        const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+        if (result.rows.length === 0) {
             return res.json({ message: 'If this email exists, a reset link has been sent' });
         }
-        const user = results[0];
+        const user = result.rows[0];
         const rawToken = crypto.randomBytes(32).toString('hex');
         const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
         const expiry = new Date(Date.now() + 15 * 60 * 1000);
-        const updateSql = 'UPDATE users SET reset_token = ?, reset_token_expiry = ? WHERE id = ?';
-        db.query(updateSql, [tokenHash, expiry, user.id], (updateErr) => {
-            if (updateErr) return res.status(500).json({ message: 'Server error' });
-            const resetLink = `${CLIENT_URL}/reset-password/${rawToken}`;
-            console.log('📧 Attempting to send password reset email to:', email);
-            console.log('🔗 Reset link:', resetLink);
-            transporter.sendMail({
-                from: `"TailorHub" <${process.env.EMAIL_USER}>`,
-                to: email,
-                subject: 'TailorHub – Password Reset Request',
-                html: `
-                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 24px; border: 1px solid #e5e7eb; border-radius: 8px;">
-                        <h2 style="color: #1f2937;">🔐 Reset Your Password</h2>
-                        <p style="color: #374151;">You requested a password reset for your TailorHub account.</p>
-                        <p style="color: #374151;">Click the button below to reset your password. This link expires in <strong>15 minutes</strong>.</p>
-                        <a href="${resetLink}" style="display: inline-block; margin: 16px 0; padding: 12px 24px; background: #1f2937; color: white; text-decoration: none; border-radius: 6px; font-weight: bold;">Reset Password</a>
-                        <p style="color: #6b7280; font-size: 13px;">If you did not request this, you can safely ignore this email. Your password will not change.</p>
-                        <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
-                        <p style="color: #9ca3af; font-size: 12px;">TailorHub – Custom Tailoring Platform</p>
-                    </div>
-                `,
-            }, (mailErr, info) => {
-                if (mailErr) {
-                    console.error('❌ Email send error:', mailErr.message);
-                    return res.status(500).json({ message: 'Failed to send reset email. Please try again later.' });
-                }
-                console.log('✅ Password reset email sent to:', email, '| Message ID:', info.messageId);
-                res.json({ message: 'If this email exists, a reset link has been sent' });
-            });
+        await pool.query(
+            'UPDATE users SET reset_token = $1, reset_token_expiry = $2 WHERE id = $3',
+            [tokenHash, expiry, user.id]
+        );
+        const resetLink = `${CLIENT_URL}/reset-password/${rawToken}`;
+        console.log('📧 Attempting to send password reset email to:', email);
+        console.log('🔗 Reset link:', resetLink);
+        transporter.sendMail({
+            from: `"TailorHub" <${process.env.EMAIL_USER}>`,
+            to: email,
+            subject: 'TailorHub – Password Reset Request',
+            html: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 24px; border: 1px solid #e5e7eb; border-radius: 8px;">
+                    <h2 style="color: #1f2937;">🔐 Reset Your Password</h2>
+                    <p style="color: #374151;">You requested a password reset for your TailorHub account.</p>
+                    <p style="color: #374151;">Click the button below to reset your password. This link expires in <strong>15 minutes</strong>.</p>
+                    <a href="${resetLink}" style="display: inline-block; margin: 16px 0; padding: 12px 24px; background: #1f2937; color: white; text-decoration: none; border-radius: 6px; font-weight: bold;">Reset Password</a>
+                    <p style="color: #6b7280; font-size: 13px;">If you did not request this, you can safely ignore this email. Your password will not change.</p>
+                    <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
+                    <p style="color: #9ca3af; font-size: 12px;">TailorHub – Custom Tailoring Platform</p>
+                </div>
+            `,
+        }, (mailErr, info) => {
+            if (mailErr) {
+                console.error('❌ Email send error:', mailErr.message);
+                return res.status(500).json({ message: 'Failed to send reset email. Please try again later.' });
+            }
+            console.log('✅ Password reset email sent to:', email, '| Message ID:', info.messageId);
+            res.json({ message: 'If this email exists, a reset link has been sent' });
         });
-    });
+    } catch (err) {
+        return res.status(500).json({ message: 'Server error' });
+    }
 });
 
 // ── Redirect browser from backend URL to React frontend for password reset ──
@@ -471,28 +460,36 @@ app.get('/reset-password/:token', (req, res) => {
     res.redirect(`${CLIENT_URL}/reset-password/${req.params.token}`);
 });
 
-app.post('/api/auth/reset-password/:token', (req, res) => {
+app.post('/api/auth/reset-password/:token', async (req, res) => {
     const { token } = req.params;
     const { password } = req.body;
     if (!password || password.length < 6) {
         return res.status(400).json({ message: 'Password must be at least 6 characters' });
     }
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-    const sql = 'SELECT * FROM users WHERE reset_token = ? AND reset_token_expiry > NOW()';
-    db.query(sql, [tokenHash], (err, results) => {
-        if (err) return res.status(500).json({ message: 'Server error' });
-        if (results.length === 0) {
+    try {
+        const result = await pool.query(
+            'SELECT * FROM users WHERE reset_token = $1 AND reset_token_expiry > NOW()',
+            [tokenHash]
+        );
+        if (result.rows.length === 0) {
             return res.status(400).json({ message: 'Reset link is invalid or has expired' });
         }
-        const user = results[0];
+        const user = result.rows[0];
         const hashed = bcrypt.hashSync(password, 10);
-        const updateSql = 'UPDATE users SET password = ?, reset_token = NULL, reset_token_expiry = NULL WHERE id = ?';
-        db.query(updateSql, [hashed, user.id], (updateErr) => {
-            if (updateErr) return res.status(500).json({ message: 'Server error' });
-            res.json({ message: 'Password reset successfully' });
-        });
-    });
+        await pool.query(
+            'UPDATE users SET password = $1, reset_token = NULL, reset_token_expiry = NULL WHERE id = $2',
+            [hashed, user.id]
+        );
+        res.json({ message: 'Password reset successfully' });
+    } catch (err) {
+        return res.status(500).json({ message: 'Server error' });
+    }
 });
+
+// ═══════════════════════════════════════════════════════════════
+// FILE UPLOAD (multer — unchanged)
+// ═══════════════════════════════════════════════════════════════
 
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
@@ -582,32 +579,43 @@ app.post('/api/customer/upload/profile-image',
     (req, res, next) => { req._uploadPrefix = 'customer'; next(); },
     upload.single('profile_img'),
     handleUploadError,
-    (req, res) => {
+    async (req, res) => {
         if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
         const imageUrl = `/uploads/${req.file.filename}`;
-        const sql = `INSERT INTO customer_profiles (user_id, profile_img)
-            VALUES (?, ?)
-            ON DUPLICATE KEY UPDATE profile_img = VALUES(profile_img)`;
-        db.query(sql, [req.userId, imageUrl], (err) => {
-            if (err) {
-                console.error('Customer profile_img save error:', err);
-                return res.status(500).json({ message: 'Image uploaded but failed to save to profile' });
-            }
+        try {
+            await pool.query(
+                `INSERT INTO customer_profiles (user_id, profile_img)
+                 VALUES ($1, $2)
+                 ON CONFLICT (user_id) DO UPDATE SET profile_img = EXCLUDED.profile_img`,
+                [req.userId, imageUrl]
+            );
             res.json({ message: 'Profile image updated successfully', imageUrl });
-        });
+        } catch (err) {
+            console.error('Customer profile_img save error:', err);
+            return res.status(500).json({ message: 'Image uploaded but failed to save to profile' });
+        }
     }
 );
 
-app.get('/api/products', (req, res) => {
-    const sql = 'SELECT * FROM products';
-    db.query(sql, (err, results) => {
-        if (err) return res.status(500).json(err);
-        res.json(results);
-    });
+// ═══════════════════════════════════════════════════════════════
+// PRODUCTS ENDPOINT
+// ═══════════════════════════════════════════════════════════════
+
+app.get('/api/products', async (req, res) => {
+    try {
+        const result = await pool.query('SELECT * FROM products');
+        res.json(result.rows);
+    } catch (err) {
+        return res.status(500).json(err);
+    }
 });
 
+// ═══════════════════════════════════════════════════════════════
+// TAILOR PROFILE ENDPOINTS
+// ═══════════════════════════════════════════════════════════════
+
 // ── Tailor Profile: Save (upsert) ──────────────────────────────────────────
-app.post('/api/tailor/profile', verifyToken, (req, res) => {
+app.post('/api/tailor/profile', verifyToken, async (req, res) => {
     const {
         phone, whatsapp, instagram, street, city, state, pin,
         products, gallery, profile_img,
@@ -615,29 +623,31 @@ app.post('/api/tailor/profile', verifyToken, (req, res) => {
         latitude, longitude
     } = req.body;
 
-    db.query('SELECT role FROM users WHERE id = ?', [req.userId], (err, rows) => {
-        if (err || rows.length === 0) return res.status(500).json({ message: 'Server error' });
-        if (rows[0].role !== 'tailor') return res.status(403).json({ message: 'Only tailors can update a tailor profile' });
+    try {
+        const userRes = await pool.query('SELECT role FROM users WHERE id = $1', [req.userId]);
+        if (userRes.rows.length === 0) return res.status(500).json({ message: 'Server error' });
+        if (userRes.rows[0].role !== 'tailor') return res.status(403).json({ message: 'Only tailors can update a tailor profile' });
 
-        const sql = `
+        const lat = (latitude !== undefined && latitude !== '' && latitude !== null) ? parseFloat(latitude) : null;
+        const lng = (longitude !== undefined && longitude !== '' && longitude !== null) ? parseFloat(longitude) : null;
+
+        await pool.query(`
             INSERT INTO tailor_profiles
                 (user_id, phone, whatsapp, instagram, street, city, state, pin,
                  products, gallery, profile_img,
                  shop_name, tagline, bio, experience, specialities, timings, deals, price_listings,
                  latitude, longitude)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE
-                phone=VALUES(phone), whatsapp=VALUES(whatsapp), instagram=VALUES(instagram),
-                street=VALUES(street), city=VALUES(city), state=VALUES(state), pin=VALUES(pin),
-                products=VALUES(products), gallery=VALUES(gallery), profile_img=VALUES(profile_img),
-                shop_name=VALUES(shop_name), tagline=VALUES(tagline), bio=VALUES(bio),
-                experience=VALUES(experience), specialities=VALUES(specialities), timings=VALUES(timings),
-                deals=VALUES(deals), price_listings=VALUES(price_listings),
-                latitude=VALUES(latitude), longitude=VALUES(longitude)
-        `;
-        const lat = (latitude !== undefined && latitude !== '' && latitude !== null) ? parseFloat(latitude) : null;
-        const lng = (longitude !== undefined && longitude !== '' && longitude !== null) ? parseFloat(longitude) : null;
-        const params = [
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+            ON CONFLICT (user_id) DO UPDATE SET
+                phone=EXCLUDED.phone, whatsapp=EXCLUDED.whatsapp, instagram=EXCLUDED.instagram,
+                street=EXCLUDED.street, city=EXCLUDED.city, state=EXCLUDED.state, pin=EXCLUDED.pin,
+                products=EXCLUDED.products, gallery=EXCLUDED.gallery, profile_img=EXCLUDED.profile_img,
+                shop_name=EXCLUDED.shop_name, tagline=EXCLUDED.tagline, bio=EXCLUDED.bio,
+                experience=EXCLUDED.experience, specialities=EXCLUDED.specialities, timings=EXCLUDED.timings,
+                deals=EXCLUDED.deals, price_listings=EXCLUDED.price_listings,
+                latitude=EXCLUDED.latitude, longitude=EXCLUDED.longitude,
+                updated_at=CURRENT_TIMESTAMP
+        `, [
             req.userId,
             phone || '', whatsapp || '', instagram || '',
             street || '', city || '', state || '', pin || '',
@@ -650,34 +660,30 @@ app.post('/api/tailor/profile', verifyToken, (req, res) => {
             JSON.stringify(deals || []),
             JSON.stringify(price_listings || []),
             lat, lng,
-        ];
-        db.query(sql, params, (insertErr) => {
-            if (insertErr) {
-                console.error('Tailor profile save error:', insertErr);
-                return res.status(500).json({ message: 'Failed to save profile' });
-            }
-            res.json({ message: 'Profile saved successfully' });
-        });
-    });
+        ]);
+        res.json({ message: 'Profile saved successfully' });
+    } catch (err) {
+        console.error('Tailor profile save error:', err);
+        return res.status(500).json({ message: 'Failed to save profile' });
+    }
 });
 
 // ── Tailor Profile: Get own profile ────────────────────────────────────────
-app.get('/api/tailor/profile', verifyToken, (req, res) => {
-    const sql = `
-        SELECT u.full_name, u.email, u.avg_rating, u.total_reviews,
-               tp.phone, tp.whatsapp, tp.instagram,
-               tp.street, tp.city, tp.state, tp.pin,
-               tp.products, tp.gallery, tp.profile_img,
-               tp.shop_name, tp.tagline, tp.bio, tp.experience, tp.specialities, tp.timings, tp.deals,
-               tp.price_listings, tp.latitude, tp.longitude
-        FROM users u
-        LEFT JOIN tailor_profiles tp ON u.id = tp.user_id
-        WHERE u.id = ? AND u.role = 'tailor'
-    `;
-    db.query(sql, [req.userId], (err, results) => {
-        if (err) return res.status(500).json({ message: 'Server error' });
-        if (results.length === 0) return res.json({ profile: null });
-        const p = results[0];
+app.get('/api/tailor/profile', verifyToken, async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT u.full_name, u.email, u.avg_rating, u.total_reviews,
+                   tp.phone, tp.whatsapp, tp.instagram,
+                   tp.street, tp.city, tp.state, tp.pin,
+                   tp.products, tp.gallery, tp.profile_img,
+                   tp.shop_name, tp.tagline, tp.bio, tp.experience, tp.specialities, tp.timings, tp.deals,
+                   tp.price_listings, tp.latitude, tp.longitude
+            FROM users u
+            LEFT JOIN tailor_profiles tp ON u.id = tp.user_id
+            WHERE u.id = $1 AND u.role = 'tailor'
+        `, [req.userId]);
+        if (result.rows.length === 0) return res.json({ profile: null });
+        const p = result.rows[0];
         res.json({
             profile: {
                 ...p,
@@ -692,80 +698,91 @@ app.get('/api/tailor/profile', verifyToken, (req, res) => {
                 longitude:      p.longitude != null ? parseFloat(p.longitude) : null,
             }
         });
-    });
+    } catch (err) {
+        return res.status(500).json({ message: 'Server error' });
+    }
 });
 
 // ── Tailor Deals: Save deals separately ────────────────────────────────────
-app.post('/api/tailor/deals', verifyToken, (req, res) => {
+app.post('/api/tailor/deals', verifyToken, async (req, res) => {
     const { deals } = req.body;
-    db.query('SELECT role FROM users WHERE id = ?', [req.userId], (err, rows) => {
-        if (err || rows.length === 0) return res.status(500).json({ message: 'Server error' });
-        if (rows[0].role !== 'tailor') return res.status(403).json({ message: 'Only tailors can update deals' });
-        const sql = `INSERT INTO tailor_profiles (user_id, deals) VALUES (?, ?)
-            ON DUPLICATE KEY UPDATE deals = VALUES(deals)`;
-        db.query(sql, [req.userId, JSON.stringify(deals || [])], (err2) => {
-            if (err2) return res.status(500).json({ message: 'Failed to save deals' });
-            res.json({ message: 'Deals saved successfully' });
-        });
-    });
+    try {
+        const userRes = await pool.query('SELECT role FROM users WHERE id = $1', [req.userId]);
+        if (userRes.rows.length === 0) return res.status(500).json({ message: 'Server error' });
+        if (userRes.rows[0].role !== 'tailor') return res.status(403).json({ message: 'Only tailors can update deals' });
+        await pool.query(
+            `INSERT INTO tailor_profiles (user_id, deals) VALUES ($1, $2)
+             ON CONFLICT (user_id) DO UPDATE SET deals = EXCLUDED.deals`,
+            [req.userId, JSON.stringify(deals || [])]
+        );
+        res.json({ message: 'Deals saved successfully' });
+    } catch (err) {
+        return res.status(500).json({ message: 'Failed to save deals' });
+    }
 });
 
 // ── Tailor Deals: Get own deals ─────────────────────────────────────────────
-app.get('/api/tailor/deals', verifyToken, (req, res) => {
-    db.query('SELECT deals FROM tailor_profiles WHERE user_id = ?', [req.userId], (err, results) => {
-        if (err) return res.status(500).json({ message: 'Server error' });
-        const deals = results.length > 0 ? safeParseJSON(results[0].deals, []) : [];
+app.get('/api/tailor/deals', verifyToken, async (req, res) => {
+    try {
+        const result = await pool.query('SELECT deals FROM tailor_profiles WHERE user_id = $1', [req.userId]);
+        const deals = result.rows.length > 0 ? safeParseJSON(result.rows[0].deals, []) : [];
         res.json({ deals });
-    });
+    } catch (err) {
+        return res.status(500).json({ message: 'Server error' });
+    }
 });
 
 // ── Tailor Deals: Get by tailor ID (public for customers) ──────────────────
-app.get('/api/tailors/:id/deals', (req, res) => {
+app.get('/api/tailors/:id/deals', async (req, res) => {
     const { id } = req.params;
-    const sql = `SELECT tp.deals FROM tailor_profiles tp
-        INNER JOIN users u ON u.id = tp.user_id WHERE u.id = ? AND u.role = 'tailor'`;
-    db.query(sql, [id], (err, results) => {
-        if (err) return res.status(500).json({ message: 'Server error' });
-        const deals = results.length > 0 ? safeParseJSON(results[0].deals, []) : [];
+    try {
+        const result = await pool.query(
+            `SELECT tp.deals FROM tailor_profiles tp
+             INNER JOIN users u ON u.id = tp.user_id WHERE u.id = $1 AND u.role = 'tailor'`,
+            [id]
+        );
+        const deals = result.rows.length > 0 ? safeParseJSON(result.rows[0].deals, []) : [];
         res.json({ deals });
-    });
+    } catch (err) {
+        return res.status(500).json({ message: 'Server error' });
+    }
 });
 
 // ── Price Listings: Save (tailor only, dedicated endpoint) ─────────────────
-app.post('/api/tailor/price-listings', verifyToken, (req, res) => {
+app.post('/api/tailor/price-listings', verifyToken, async (req, res) => {
     const { price_listings } = req.body;
-    db.query('SELECT role FROM users WHERE id = ?', [req.userId], (err, rows) => {
-        if (err || rows.length === 0) return res.status(500).json({ message: 'Server error' });
-        if (rows[0].role !== 'tailor') return res.status(403).json({ message: 'Only tailors can update price listings' });
-        const sql = `INSERT INTO tailor_profiles (user_id, price_listings) VALUES (?, ?)
-            ON DUPLICATE KEY UPDATE price_listings = VALUES(price_listings)`;
-        db.query(sql, [req.userId, JSON.stringify(price_listings || [])], (err2) => {
-            if (err2) {
-                console.error('Price listings save error:', err2);
-                return res.status(500).json({ message: 'Failed to save price listings' });
-            }
-            res.json({ message: 'Price listings saved successfully' });
-        });
-    });
+    try {
+        const userRes = await pool.query('SELECT role FROM users WHERE id = $1', [req.userId]);
+        if (userRes.rows.length === 0) return res.status(500).json({ message: 'Server error' });
+        if (userRes.rows[0].role !== 'tailor') return res.status(403).json({ message: 'Only tailors can update price listings' });
+        await pool.query(
+            `INSERT INTO tailor_profiles (user_id, price_listings) VALUES ($1, $2)
+             ON CONFLICT (user_id) DO UPDATE SET price_listings = EXCLUDED.price_listings`,
+            [req.userId, JSON.stringify(price_listings || [])]
+        );
+        res.json({ message: 'Price listings saved successfully' });
+    } catch (err) {
+        console.error('Price listings save error:', err);
+        return res.status(500).json({ message: 'Failed to save price listings' });
+    }
 });
 
 // ── Tailor Profiles: Fetch all (for customer dashboard) ────────────────────
-app.get('/api/tailors', (req, res) => {
-    const sql = `
-        SELECT u.id, u.full_name, u.email, u.avg_rating, u.total_reviews,
-               tp.phone, tp.whatsapp, tp.instagram,
-               tp.street, tp.city, tp.state, tp.pin,
-               tp.products, tp.gallery, tp.profile_img,
-               tp.shop_name, tp.tagline, tp.bio, tp.experience, tp.specialities, tp.timings,
-               tp.price_listings, tp.deals, tp.latitude, tp.longitude
-        FROM users u
-        INNER JOIN tailor_profiles tp ON u.id = tp.user_id
-        WHERE u.role = 'tailor'
-        ORDER BY tp.updated_at DESC
-    `;
-    db.query(sql, (err, results) => {
-        if (err) return res.status(500).json({ message: 'Server error' });
-        const tailors = results.map(t => ({
+app.get('/api/tailors', async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT u.id, u.full_name, u.email, u.avg_rating, u.total_reviews,
+                   tp.phone, tp.whatsapp, tp.instagram,
+                   tp.street, tp.city, tp.state, tp.pin,
+                   tp.products, tp.gallery, tp.profile_img,
+                   tp.shop_name, tp.tagline, tp.bio, tp.experience, tp.specialities, tp.timings,
+                   tp.price_listings, tp.deals, tp.latitude, tp.longitude
+            FROM users u
+            INNER JOIN tailor_profiles tp ON u.id = tp.user_id
+            WHERE u.role = 'tailor'
+            ORDER BY tp.updated_at DESC
+        `);
+        const tailors = result.rows.map(t => ({
             ...t,
             profile_img:    normalizeImgPath(t.profile_img),
             products:       safeParseJSON(t.products, []),
@@ -778,27 +795,28 @@ app.get('/api/tailors', (req, res) => {
             longitude:      t.longitude != null ? parseFloat(t.longitude) : null,
         }));
         res.json({ tailors });
-    });
+    } catch (err) {
+        return res.status(500).json({ message: 'Server error' });
+    }
 });
 
 // ── Tailor Profiles: Get by ID ─────────────────────────────────────────────
-app.get('/api/tailors/:id', (req, res) => {
+app.get('/api/tailors/:id', async (req, res) => {
     const { id } = req.params;
-    const sql = `
-        SELECT u.id as user_id, u.full_name, u.email, u.avg_rating, u.total_reviews,
-               tp.phone, tp.whatsapp, tp.instagram,
-               tp.street, tp.city, tp.state, tp.pin,
-               tp.products, tp.gallery, tp.profile_img,
-               tp.shop_name, tp.tagline, tp.bio, tp.experience, tp.specialities, tp.timings,
-               tp.price_listings, tp.deals, tp.latitude, tp.longitude
-        FROM users u
-        INNER JOIN tailor_profiles tp ON u.id = tp.user_id
-        WHERE u.role = 'tailor' AND u.id = ?
-    `;
-    db.query(sql, [id], (err, results) => {
-        if (err) return res.status(500).json({ message: 'Server error' });
-        if (results.length === 0) return res.status(404).json({ message: 'Tailor not found' });
-        const t = results[0];
+    try {
+        const result = await pool.query(`
+            SELECT u.id as user_id, u.full_name, u.email, u.avg_rating, u.total_reviews,
+                   tp.phone, tp.whatsapp, tp.instagram,
+                   tp.street, tp.city, tp.state, tp.pin,
+                   tp.products, tp.gallery, tp.profile_img,
+                   tp.shop_name, tp.tagline, tp.bio, tp.experience, tp.specialities, tp.timings,
+                   tp.price_listings, tp.deals, tp.latitude, tp.longitude
+            FROM users u
+            INNER JOIN tailor_profiles tp ON u.id = tp.user_id
+            WHERE u.role = 'tailor' AND u.id = $1
+        `, [id]);
+        if (result.rows.length === 0) return res.status(404).json({ message: 'Tailor not found' });
+        const t = result.rows[0];
         res.json({
             tailor: {
                 ...t,
@@ -813,142 +831,159 @@ app.get('/api/tailors/:id', (req, res) => {
                 longitude:      t.longitude != null ? parseFloat(t.longitude) : null,
             }
         });
-    });
+    } catch (err) {
+        return res.status(500).json({ message: 'Server error' });
+    }
 });
 
+// ═══════════════════════════════════════════════════════════════
+// CUSTOMER PROFILE ENDPOINTS
+// ═══════════════════════════════════════════════════════════════
+
 // ── Customer Profile: Save (upsert) ──────────────────────────────────────────
-app.post('/api/customer/profile', verifyToken, (req, res) => {
+app.post('/api/customer/profile', verifyToken, async (req, res) => {
     const { phone, whatsapp, street, city, state, pin } = req.body;
+    try {
+        const userRes = await pool.query('SELECT role FROM users WHERE id = $1', [req.userId]);
+        if (userRes.rows.length === 0) return res.status(500).json({ message: 'Server error' });
+        if (userRes.rows[0].role !== 'customer') return res.status(403).json({ message: 'Only customers can update a customer profile' });
 
-    db.query('SELECT role FROM users WHERE id = ?', [req.userId], (err, rows) => {
-        if (err || rows.length === 0) return res.status(500).json({ message: 'Server error' });
-        if (rows[0].role !== 'customer') return res.status(403).json({ message: 'Only customers can update a customer profile' });
-
-        const sql = `
+        await pool.query(`
             INSERT INTO customer_profiles (user_id, phone, whatsapp, street, city, state, pin)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE
-                phone = VALUES(phone), whatsapp = VALUES(whatsapp),
-                street = VALUES(street), city = VALUES(city), state = VALUES(state), pin = VALUES(pin)
-        `;
-        const params = [req.userId, phone || '', whatsapp || '', street || '', city || '', state || '', pin || ''];
-        db.query(sql, params, (insertErr) => {
-            if (insertErr) {
-                console.error('Customer profile save error:', insertErr);
-                return res.status(500).json({ message: 'Failed to save profile' });
-            }
-            res.json({ message: 'Profile saved successfully' });
-        });
-    });
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            ON CONFLICT (user_id) DO UPDATE SET
+                phone = EXCLUDED.phone, whatsapp = EXCLUDED.whatsapp,
+                street = EXCLUDED.street, city = EXCLUDED.city,
+                state = EXCLUDED.state, pin = EXCLUDED.pin
+        `, [req.userId, phone || '', whatsapp || '', street || '', city || '', state || '', pin || '']);
+        res.json({ message: 'Profile saved successfully' });
+    } catch (err) {
+        console.error('Customer profile save error:', err);
+        return res.status(500).json({ message: 'Failed to save profile' });
+    }
 });
 
 // ── Customer Profile: Get own profile ────────────────────────────────────────
-app.get('/api/customer/profile', verifyToken, (req, res) => {
-    const sql = 'SELECT phone, whatsapp, street, city, state, pin, profile_img FROM customer_profiles WHERE user_id = ?';
-    db.query(sql, [req.userId], (err, results) => {
-        if (err) return res.status(500).json({ message: 'Server error' });
-        if (results.length === 0) return res.json({ profile: null });
-        const p = results[0];
+app.get('/api/customer/profile', verifyToken, async (req, res) => {
+    try {
+        const result = await pool.query(
+            'SELECT phone, whatsapp, street, city, state, pin, profile_img FROM customer_profiles WHERE user_id = $1',
+            [req.userId]
+        );
+        if (result.rows.length === 0) return res.json({ profile: null });
+        const p = result.rows[0];
         res.json({ profile: { ...p, profile_img: normalizeImgPath(p.profile_img) } });
-    });
+    } catch (err) {
+        return res.status(500).json({ message: 'Server error' });
+    }
 });
 
+// ═══════════════════════════════════════════════════════════════
+// BOOKINGS ENDPOINT
+// ═══════════════════════════════════════════════════════════════
+
 // ── Bookings: Submit & Send Email Notification ─────────────────────────────
-app.post('/api/bookings', verifyToken, (req, res) => {
+app.post('/api/bookings', verifyToken, async (req, res) => {
     const { tailor_id, service, date, time, notes, tailor_name } = req.body;
-    
-    // Get the logged-in customer's details (email, name, phone from profile if exists)
-    const sqlCustomer = `
-        SELECT u.email, u.full_name, c.phone 
-        FROM users u 
-        LEFT JOIN customer_profiles c ON u.id = c.user_id 
-        WHERE u.id = ?
-    `;
-    db.query(sqlCustomer, [req.userId], (err, customerResults) => {
-        if (err || customerResults.length === 0) {
+
+    try {
+        // Get the logged-in customer's details (email, name, phone from profile if exists)
+        const customerRes = await pool.query(`
+            SELECT u.email, u.full_name, c.phone
+            FROM users u
+            LEFT JOIN customer_profiles c ON u.id = c.user_id
+            WHERE u.id = $1
+        `, [req.userId]);
+
+        if (customerRes.rows.length === 0) {
             return res.status(500).json({ message: 'User not found or server error' });
         }
-        
-        const customer = customerResults[0];
-        
-        // Find tailor email (skip if a fallback 'f1', 'f2' string ID)
-        const sqlTailor = 'SELECT email, full_name FROM users WHERE id = ? AND role = "tailor"';
-        db.query(sqlTailor, [tailor_id], (err2, tailorResults) => {
-            const tailorEmail = !err2 && tailorResults.length > 0 ? tailorResults[0].email : null;
-            
-            // 1. Send confirmation to the Customer
-            const mailOptionsCustomer = {
+        const customer = customerRes.rows[0];
+
+        // Find tailor email
+        let tailorEmail = null;
+        let tailorFullName = null;
+        try {
+            const tailorRes = await pool.query(
+                'SELECT email, full_name FROM users WHERE id = $1 AND role = \'tailor\'',
+                [tailor_id]
+            );
+            if (tailorRes.rows.length > 0) {
+                tailorEmail = tailorRes.rows[0].email;
+                tailorFullName = tailorRes.rows[0].full_name;
+            }
+        } catch (e) { /* proceed without tailor email */ }
+
+        // 1. Send confirmation to the Customer
+        const mailOptionsCustomer = {
+            from: `"TailorHub" <${process.env.EMAIL_USER}>`,
+            to: customer.email,
+            subject: 'TailorHub – Appointment Booking Confirmed',
+            html: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 24px; border: 1px solid #e5e7eb; border-radius: 8px;">
+                    <h2 style="color: #10b981;">✅ Booking Confirmed!</h2>
+                    <p style="color: #374151;">Hi <strong>${customer.full_name}</strong>,</p>
+                    <p style="color: #374151;">Your appointment with <strong>${tailor_name || 'Tailor'}</strong> has been successfully booked.</p>
+                    <div style="background-color: #f9fafb; padding: 16px; border-radius: 8px; margin: 20px 0;">
+                        <h3 style="margin-top: 0; color: #4b5563;">Booking Details:</h3>
+                        <p style="margin: 4px 0;"><strong>Service:</strong> ${service}</p>
+                        <p style="margin: 4px 0;"><strong>Date:</strong> ${date}</p>
+                        <p style="margin: 4px 0;"><strong>Time:</strong> ${time}</p>
+                        ${notes ? `<p style="margin: 4px 0;"><strong>Notes:</strong> ${notes}</p>` : ''}
+                    </div>
+                    <p style="color: #6b7280; font-size: 14px;">Please arrive on time. You can contact your tailor through the TailorHub dashboard if you need to reschedule.</p>
+                    <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
+                    <p style="color: #9ca3af; font-size: 12px;">TailorHub – Custom Tailoring Platform</p>
+                </div>
+            `,
+        };
+
+        transporter.sendMail(mailOptionsCustomer, (mailErr) => {
+            if (mailErr) console.error('❌ Email send error (Customer):', mailErr.message);
+            else console.log('✅ Booking email sent to customer:', customer.email);
+        });
+
+        // 2. Send notification to the Tailor
+        if (tailorEmail) {
+            const mailOptionsTailor = {
                 from: `"TailorHub" <${process.env.EMAIL_USER}>`,
-                to: customer.email,
-                subject: 'TailorHub – Appointment Booking Confirmed',
+                to: tailorEmail,
+                subject: 'TailorHub – New Appointment Booking!',
                 html: `
                     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 24px; border: 1px solid #e5e7eb; border-radius: 8px;">
-                        <h2 style="color: #10b981;">✅ Booking Confirmed!</h2>
-                        <p style="color: #374151;">Hi <strong>${customer.full_name}</strong>,</p>
-                        <p style="color: #374151;">Your appointment with <strong>${tailor_name || 'Tailor'}</strong> has been successfully booked.</p>
-                        
+                        <h2 style="color: #6366f1;">📅 New Booking Received!</h2>
+                        <p style="color: #374151;">Hi <strong>${tailorFullName}</strong>,</p>
+                        <p style="color: #374151;">You have a new appointment booking request from <strong>${customer.full_name}</strong>.</p>
                         <div style="background-color: #f9fafb; padding: 16px; border-radius: 8px; margin: 20px 0;">
                             <h3 style="margin-top: 0; color: #4b5563;">Booking Details:</h3>
+                            <p style="margin: 4px 0;"><strong>Customer Name:</strong> ${customer.full_name}</p>
+                            <p style="margin: 4px 0;"><strong>Customer Email:</strong> ${customer.email}</p>
+                            ${customer.phone ? `<p style="margin: 4px 0;"><strong>Customer Phone:</strong> ${customer.phone}</p>` : ''}
                             <p style="margin: 4px 0;"><strong>Service:</strong> ${service}</p>
                             <p style="margin: 4px 0;"><strong>Date:</strong> ${date}</p>
                             <p style="margin: 4px 0;"><strong>Time:</strong> ${time}</p>
                             ${notes ? `<p style="margin: 4px 0;"><strong>Notes:</strong> ${notes}</p>` : ''}
                         </div>
-                        
-                        <p style="color: #6b7280; font-size: 14px;">Please arrive on time. You can contact your tailor through the TailorHub dashboard if you need to reschedule.</p>
+                        <p style="color: #6b7280; font-size: 14px;">Please review this appointment. You can view more details in your TailorHub dashboard.</p>
                         <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
                         <p style="color: #9ca3af; font-size: 12px;">TailorHub – Custom Tailoring Platform</p>
                     </div>
                 `,
             };
-            
-            transporter.sendMail(mailOptionsCustomer, (mailErr) => {
-                if (mailErr) console.error('❌ Email send error (Customer):', mailErr.message);
-                else console.log('✅ Booking email sent to customer:', customer.email);
+
+            transporter.sendMail(mailOptionsTailor, (mailErr) => {
+                if (mailErr) console.error('❌ Email send error (Tailor):', mailErr.message);
+                else console.log('✅ Booking email sent to tailor:', tailorEmail);
             });
+        }
 
-            // 2. Send notification to the Tailor
-            if (tailorEmail) {
-                const mailOptionsTailor = {
-                    from: `"TailorHub" <${process.env.EMAIL_USER}>`,
-                    to: tailorEmail,
-                    subject: 'TailorHub – New Appointment Booking!',
-                    html: `
-                        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 24px; border: 1px solid #e5e7eb; border-radius: 8px;">
-                            <h2 style="color: #6366f1;">📅 New Booking Received!</h2>
-                            <p style="color: #374151;">Hi <strong>${tailorResults[0].full_name}</strong>,</p>
-                            <p style="color: #374151;">You have a new appointment booking request from <strong>${customer.full_name}</strong>.</p>
-                            
-                            <div style="background-color: #f9fafb; padding: 16px; border-radius: 8px; margin: 20px 0;">
-                                <h3 style="margin-top: 0; color: #4b5563;">Booking Details:</h3>
-                                <p style="margin: 4px 0;"><strong>Customer Name:</strong> ${customer.full_name}</p>
-                                <p style="margin: 4px 0;"><strong>Customer Email:</strong> ${customer.email}</p>
-                                ${customer.phone ? `<p style="margin: 4px 0;"><strong>Customer Phone:</strong> ${customer.phone}</p>` : ''}
-                                <p style="margin: 4px 0;"><strong>Service:</strong> ${service}</p>
-                                <p style="margin: 4px 0;"><strong>Date:</strong> ${date}</p>
-                                <p style="margin: 4px 0;"><strong>Time:</strong> ${time}</p>
-                                ${notes ? `<p style="margin: 4px 0;"><strong>Notes:</strong> ${notes}</p>` : ''}
-                            </div>
-                            
-                            <p style="color: #6b7280; font-size: 14px;">Please review this appointment. You can view more details in your TailorHub dashboard.</p>
-                            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
-                            <p style="color: #9ca3af; font-size: 12px;">TailorHub – Custom Tailoring Platform</p>
-                        </div>
-                    `,
-                };
-                
-                transporter.sendMail(mailOptionsTailor, (mailErr) => {
-                    if (mailErr) console.error('❌ Email send error (Tailor):', mailErr.message);
-                    else console.log('✅ Booking email sent to tailor:', tailorEmail);
-                });
-            }
-
-            res.json({ message: 'Booking confirmed and emails sent successfully!' });
-        });
-    });
+        res.json({ message: 'Booking confirmed and emails sent successfully!' });
+    } catch (err) {
+        return res.status(500).json({ message: 'Server error' });
+    }
 });
 
-
+// ── Button click endpoints ──────────────────────────────────────────────────
 const buttons = [
     'categories-btn', 'deals-btn', 'new-arrivals-btn', 'trending-btn',
     'shirts-service-btn', 'pants-service-btn', 'kurtas-service-btn',
@@ -967,54 +1002,48 @@ buttons.forEach((buttonId) => {
 // ═══════════════════════════════════════════════════════════════
 
 // ── POST /api/tailor/offers — Create a new offer ───────────────
-app.post('/api/tailor/offers', verifyToken, (req, res) => {
+app.post('/api/tailor/offers', verifyToken, async (req, res) => {
     const { title, description, discount, discount_type, start_date, end_date } = req.body;
 
-    // Validate required fields
     if (!title || !discount || !start_date || !end_date)
         return res.status(400).json({ message: 'title, discount, start_date and end_date are required' });
 
-    // Validate dates: end_date must be >= start_date
     if (new Date(end_date) < new Date(start_date))
         return res.status(400).json({ message: 'end_date must be on or after start_date' });
 
-    // Ensure user is a tailor
-    db.query('SELECT role FROM users WHERE id = ?', [req.userId], (err, rows) => {
-        if (err || rows.length === 0) return res.status(500).json({ message: 'Server error' });
-        if (rows[0].role !== 'tailor') return res.status(403).json({ message: 'Only tailors can create offers' });
+    try {
+        const userRes = await pool.query('SELECT role FROM users WHERE id = $1', [req.userId]);
+        if (userRes.rows.length === 0) return res.status(500).json({ message: 'Server error' });
+        if (userRes.rows[0].role !== 'tailor') return res.status(403).json({ message: 'Only tailors can create offers' });
 
-        const sql = `INSERT INTO offers (tailor_id, title, description, discount, discount_type, start_date, end_date)
-                     VALUES (?, ?, ?, ?, ?, ?, ?)`;
-        db.query(sql, [
-            req.userId, title, description || '', discount,
-            discount_type || 'percent', start_date, end_date
-        ], (insertErr, result) => {
-            if (insertErr) {
-                console.error('Offer insert error:', insertErr.message);
-                return res.status(500).json({ message: 'Failed to save offer' });
-            }
-            res.json({ message: 'Offer created successfully', id: result.insertId });
-        });
-    });
+        const result = await pool.query(
+            `INSERT INTO offers (tailor_id, title, description, discount, discount_type, start_date, end_date)
+             VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+            [req.userId, title, description || '', discount, discount_type || 'percent', start_date, end_date]
+        );
+        res.json({ message: 'Offer created successfully', id: result.rows[0].id });
+    } catch (err) {
+        console.error('Offer insert error:', err.message);
+        return res.status(500).json({ message: 'Failed to save offer' });
+    }
 });
 
 // ── GET /api/tailor/offers — Own offers with active status ─────
-app.get('/api/tailor/offers', verifyToken, (req, res) => {
-    const sql = `
-        SELECT id, title, description, discount, discount_type, start_date, end_date, created_at,
-               (CURDATE() >= start_date AND CURDATE() <= end_date) AS is_active,
-               DATEDIFF(end_date, CURDATE()) AS days_left
-        FROM offers WHERE tailor_id = ?
-        ORDER BY end_date ASC
-    `;
-    db.query(sql, [req.userId], (err, results) => {
-        if (err) return res.status(500).json({ message: 'Server error' });
+app.get('/api/tailor/offers', verifyToken, async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT id, title, description, discount, discount_type, start_date, end_date, created_at,
+                   (CURRENT_DATE >= start_date AND CURRENT_DATE <= end_date) AS is_active,
+                   (end_date - CURRENT_DATE) AS days_left
+            FROM offers WHERE tailor_id = $1
+            ORDER BY end_date ASC
+        `, [req.userId]);
         const toDateStr = (val) => {
             if (!val) return null;
             if (val instanceof Date) return val.toISOString().split('T')[0];
             return String(val).split('T')[0];
         };
-        const offers = results.map(o => ({
+        const offers = result.rows.map(o => ({
             ...o,
             start_date: toDateStr(o.start_date),
             end_date:   toDateStr(o.end_date),
@@ -1022,49 +1051,46 @@ app.get('/api/tailor/offers', verifyToken, (req, res) => {
             is_active:  Boolean(o.is_active),
         }));
         res.json({ offers });
-    });
+    } catch (err) {
+        return res.status(500).json({ message: 'Server error' });
+    }
 });
 
 // ── DELETE /api/tailor/offers/:id — Delete own offer ──────────
-app.delete('/api/tailor/offers/:id', verifyToken, (req, res) => {
+app.delete('/api/tailor/offers/:id', verifyToken, async (req, res) => {
     const { id } = req.params;
-    db.query('SELECT tailor_id FROM offers WHERE id = ?', [id], (err, rows) => {
-        if (err) return res.status(500).json({ message: 'Server error' });
-        if (rows.length === 0) return res.status(404).json({ message: 'Offer not found' });
-        if (rows[0].tailor_id !== req.userId) return res.status(403).json({ message: 'Not authorized' });
-        db.query('DELETE FROM offers WHERE id = ?', [id], (delErr) => {
-            if (delErr) return res.status(500).json({ message: 'Failed to delete offer' });
-            res.json({ message: 'Offer deleted successfully' });
-        });
-    });
+    try {
+        const offerRes = await pool.query('SELECT tailor_id FROM offers WHERE id = $1', [id]);
+        if (offerRes.rows.length === 0) return res.status(404).json({ message: 'Offer not found' });
+        if (offerRes.rows[0].tailor_id !== req.userId) return res.status(403).json({ message: 'Not authorized' });
+        await pool.query('DELETE FROM offers WHERE id = $1', [id]);
+        res.json({ message: 'Offer deleted successfully' });
+    } catch (err) {
+        return res.status(500).json({ message: 'Failed to delete offer' });
+    }
 });
 
 // ── GET /api/offers/active — Public: all active offers with tailor info ──
-app.get('/api/offers/active', (req, res) => {
-    const sql = `
-        SELECT o.id, o.title, o.description, o.discount, o.discount_type,
-               o.start_date, o.end_date,
-               DATEDIFF(o.end_date, CURDATE()) AS days_left,
-               u.id AS tailor_id, u.full_name,
-               tp.shop_name, tp.city, tp.profile_img
-        FROM offers o
-        INNER JOIN users u ON u.id = o.tailor_id AND u.role = 'tailor'
-        LEFT JOIN tailor_profiles tp ON tp.user_id = o.tailor_id
-        WHERE CURDATE() >= o.start_date AND CURDATE() <= o.end_date
-        ORDER BY o.end_date ASC
-    `;
-    db.query(sql, (err, results) => {
-        if (err) {
-            console.error('Error fetching active offers:', err.message);
-            return res.status(500).json({ message: 'Server error', error: err.message });
-        }
-        // mysql2 may return DATE columns as JS Date objects — serialize them to YYYY-MM-DD strings
+app.get('/api/offers/active', async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT o.id, o.title, o.description, o.discount, o.discount_type,
+                   o.start_date, o.end_date,
+                   (o.end_date - CURRENT_DATE) AS days_left,
+                   u.id AS tailor_id, u.full_name,
+                   tp.shop_name, tp.city, tp.profile_img
+            FROM offers o
+            INNER JOIN users u ON u.id = o.tailor_id AND u.role = 'tailor'
+            LEFT JOIN tailor_profiles tp ON tp.user_id = o.tailor_id
+            WHERE CURRENT_DATE >= o.start_date AND CURRENT_DATE <= o.end_date
+            ORDER BY o.end_date ASC
+        `);
         const toDateStr = (val) => {
             if (!val) return null;
             if (val instanceof Date) return val.toISOString().split('T')[0];
-            return String(val).split('T')[0]; // already a string, trim any time part
+            return String(val).split('T')[0];
         };
-        const offers = results.map(o => ({
+        const offers = result.rows.map(o => ({
             id: o.id,
             title: o.title,
             description: o.description || '',
@@ -1084,32 +1110,36 @@ app.get('/api/offers/active', (req, res) => {
         }));
         console.log(`[/api/offers/active] returning ${offers.length} active offers`);
         res.json({ offers });
-    });
+    } catch (err) {
+        console.error('Error fetching active offers:', err.message);
+        return res.status(500).json({ message: 'Server error', error: err.message });
+    }
 });
 
 // ── GET /api/tailor/offers/active-for-order — Active offers for logged-in tailor (for order creation)
-app.get('/api/tailor/offers/active-for-order', verifyToken, requireRole('tailor'), (req, res) => {
-    const sql = `
-        SELECT id, title, description, discount, discount_type, start_date, end_date
-        FROM offers
-        WHERE tailor_id = ? AND CURDATE() >= start_date AND CURDATE() <= end_date
-        ORDER BY end_date ASC
-    `;
-    db.query(sql, [req.userId], (err, results) => {
-        if (err) return res.status(500).json({ message: 'Server error' });
+app.get('/api/tailor/offers/active-for-order', verifyToken, requireRole('tailor'), async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT id, title, description, discount, discount_type, start_date, end_date
+            FROM offers
+            WHERE tailor_id = $1 AND CURRENT_DATE >= start_date AND CURRENT_DATE <= end_date
+            ORDER BY end_date ASC
+        `, [req.userId]);
         const toDateStr = (val) => {
             if (!val) return null;
             if (val instanceof Date) return val.toISOString().split('T')[0];
             return String(val).split('T')[0];
         };
-        const offers = results.map(o => ({
+        const offers = result.rows.map(o => ({
             ...o,
             start_date: toDateStr(o.start_date),
             end_date:   toDateStr(o.end_date),
             discount:   Number(o.discount),
         }));
         res.json({ offers });
-    });
+    } catch (err) {
+        return res.status(500).json({ message: 'Server error' });
+    }
 });
 
 // ═══════════════════════════════════════════════════════════════
@@ -1117,21 +1147,22 @@ app.get('/api/tailor/offers/active-for-order', verifyToken, requireRole('tailor'
 // ═══════════════════════════════════════════════════════════════
 
 // ── GET /api/tailor/verify-customer — Find customer by email or phone ──
-app.get('/api/tailor/verify-customer', verifyToken, requireRole('tailor'), (req, res) => {
-    const { query } = req.query; // this can be email or phone
+app.get('/api/tailor/verify-customer', verifyToken, requireRole('tailor'), async (req, res) => {
+    const { query } = req.query;
     if (!query) return res.status(400).json({ message: 'Please provide email or phone to search' });
 
-    const sql = `
-        SELECT u.id, u.full_name, u.email, c.phone 
-        FROM users u 
-        LEFT JOIN customer_profiles c ON u.id = c.user_id 
-        WHERE u.role = 'customer' AND (u.email = ? OR c.phone = ?)
-    `;
-    db.query(sql, [query, query], (err, results) => {
-        if (err) return res.status(500).json({ message: 'Server error' });
-        if (results.length === 0) return res.status(404).json({ message: 'Customer not found. Please register first.' });
-        res.json({ customer: results[0] });
-    });
+    try {
+        const result = await pool.query(`
+            SELECT u.id, u.full_name, u.email, c.phone
+            FROM users u
+            LEFT JOIN customer_profiles c ON u.id = c.user_id
+            WHERE u.role = 'customer' AND (u.email = $1 OR c.phone = $2)
+        `, [query, query]);
+        if (result.rows.length === 0) return res.status(404).json({ message: 'Customer not found. Please register first.' });
+        res.json({ customer: result.rows[0] });
+    } catch (err) {
+        return res.status(500).json({ message: 'Server error' });
+    }
 });
 
 // ── POST /api/orders — Create a new order (Tailor only) ──
@@ -1139,14 +1170,14 @@ app.post('/api/orders', verifyToken, requireRole('tailor'), async (req, res) => 
     try {
         console.log('📦 Create Order Request Body:', req.body);
         const { customer_id, product_name, total_amount, advance_payment, delivery_date, notes, offer_id, discount_amount, final_amount } = req.body;
-        
+
         if (!customer_id || !product_name || total_amount === undefined || advance_payment === undefined || !delivery_date) {
             return res.status(400).json({ message: 'All required fields must be provided' });
         }
 
         // Ensure customerId exists
-        const [customerCheck] = await db.promise().query('SELECT id FROM users WHERE id = ?', [customer_id]);
-        if (customerCheck.length === 0) {
+        const customerCheck = await pool.query('SELECT id FROM users WHERE id = $1', [customer_id]);
+        if (customerCheck.rows.length === 0) {
             return res.status(404).json({ message: 'Customer does not exist' });
         }
 
@@ -1156,42 +1187,41 @@ app.post('/api/orders', verifyToken, requireRole('tailor'), async (req, res) => 
         let resolvedFinalAmount = final_amount !== undefined ? parseFloat(final_amount) : parseFloat(total_amount);
 
         if (resolvedOfferId) {
-            const [offerRows] = await db.promise().query(
-                'SELECT id FROM offers WHERE id = ? AND tailor_id = ? AND CURDATE() >= start_date AND CURDATE() <= end_date',
+            const offerCheck = await pool.query(
+                'SELECT id FROM offers WHERE id = $1 AND tailor_id = $2 AND CURRENT_DATE >= start_date AND CURRENT_DATE <= end_date',
                 [resolvedOfferId, req.userId]
             );
-            if (offerRows.length === 0) {
-                // Offer is invalid or expired — proceed without it
+            if (offerCheck.rows.length === 0) {
                 resolvedOfferId = null;
                 resolvedDiscount = 0;
                 resolvedFinalAmount = parseFloat(total_amount);
             }
         }
 
-        const sql = `
-            INSERT INTO orders (tailor_id, customer_id, product_name, total_amount, advance_payment, delivery_date, notes, offer_id, discount_amount, final_amount) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `;
-        const params = [
-            req.userId, 
-            customer_id, 
-            product_name, 
-            parseFloat(total_amount), 
-            parseFloat(advance_payment), 
-            delivery_date, 
+        const result = await pool.query(`
+            INSERT INTO orders (tailor_id, customer_id, product_name, total_amount, advance_payment, delivery_date, notes, offer_id, discount_amount, final_amount)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id
+        `, [
+            req.userId,
+            customer_id,
+            product_name,
+            parseFloat(total_amount),
+            parseFloat(advance_payment),
+            delivery_date,
             notes || null,
             resolvedOfferId,
             resolvedDiscount,
             resolvedFinalAmount
-        ];
-        
-        const [result] = await db.promise().query(sql, params);
-        console.log('✅ DB Query Result:', result);
-        
-        const orderId = result.insertId;
+        ]);
+        console.log('✅ DB Query Result:', result.rows[0]);
+
+        const orderId = result.rows[0].id;
         // Insert initial status into history
-        await db.promise().query('INSERT INTO order_status_history (order_id, status, note) VALUES (?, "Order Placed", "Order initially placed by tailor.")', [orderId]);
-        
+        await pool.query(
+            'INSERT INTO order_status_history (order_id, status, note) VALUES ($1, $2, $3)',
+            [orderId, 'Order Placed', 'Order initially placed by tailor.']
+        );
+
         res.status(201).json({ message: 'Order created successfully', order_id: orderId });
     } catch (err) {
         console.error('❌ Create order error:', err);
@@ -1205,27 +1235,27 @@ app.get('/api/tailor/dashboard-stats', verifyToken, requireRole('tailor'), async
         const uid = req.userId;
 
         // 1. Order counts and earnings in one query
-        const [orderStats] = await db.promise().query(`
+        const orderStats = await pool.query(`
             SELECT
                 COUNT(*) AS total_orders,
                 SUM(CASE WHEN current_status NOT IN ('Completed','Delivered') THEN 1 ELSE 0 END) AS pending_count,
                 SUM(CASE WHEN current_status IN ('Completed','Delivered') THEN 1 ELSE 0 END) AS completed_count,
                 SUM(COALESCE(final_amount, total_amount)) AS total_earnings
             FROM orders
-            WHERE tailor_id = ?
+            WHERE tailor_id = $1
         `, [uid]);
 
         // 2. Tailor profile for completion %
-        const [profileRows] = await db.promise().query(`
+        const profileRes = await pool.query(`
             SELECT tp.phone, tp.shop_name, tp.profile_img, tp.bio, tp.experience,
                    tp.specialities, tp.timings, tp.city,
                    u.avg_rating, u.total_reviews
             FROM users u
             LEFT JOIN tailor_profiles tp ON tp.user_id = u.id
-            WHERE u.id = ?
+            WHERE u.id = $1
         `, [uid]);
 
-        const profile = profileRows[0] || {};
+        const profile = profileRes.rows[0] || {};
 
         // Compute profile completion (out of 8 key fields)
         const fields = [profile.phone, profile.shop_name, profile.profile_img, profile.bio,
@@ -1234,18 +1264,18 @@ app.get('/api/tailor/dashboard-stats', verifyToken, requireRole('tailor'), async
         const profileCompletion = Math.round((filled / fields.length) * 100);
 
         // 3. Recent 5 orders
-        const [recentOrders] = await db.promise().query(`
+        const recentOrders = await pool.query(`
             SELECT o.id, o.product_name, o.current_status, o.delivery_date,
                    COALESCE(o.final_amount, o.total_amount) AS amount,
                    u.full_name AS customer_name
             FROM orders o
             JOIN users u ON o.customer_id = u.id
-            WHERE o.tailor_id = ?
+            WHERE o.tailor_id = $1
             ORDER BY o.created_at DESC
             LIMIT 5
         `, [uid]);
 
-        const stats = orderStats[0] || {};
+        const stats = orderStats.rows[0] || {};
         res.json({
             pendingCount:      Number(stats.pending_count) || 0,
             completedCount:    Number(stats.completed_count) || 0,
@@ -1253,7 +1283,7 @@ app.get('/api/tailor/dashboard-stats', verifyToken, requireRole('tailor'), async
             avgRating:         parseFloat(profile.avg_rating) || 0,
             totalReviews:      Number(profile.total_reviews) || 0,
             profileCompletion,
-            recentOrders,
+            recentOrders:      recentOrders.rows,
         });
     } catch (err) {
         console.error('/api/tailor/dashboard-stats error:', err);
@@ -1262,18 +1292,17 @@ app.get('/api/tailor/dashboard-stats', verifyToken, requireRole('tailor'), async
 });
 
 // ── GET /api/orders/tailor — Get all orders for the logged in tailor ──
-app.get('/api/orders/tailor', verifyToken, requireRole('tailor'), (req, res) => {
-    const sql = `
-        SELECT o.*, u.full_name AS customer_name, u.email AS customer_email, c.phone AS customer_phone 
-        FROM orders o 
-        JOIN users u ON o.customer_id = u.id 
-        LEFT JOIN customer_profiles c ON u.id = c.user_id 
-        WHERE o.tailor_id = ?
-        ORDER BY o.created_at DESC
-    `;
-    db.query(sql, [req.userId], (err, results) => {
-        if (err) return res.status(500).json({ message: 'Server error' });
-        const orders = results.map(o => ({
+app.get('/api/orders/tailor', verifyToken, requireRole('tailor'), async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT o.*, u.full_name AS customer_name, u.email AS customer_email, c.phone AS customer_phone
+            FROM orders o
+            JOIN users u ON o.customer_id = u.id
+            LEFT JOIN customer_profiles c ON u.id = c.user_id
+            WHERE o.tailor_id = $1
+            ORDER BY o.created_at DESC
+        `, [req.userId]);
+        const orders = result.rows.map(o => ({
             ...o,
             total_amount:     parseFloat(o.total_amount) || 0,
             advance_payment:  parseFloat(o.advance_payment) || 0,
@@ -1282,26 +1311,24 @@ app.get('/api/orders/tailor', verifyToken, requireRole('tailor'), (req, res) => 
             remaining_amount: parseFloat(o.remaining_amount) || 0,
         }));
         res.json({ orders });
-    });
+    } catch (err) {
+        return res.status(500).json({ message: 'Server error' });
+    }
 });
 
 // ── GET /api/orders/customer — Get all orders for logged in customer ──
-app.get('/api/orders/customer', verifyToken, requireRole('customer'), (req, res) => {
-    const sql = `
-        SELECT o.*, u.full_name AS tailor_name, tp.shop_name,
-               (SELECT COUNT(*) FROM feedbacks f WHERE f.order_id = o.id) AS feedback_submitted
-        FROM orders o 
-        JOIN users u ON o.tailor_id = u.id 
-        LEFT JOIN tailor_profiles tp ON u.id = tp.user_id 
-        WHERE o.customer_id = ?
-        ORDER BY o.created_at DESC
-    `;
-    db.query(sql, [req.userId], (err, results) => {
-        if (err) {
-            console.error('Error fetching customer orders:', err);
-            return res.status(500).json({ message: 'Server error' });
-        }
-        const orders = results.map(o => ({
+app.get('/api/orders/customer', verifyToken, requireRole('customer'), async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT o.*, u.full_name AS tailor_name, tp.shop_name,
+                   (SELECT COUNT(*) FROM feedbacks f WHERE f.order_id = o.id) AS feedback_submitted
+            FROM orders o
+            JOIN users u ON o.tailor_id = u.id
+            LEFT JOIN tailor_profiles tp ON u.id = tp.user_id
+            WHERE o.customer_id = $1
+            ORDER BY o.created_at DESC
+        `, [req.userId]);
+        const orders = result.rows.map(o => ({
             ...o,
             total_amount:     parseFloat(o.total_amount) || 0,
             advance_payment:  parseFloat(o.advance_payment) || 0,
@@ -1310,35 +1337,33 @@ app.get('/api/orders/customer', verifyToken, requireRole('customer'), (req, res)
             remaining_amount: parseFloat(o.remaining_amount) || 0,
         }));
         res.json({ orders });
-    });
+    } catch (err) {
+        console.error('Error fetching customer orders:', err);
+        return res.status(500).json({ message: 'Server error' });
+    }
 });
 
 // ── GET /api/orders/:id/history — Get status history for an order ──
-app.get('/api/orders/:id/history', verifyToken, (req, res) => {
+app.get('/api/orders/:id/history', verifyToken, async (req, res) => {
     const orderId = req.params.id;
     console.log(`[GET History] Request for orderId: ${orderId}, userRole: ${req.userRole}, userId: ${req.userId}`);
-    // Verify ownership (tailor or customer of the order)
-    db.query('SELECT tailor_id, customer_id FROM orders WHERE id = ?', [orderId], (err, rows) => {
-        if (err) {
-            console.error('[GET History] Verify query err:', err);
-            return res.status(404).json({ message: 'Order not found error' });
-        }
-        if (rows.length === 0) {
-            return res.status(404).json({ message: 'Order not found' });
-        }
-        const { tailor_id, customer_id } = rows[0];
+    try {
+        const orderRes = await pool.query('SELECT tailor_id, customer_id FROM orders WHERE id = $1', [orderId]);
+        if (orderRes.rows.length === 0) return res.status(404).json({ message: 'Order not found' });
+        const { tailor_id, customer_id } = orderRes.rows[0];
         if (req.userRole === 'tailor' && req.userId !== tailor_id) return res.status(403).json({ message: 'Access denied' });
         if (req.userRole === 'customer' && req.userId !== customer_id) return res.status(403).json({ message: 'Access denied' });
 
-        db.query('SELECT id, order_id, status, note, created_at as updated_at FROM order_status_history WHERE order_id = ? ORDER BY created_at ASC', [orderId], (errHistory, results) => {
-            if (errHistory) {
-                console.error('[History fetch error]:', errHistory);
-                return res.status(500).json({ message: 'Server error fetching history DB' });
-            }
-            console.log('[GET History] Success sending results:', results.length);
-            res.json({ history: results });
-        });
-    });
+        const histResult = await pool.query(
+            'SELECT id, order_id, status, note, updated_at FROM order_status_history WHERE order_id = $1 ORDER BY updated_at ASC',
+            [orderId]
+        );
+        console.log('[GET History] Success sending results:', histResult.rows.length);
+        res.json({ history: histResult.rows });
+    } catch (err) {
+        console.error('[History fetch error]:', err);
+        return res.status(500).json({ message: 'Server error fetching history DB' });
+    }
 });
 
 // ── PUT /api/orders/:id — Edit order details (Tailor only) ──
@@ -1346,52 +1371,50 @@ app.put('/api/orders/:id', verifyToken, requireRole('tailor'), async (req, res) 
     try {
         const orderId = req.params.id;
         const { product_name, total_amount, advance_payment, delivery_date, notes, offer_id, discount_amount, final_amount } = req.body;
-        
+
         // Verify ownership
-        const [rows] = await db.promise().query('SELECT id FROM orders WHERE id = ? AND tailor_id = ?', [orderId, req.userId]);
-        if (rows.length === 0) return res.status(404).json({ message: 'Order not found or unauthorized' });
+        const ownerCheck = await pool.query('SELECT id FROM orders WHERE id = $1 AND tailor_id = $2', [orderId, req.userId]);
+        if (ownerCheck.rows.length === 0) return res.status(404).json({ message: 'Order not found or unauthorized' });
 
         let resolvedOfferId = offer_id || null;
         let resolvedDiscount = parseFloat(discount_amount) || 0;
         let resolvedFinalAmount = final_amount !== undefined ? parseFloat(final_amount) : parseFloat(total_amount);
 
         if (resolvedOfferId) {
-            const [offerRows] = await db.promise().query(
-                'SELECT id FROM offers WHERE id = ? AND tailor_id = ? AND CURDATE() >= start_date AND CURDATE() <= end_date',
+            const offerCheck = await pool.query(
+                'SELECT id FROM offers WHERE id = $1 AND tailor_id = $2 AND CURRENT_DATE >= start_date AND CURRENT_DATE <= end_date',
                 [resolvedOfferId, req.userId]
             );
-            if (offerRows.length === 0) {
+            if (offerCheck.rows.length === 0) {
                 resolvedOfferId = null;
                 resolvedDiscount = 0;
                 resolvedFinalAmount = parseFloat(total_amount);
             }
         }
 
-        const sql = `
-            UPDATE orders 
-            SET product_name = ?, 
-                total_amount = ?, 
-                advance_payment = ?, 
-                delivery_date = ?, 
-                notes = ?, 
-                offer_id = ?, 
-                discount_amount = ?, 
-                final_amount = ? 
-            WHERE id = ?
-        `;
-        const params = [
-            product_name, 
-            parseFloat(total_amount), 
-            parseFloat(advance_payment), 
-            delivery_date || null, 
+        await pool.query(`
+            UPDATE orders
+            SET product_name = $1,
+                total_amount = $2,
+                advance_payment = $3,
+                delivery_date = $4,
+                notes = $5,
+                offer_id = $6,
+                discount_amount = $7,
+                final_amount = $8,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = $9
+        `, [
+            product_name,
+            parseFloat(total_amount),
+            parseFloat(advance_payment),
+            delivery_date || null,
             notes || null,
             resolvedOfferId,
             resolvedDiscount,
             resolvedFinalAmount,
             orderId
-        ];
-
-        await db.promise().query(sql, params);
+        ]);
         res.json({ message: 'Order updated successfully' });
     } catch (err) {
         console.error('❌ Update order error:', err);
@@ -1400,296 +1423,298 @@ app.put('/api/orders/:id', verifyToken, requireRole('tailor'), async (req, res) 
 });
 
 // ── PUT /api/orders/:id/status — Update order status and add history (Tailor only) ──
-app.put('/api/orders/:id/status', verifyToken, requireRole('tailor'), (req, res) => {
+app.put('/api/orders/:id/status', verifyToken, requireRole('tailor'), async (req, res) => {
     const orderId = req.params.id;
     const { status, note, delivery_date } = req.body;
     console.log(`[Update Order] Request for orderId ${orderId} by tailor ${req.userId}. Body:`, req.body);
-    
-    // First, verify order belongs to tailor and fetch associated names and emails
-    const verifySql = `
-        SELECT o.id, o.customer_id, o.product_name, u.email AS customer_email, u.full_name AS customer_name, t.full_name AS tailor_name
-        FROM orders o
-        JOIN users u ON o.customer_id = u.id
-        JOIN users t ON o.tailor_id = t.id
-        WHERE o.id = ? AND o.tailor_id = ?
-    `;
-    db.query(verifySql, [orderId, req.userId], (err, rows) => {
-        if (err) {
-            console.error('[Update Order] verifySql error:', err);
-            return res.status(500).json({ message: 'Server error during verification' });
-        }
-        if (rows.length === 0) {
+
+    try {
+        // First, verify order belongs to tailor and fetch associated names and emails
+        const verifyResult = await pool.query(`
+            SELECT o.id, o.customer_id, o.product_name, u.email AS customer_email, u.full_name AS customer_name, t.full_name AS tailor_name
+            FROM orders o
+            JOIN users u ON o.customer_id = u.id
+            JOIN users t ON o.tailor_id = t.id
+            WHERE o.id = $1 AND o.tailor_id = $2
+        `, [orderId, req.userId]);
+
+        if (verifyResult.rows.length === 0) {
             console.log(`[Update Order] Order not found or unauthorized for orderId ${orderId}, tailor_id ${req.userId}`);
             return res.status(404).json({ message: 'Order not found or unauthorized' });
         }
-        
-        const orderInfo = rows[0];
+
+        const orderInfo = verifyResult.rows[0];
         console.log('[Update Order] Order Info fetched:', orderInfo);
 
-        // Treat empty delivery_date as null to avoid invalid date syntax in MySQL
+        // Treat empty delivery_date as null
         const finalDeliveryDate = delivery_date === '' ? null : delivery_date;
-        let updateSql = 'UPDATE orders SET current_status = ?';
+        let updateSql = 'UPDATE orders SET current_status = $1';
         let params = [status];
+        let paramIdx = 2;
         if (finalDeliveryDate !== undefined) {
-            updateSql += ', delivery_date = ?';
+            updateSql += `, delivery_date = $${paramIdx++}`;
             params.push(finalDeliveryDate);
         }
-        updateSql += ' WHERE id = ?';
+        updateSql += `, updated_at = CURRENT_TIMESTAMP WHERE id = $${paramIdx}`;
         params.push(orderId);
-        
+
         console.log('[Update Order] Executing UPDATE:', updateSql, params);
-        db.query(updateSql, params, (updateErr) => {
-            if (updateErr) {
-                console.error('[Update Order] updateSql error:', updateErr);
-                return res.status(500).json({ message: 'Failed to update order' });
-            }
+        await pool.query(updateSql, params);
 
-            
-            // Insert into history
-            db.query('INSERT INTO order_status_history (order_id, status, note) VALUES (?, ?, ?)', [orderId, status, note || null], (histErr) => {
-                if (histErr) return res.status(500).json({ message: 'Updated order but failed to log history' });
+        // Insert into history
+        await pool.query(
+            'INSERT INTO order_status_history (order_id, status, note) VALUES ($1, $2, $3)',
+            [orderId, status, note || null]
+        );
 
-                // ── Insert in-app notification for the customer ──
-                const notifType = status === 'Completed' ? 'order_completed'
-                                : status === 'Delivered' ? 'order_delivered'
-                                : 'order_update';
-                const notifTitle = `Order "${orderInfo.product_name}" → ${status}`;
-                const notifBody  = note ? `Note from tailor: ${note}` : `Your order status was updated by ${orderInfo.tailor_name}.`;
-                
-                db.query(
-                    'INSERT INTO notifications (user_id, type, title, body, action_url, action_label) VALUES (?, ?, ?, ?, ?, ?)',
-                    [orderInfo.customer_id, notifType, notifTitle, notifBody, '/customer/orders', 'View Orders'],
-                    (notifErr, notifRes) => { 
-                        if (notifErr) console.warn('Notification insert warning:', notifErr.message); 
-                        else {
-                            // Emit real-time socket event (IOC)
-                            db.query('SELECT * FROM notifications WHERE id = ?', [notifRes.insertId], (err, rows) => {
-                                if (!err && rows.length > 0) {
-                                    io.to(`user_${orderInfo.customer_id}`).emit('new_notification', rows[0]);
-                                }
-                            });
-                        }
-                    }
-                );
+        // ── Insert in-app notification for the customer ──
+        const notifType = status === 'Completed' ? 'order_completed'
+                        : status === 'Delivered' ? 'order_delivered'
+                        : 'order_update';
+        const notifTitle = `Order "${orderInfo.product_name}" → ${status}`;
+        const notifBody  = note ? `Note from tailor: ${note}` : `Your order status was updated by ${orderInfo.tailor_name}.`;
 
-                // Send email to customer
-                if (orderInfo.customer_email) {
-                    const mailOptions = {
-                        from: `"TailorHub" <${process.env.EMAIL_USER}>`,
-                        to: orderInfo.customer_email,
-                        subject: `TailorHub – Order Status Updated to: ${status}`,
-                        html: `
-                            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 24px; border: 1px solid #e5e7eb; border-radius: 8px;">
-                                <h2 style="color: #6366f1;">📦 Order Status Updated</h2>
-                                <p style="color: #374151;">Hi <strong>${orderInfo.customer_name}</strong>,</p>
-                                <p style="color: #374151;">Your tailor <strong>${orderInfo.tailor_name}</strong> has updated the status of your order.</p>
-                                
-                                <div style="background-color: #f9fafb; padding: 16px; border-radius: 8px; margin: 20px 0;">
-                                    <h3 style="margin-top: 0; color: #4b5563;">Order details:</h3>
-                                    <p style="margin: 4px 0;"><strong>Product:</strong> ${orderInfo.product_name}</p>
-                                    <p style="margin: 4px 0;"><strong>New Status:</strong> <span style="display:inline-block; padding: 2px 8px; background: #e0e7ff; color: #4338ca; border-radius: 12px; font-weight: bold; font-size: 12px;">${status}</span></p>
-                                    ${delivery_date ? `<p style="margin: 4px 0;"><strong>Expected Delivery:</strong> ${delivery_date}</p>` : ''}
-                                    ${note ? `<p style="margin: 4px 0;"><strong>Tailor's Note:</strong> ${note}</p>` : ''}
-                                </div>
-                                
-                                <p style="color: #6b7280; font-size: 14px;">You can view more details in your TailorHub dashboard.</p>
-                                <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
-                                <p style="color: #9ca3af; font-size: 12px;">TailorHub – Custom Tailoring Platform</p>
-                            </div>
-                        `,
-                    };
-                    transporter.sendMail(mailOptions, (mailErr) => {
-                        if (mailErr) console.error('❌ Email send error (Order Update):', mailErr.message);
-                        else console.log('✅ Order update email sent to:', orderInfo.customer_email);
-                    });
-                }
+        const notifResult = await pool.query(
+            'INSERT INTO notifications (user_id, type, title, body, action_url, action_label) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+            [orderInfo.customer_id, notifType, notifTitle, notifBody, '/customer/orders', 'View Orders']
+        );
+        if (notifResult.rows.length > 0) {
+            io.to(`user_${orderInfo.customer_id}`).emit('new_notification', notifResult.rows[0]);
+        }
 
-                res.json({ message: 'Order status updated' });
+        // Send email to customer
+        if (orderInfo.customer_email) {
+            const mailOptions = {
+                from: `"TailorHub" <${process.env.EMAIL_USER}>`,
+                to: orderInfo.customer_email,
+                subject: `TailorHub – Order Status Updated to: ${status}`,
+                html: `
+                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 24px; border: 1px solid #e5e7eb; border-radius: 8px;">
+                        <h2 style="color: #6366f1;">📦 Order Status Updated</h2>
+                        <p style="color: #374151;">Hi <strong>${orderInfo.customer_name}</strong>,</p>
+                        <p style="color: #374151;">Your tailor <strong>${orderInfo.tailor_name}</strong> has updated the status of your order.</p>
+                        <div style="background-color: #f9fafb; padding: 16px; border-radius: 8px; margin: 20px 0;">
+                            <h3 style="margin-top: 0; color: #4b5563;">Order details:</h3>
+                            <p style="margin: 4px 0;"><strong>Product:</strong> ${orderInfo.product_name}</p>
+                            <p style="margin: 4px 0;"><strong>New Status:</strong> <span style="display:inline-block; padding: 2px 8px; background: #e0e7ff; color: #4338ca; border-radius: 12px; font-weight: bold; font-size: 12px;">${status}</span></p>
+                            ${delivery_date ? `<p style="margin: 4px 0;"><strong>Expected Delivery:</strong> ${delivery_date}</p>` : ''}
+                            ${note ? `<p style="margin: 4px 0;"><strong>Tailor's Note:</strong> ${note}</p>` : ''}
+                        </div>
+                        <p style="color: #6b7280; font-size: 14px;">You can view more details in your TailorHub dashboard.</p>
+                        <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
+                        <p style="color: #9ca3af; font-size: 12px;">TailorHub – Custom Tailoring Platform</p>
+                    </div>
+                `,
+            };
+            transporter.sendMail(mailOptions, (mailErr) => {
+                if (mailErr) console.error('❌ Email send error (Order Update):', mailErr.message);
+                else console.log('✅ Order update email sent to:', orderInfo.customer_email);
             });
-        });
-    });
+        }
+
+        res.json({ message: 'Order status updated' });
+    } catch (err) {
+        console.error('[Update Order] error:', err);
+        return res.status(500).json({ message: 'Failed to update order' });
+    }
 });
 
 // ── PUT /api/orders/:id/payment — Update payment details (Tailor only) ──
-app.put('/api/orders/:id/payment', verifyToken, requireRole('tailor'), (req, res) => {
+app.put('/api/orders/:id/payment', verifyToken, requireRole('tailor'), async (req, res) => {
     const orderId = req.params.id;
     const { total_amount, advance_payment } = req.body;
-    
+
     if (total_amount === undefined || advance_payment === undefined) {
         return res.status(400).json({ message: 'total_amount and advance_payment required' });
     }
 
-    db.query('UPDATE orders SET total_amount = ?, advance_payment = ? WHERE id = ? AND tailor_id = ?', 
-             [total_amount, advance_payment, orderId, req.userId], (err, result) => {
-        if (err) return res.status(500).json({ message: 'Server error' });
-        if (result.affectedRows === 0) return res.status(404).json({ message: 'Order not found or unauthorized' });
+    try {
+        const result = await pool.query(
+            'UPDATE orders SET total_amount = $1, advance_payment = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3 AND tailor_id = $4',
+            [total_amount, advance_payment, orderId, req.userId]
+        );
+        if (result.rowCount === 0) return res.status(404).json({ message: 'Order not found or unauthorized' });
         res.json({ message: 'Payment updated successfully' });
-    });
+    } catch (err) {
+        return res.status(500).json({ message: 'Server error' });
+    }
 });
-
 
 // ═══════════════════════════════════════════════════════════════
 // FEEDBACK ENDPOINTS
 // ═══════════════════════════════════════════════════════════════
 
 // ── POST /api/add-feedback ──
-app.post('/api/add-feedback', verifyToken, (req, res) => {
+app.post('/api/add-feedback', verifyToken, async (req, res) => {
     const { orderId, customerId, tailorId, rating, message } = req.body;
-    
-    // Validate fields
+
     if (!orderId || !customerId || !tailorId || !rating) {
         return res.status(400).json({ message: 'Missing required fields' });
     }
 
-    // Verify order status
-    db.query('SELECT current_status FROM orders WHERE id = ?', [orderId], (err, results) => {
-        if (err) return res.status(500).json({ message: 'Server error' });
-        if (results.length === 0) return res.status(404).json({ message: 'Order not found' });
-        
-        const status = results[0].current_status;
+    try {
+        // Verify order status
+        const orderRes = await pool.query('SELECT current_status FROM orders WHERE id = $1', [orderId]);
+        if (orderRes.rows.length === 0) return res.status(404).json({ message: 'Order not found' });
+
+        const status = orderRes.rows[0].current_status;
         if (status !== 'Delivered' && status !== 'Completed') {
             return res.status(400).json({ message: 'Feedback allowed only for Delivered or Completed orders' });
         }
 
         // Insert feedback
-        const sql = `INSERT INTO feedbacks (order_id, customer_id, tailor_id, rating, message) VALUES (?, ?, ?, ?, ?)`;
-        db.query(sql, [orderId, customerId, tailorId, rating, message || ''], (err2) => {
-            if (err2) {
-                if (err2.code === 'ER_DUP_ENTRY') {
-                    return res.status(400).json({ message: 'Feedback already submitted for this order' });
-                }
-                return res.status(500).json({ message: 'Error submitting feedback' });
+        try {
+            await pool.query(
+                'INSERT INTO feedbacks (order_id, customer_id, tailor_id, rating, message) VALUES ($1, $2, $3, $4, $5)',
+                [orderId, customerId, tailorId, rating, message || '']
+            );
+        } catch (err2) {
+            if (err2.code === '23505') {
+                return res.status(400).json({ message: 'Feedback already submitted for this order' });
             }
+            return res.status(500).json({ message: 'Error submitting feedback' });
+        }
 
-            // Recalculate tailor rating
-            db.query('SELECT COUNT(*) as totalReviews, AVG(rating) as avgRating FROM feedbacks WHERE tailor_id = ?', [tailorId], (err3, ratingResults) => {
-                if (!err3 && ratingResults.length > 0) {
-                    const { totalReviews, avgRating } = ratingResults[0];
-                    db.query('UPDATE users SET avg_rating = ?, total_reviews = ? WHERE id = ?', [avgRating || 0, totalReviews || 0, tailorId]);
-                }
-            });
+        // Recalculate tailor rating
+        try {
+            const ratingRes = await pool.query(
+                'SELECT COUNT(*) as total_reviews, AVG(rating) as avg_rating FROM feedbacks WHERE tailor_id = $1',
+                [tailorId]
+            );
+            if (ratingRes.rows.length > 0) {
+                const { total_reviews, avg_rating } = ratingRes.rows[0];
+                await pool.query(
+                    'UPDATE users SET avg_rating = $1, total_reviews = $2 WHERE id = $3',
+                    [avg_rating || 0, total_reviews || 0, tailorId]
+                );
+            }
+        } catch (ratingErr) { /* non-critical */ }
 
-            res.status(201).json({ message: 'Feedback submitted successfully' });
-        });
-    });
+        res.status(201).json({ message: 'Feedback submitted successfully' });
+    } catch (err) {
+        return res.status(500).json({ message: 'Server error' });
+    }
 });
 
 // ── GET /api/tailor-feedback/:tailorId ──
-app.get('/api/tailor-feedback/:tailorId', (req, res) => {
+app.get('/api/tailor-feedback/:tailorId', async (req, res) => {
     const { tailorId } = req.params;
-    const sql = `
-        SELECT f.id as feedbackId, f.order_id, f.customer_id, f.tailor_id, f.rating, f.message, f.created_at,
-               u.full_name as customer_name,
-               o.product_name
-        FROM feedbacks f
-        JOIN users u ON f.customer_id = u.id
-        JOIN orders o ON f.order_id = o.id
-        WHERE f.tailor_id = ?
-        ORDER BY f.created_at DESC
-    `;
-    db.query(sql, [tailorId], (err, results) => {
-        if (err) return res.status(500).json({ message: 'Server error' });
-        res.json({ feedbacks: results });
-    });
+    try {
+        const result = await pool.query(`
+            SELECT f.id as feedbackId, f.order_id, f.customer_id, f.tailor_id, f.rating, f.message, f.created_at,
+                   u.full_name as customer_name,
+                   o.product_name
+            FROM feedbacks f
+            JOIN users u ON f.customer_id = u.id
+            JOIN orders o ON f.order_id = o.id
+            WHERE f.tailor_id = $1
+            ORDER BY f.created_at DESC
+        `, [tailorId]);
+        res.json({ feedbacks: result.rows });
+    } catch (err) {
+        return res.status(500).json({ message: 'Server error' });
+    }
 });
 
+// ═══════════════════════════════════════════════════════════════
+// CHAT ENDPOINTS
+// ═══════════════════════════════════════════════════════════════
 
-// ── Chat endpoints ────────────────────────────────────────────────────────
-app.get('/api/chat/users', verifyToken, (req, res) => {
+app.get('/api/chat/users', verifyToken, async (req, res) => {
     const isTailor = req.userRole === 'tailor';
-    const orderJoinCond = isTailor ? 'o.tailor_id = ? AND o.customer_id = u.id' : 'o.customer_id = ? AND o.tailor_id = u.id';
-    
-    const sql = `
-        SELECT DISTINCT u.id, u.full_name, u.role,
-            COALESCE(tp.profile_img, cp.profile_img) AS profile_img,
-            (SELECT message FROM messages WHERE (sender_id = u.id AND receiver_id = ?) OR (sender_id = ? AND receiver_id = u.id) ORDER BY created_at DESC LIMIT 1) as last_message,
-            (SELECT created_at FROM messages WHERE (sender_id = u.id AND receiver_id = ?) OR (sender_id = ? AND receiver_id = u.id) ORDER BY created_at DESC LIMIT 1) as last_message_time,
-            (SELECT COUNT(*) FROM messages WHERE sender_id = u.id AND receiver_id = ? AND is_read = 0) as unread_count
-        FROM users u
-        INNER JOIN orders o ON ${orderJoinCond}
-        LEFT JOIN tailor_profiles tp ON tp.user_id = u.id AND u.role = 'tailor'
-        LEFT JOIN customer_profiles cp ON cp.user_id = u.id AND u.role = 'customer'
-        ORDER BY last_message_time DESC, u.full_name ASC
-    `;
-    db.query(sql, [req.userId, req.userId, req.userId, req.userId, req.userId, req.userId], (err, results) => {
-        if (err) return res.status(500).json({ message: 'Server error', error: err.message });
-        const users = results.map(u => ({ ...u, profile_img: normalizeImgPath(u.profile_img) }));
+    const orderJoinCond = isTailor ? 'o.tailor_id = $1 AND o.customer_id = u.id' : 'o.customer_id = $1 AND o.tailor_id = u.id';
+
+    try {
+        const result = await pool.query(`
+            SELECT DISTINCT u.id, u.full_name, u.role,
+                COALESCE(tp.profile_img, cp.profile_img) AS profile_img,
+                (SELECT message FROM messages WHERE (sender_id = u.id AND receiver_id = $2) OR (sender_id = $3 AND receiver_id = u.id) ORDER BY created_at DESC LIMIT 1) as last_message,
+                (SELECT created_at FROM messages WHERE (sender_id = u.id AND receiver_id = $4) OR (sender_id = $5 AND receiver_id = u.id) ORDER BY created_at DESC LIMIT 1) as last_message_time,
+                (SELECT COUNT(*) FROM messages WHERE sender_id = u.id AND receiver_id = $6 AND is_read = FALSE) as unread_count
+            FROM users u
+            INNER JOIN orders o ON ${orderJoinCond}
+            LEFT JOIN tailor_profiles tp ON tp.user_id = u.id AND u.role = 'tailor'
+            LEFT JOIN customer_profiles cp ON cp.user_id = u.id AND u.role = 'customer'
+            ORDER BY last_message_time DESC, u.full_name ASC
+        `, [req.userId, req.userId, req.userId, req.userId, req.userId, req.userId]);
+        const users = result.rows.map(u => ({ ...u, profile_img: normalizeImgPath(u.profile_img) }));
         res.json({ users });
-    });
+    } catch (err) {
+        return res.status(500).json({ message: 'Server error', error: err.message });
+    }
 });
 
-// ── GET /api/chat/user/:userId — Look up a single user's info (fallback for first-time chat from Orders) ──
-app.get('/api/chat/user/:userId', verifyToken, (req, res) => {
+// ── GET /api/chat/user/:userId — Look up a single user's info ──
+app.get('/api/chat/user/:userId', verifyToken, async (req, res) => {
     const { userId } = req.params;
     const isTailor = req.userRole === 'tailor';
     const orderJoinCond = isTailor
-        ? 'o.tailor_id = ? AND o.customer_id = u.id'
-        : 'o.customer_id = ? AND o.tailor_id = u.id';
+        ? 'o.tailor_id = $1 AND o.customer_id = u.id'
+        : 'o.customer_id = $1 AND o.tailor_id = u.id';
 
-    // Only return the user if there's an order relationship (security check)
-    const sql = `
-        SELECT DISTINCT u.id, u.full_name, u.role,
-            COALESCE(tp.profile_img, cp.profile_img) AS profile_img
-        FROM users u
-        INNER JOIN orders o ON ${orderJoinCond}
-        LEFT JOIN tailor_profiles tp ON tp.user_id = u.id AND u.role = 'tailor'
-        LEFT JOIN customer_profiles cp ON cp.user_id = u.id AND u.role = 'customer'
-        WHERE u.id = ?
-        LIMIT 1
-    `;
-    db.query(sql, [req.userId, userId], (err, results) => {
-        if (err) return res.status(500).json({ message: 'Server error' });
-        if (results.length === 0) return res.status(404).json({ message: 'User not found or no order relationship' });
-        const u = results[0];
+    try {
+        const result = await pool.query(`
+            SELECT DISTINCT u.id, u.full_name, u.role,
+                COALESCE(tp.profile_img, cp.profile_img) AS profile_img
+            FROM users u
+            INNER JOIN orders o ON ${orderJoinCond}
+            LEFT JOIN tailor_profiles tp ON tp.user_id = u.id AND u.role = 'tailor'
+            LEFT JOIN customer_profiles cp ON cp.user_id = u.id AND u.role = 'customer'
+            WHERE u.id = $2
+            LIMIT 1
+        `, [req.userId, userId]);
+        if (result.rows.length === 0) return res.status(404).json({ message: 'User not found or no order relationship' });
+        const u = result.rows[0];
         res.json({ user: { ...u, profile_img: normalizeImgPath(u.profile_img), last_message: null } });
-    });
+    } catch (err) {
+        return res.status(500).json({ message: 'Server error' });
+    }
 });
 
-app.get('/api/chat/search-users', verifyToken, (req, res) => {
+app.get('/api/chat/search-users', verifyToken, async (req, res) => {
     const { query } = req.query;
     if (!query) return res.json({ users: [] });
-    
+
     const isTailor = req.userRole === 'tailor';
-    const orderJoinCond = isTailor ? 'o.tailor_id = ? AND o.customer_id = u.id' : 'o.customer_id = ? AND o.tailor_id = u.id';
-    
-    const sql = `
-        SELECT DISTINCT u.id, u.full_name, u.email, u.role,
-            COALESCE(tp.profile_img, cp.profile_img) AS profile_img
-        FROM users u
-        INNER JOIN orders o ON ${orderJoinCond}
-        LEFT JOIN tailor_profiles tp ON tp.user_id = u.id AND u.role = 'tailor'
-        LEFT JOIN customer_profiles cp ON cp.user_id = u.id AND u.role = 'customer'
-        WHERE u.full_name LIKE ? OR u.email LIKE ?
-        LIMIT 10
-    `;
-    db.query(sql, [req.userId, `%${query}%`, `%${query}%`], (err, results) => {
-        if (err) return res.status(500).json({ message: 'Server error' });
-        const users = results.map(u => ({ ...u, profile_img: normalizeImgPath(u.profile_img) }));
+    const orderJoinCond = isTailor ? 'o.tailor_id = $1 AND o.customer_id = u.id' : 'o.customer_id = $1 AND o.tailor_id = u.id';
+
+    try {
+        const result = await pool.query(`
+            SELECT DISTINCT u.id, u.full_name, u.email, u.role,
+                COALESCE(tp.profile_img, cp.profile_img) AS profile_img
+            FROM users u
+            INNER JOIN orders o ON ${orderJoinCond}
+            LEFT JOIN tailor_profiles tp ON tp.user_id = u.id AND u.role = 'tailor'
+            LEFT JOIN customer_profiles cp ON cp.user_id = u.id AND u.role = 'customer'
+            WHERE u.full_name ILIKE $2 OR u.email ILIKE $3
+            LIMIT 10
+        `, [req.userId, `%${query}%`, `%${query}%`]);
+        const users = result.rows.map(u => ({ ...u, profile_img: normalizeImgPath(u.profile_img) }));
         res.json({ users });
-    });
+    } catch (err) {
+        return res.status(500).json({ message: 'Server error' });
+    }
 });
 
-app.get('/api/chat/:userId', verifyToken, (req, res) => {
+app.get('/api/chat/:userId', verifyToken, async (req, res) => {
     const { userId } = req.params;
-    const sql = `
-        SELECT * FROM messages 
-        WHERE (sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?)
-        ORDER BY created_at ASC
-    `;
-    db.query(sql, [req.userId, userId, userId, req.userId], (err, results) => {
-        if (err) return res.status(500).json({ message: 'Server error' });
+    try {
+        const result = await pool.query(`
+            SELECT * FROM messages
+            WHERE (sender_id = $1 AND receiver_id = $2) OR (sender_id = $3 AND receiver_id = $4)
+            ORDER BY created_at ASC
+        `, [req.userId, userId, userId, req.userId]);
 
-        // Once messages are fetched, mark them as read
-        const markReadSql = 'UPDATE messages SET is_read = 1 WHERE receiver_id = ? AND sender_id = ? AND is_read = 0';
-        db.query(markReadSql, [req.userId, userId], (updateErr) => {
-            if (updateErr) {
-                console.error("Failed to mark messages as read:", updateErr);
-                // Don't block the response for this, just log it
-            }
-        });
+        // Mark messages as read
+        pool.query(
+            'UPDATE messages SET is_read = TRUE WHERE receiver_id = $1 AND sender_id = $2 AND is_read = FALSE',
+            [req.userId, userId]
+        ).catch(updateErr => console.error('Failed to mark messages as read:', updateErr));
 
-        res.json({ messages: results });
-    });
+        res.json({ messages: result.rows });
+    } catch (err) {
+        return res.status(500).json({ message: 'Server error' });
+    }
 });
 
 // ── POST /api/chat/upload — Upload a file attachment for chat ─────────────────
@@ -1702,97 +1727,107 @@ app.post('/api/chat/upload', verifyToken, chatUpload.single('file'), handleUploa
     res.json({ fileUrl, fileType, fileName });
 });
 
-app.post('/api/chat/:userId', verifyToken, (req, res) => {
+app.post('/api/chat/:userId', verifyToken, async (req, res) => {
     const { userId } = req.params;
     const { message } = req.body;
     if (!message || !message.trim()) return res.status(400).json({ message: 'Message is required' });
-    
-    const sql = 'INSERT INTO messages (sender_id, receiver_id, message) VALUES (?, ?, ?)';
-    db.query(sql, [req.userId, userId, message.trim()], (err, result) => {
-        if (err) return res.status(500).json({ message: 'Server error' });
-        
-        // Fetch the inserted message to return
-        db.query('SELECT * FROM messages WHERE id = ?', [result.insertId], (err2, results) => {
-            if (err2 || results.length === 0) return res.status(500).json({ message: 'Server error' });
-            res.status(201).json({ message: results[0] });
-        });
-    });
+
+    try {
+        const insertResult = await pool.query(
+            'INSERT INTO messages (sender_id, receiver_id, message) VALUES ($1, $2, $3) RETURNING id',
+            [req.userId, userId, message.trim()]
+        );
+        const msgResult = await pool.query('SELECT * FROM messages WHERE id = $1', [insertResult.rows[0].id]);
+        if (msgResult.rows.length === 0) return res.status(500).json({ message: 'Server error' });
+        res.status(201).json({ message: msgResult.rows[0] });
+    } catch (err) {
+        return res.status(500).json({ message: 'Server error' });
+    }
 });
 
 // ── DELETE /api/chat/message/:id — Delete own message ──────────────────────
-app.delete('/api/chat/message/:id', verifyToken, (req, res) => {
+app.delete('/api/chat/message/:id', verifyToken, async (req, res) => {
     const { id } = req.params;
-    // First verify the message belongs to the requester
-    db.query('SELECT sender_id, receiver_id FROM messages WHERE id = ?', [id], (err, rows) => {
-        if (err) return res.status(500).json({ message: 'Server error' });
-        if (rows.length === 0) return res.status(404).json({ message: 'Message not found' });
-        if (rows[0].sender_id !== req.userId) return res.status(403).json({ message: 'Not allowed' });
-        const receiverId = rows[0].receiver_id;
-        db.query('DELETE FROM messages WHERE id = ?', [id], (err2) => {
-            if (err2) return res.status(500).json({ message: 'Server error' });
-            // Real-time: notify both parties via Socket.IO
-            io.to(`user_${req.userId}`).emit('message_deleted', { id: Number(id) });
-            io.to(`user_${receiverId}`).emit('message_deleted', { id: Number(id) });
-            res.json({ message: 'Message deleted' });
-        });
-    });
+    try {
+        const msgRes = await pool.query('SELECT sender_id, receiver_id FROM messages WHERE id = $1', [id]);
+        if (msgRes.rows.length === 0) return res.status(404).json({ message: 'Message not found' });
+        if (msgRes.rows[0].sender_id !== req.userId) return res.status(403).json({ message: 'Not allowed' });
+        const receiverId = msgRes.rows[0].receiver_id;
+        await pool.query('DELETE FROM messages WHERE id = $1', [id]);
+        // Real-time: notify both parties via Socket.IO
+        io.to(`user_${req.userId}`).emit('message_deleted', { id: Number(id) });
+        io.to(`user_${receiverId}`).emit('message_deleted', { id: Number(id) });
+        res.json({ message: 'Message deleted' });
+    } catch (err) {
+        return res.status(500).json({ message: 'Server error' });
+    }
 });
 
 // ── PUT /api/chat/message/:id — Edit own message ────────────────────────────
-app.put('/api/chat/message/:id', verifyToken, (req, res) => {
+app.put('/api/chat/message/:id', verifyToken, async (req, res) => {
     const { id } = req.params;
     const { message } = req.body;
     if (!message || !message.trim()) return res.status(400).json({ message: 'Message is required' });
-    db.query('SELECT sender_id, receiver_id FROM messages WHERE id = ?', [id], (err, rows) => {
-        if (err) return res.status(500).json({ message: 'Server error' });
-        if (rows.length === 0) return res.status(404).json({ message: 'Message not found' });
-        if (rows[0].sender_id !== req.userId) return res.status(403).json({ message: 'Not allowed' });
-        const receiverId = rows[0].receiver_id;
-        db.query('UPDATE messages SET message = ?, is_edited = 1 WHERE id = ?', [message.trim(), id], (err2) => {
-            if (err2) return res.status(500).json({ message: 'Server error' });
-            db.query('SELECT * FROM messages WHERE id = ?', [id], (err3, results) => {
-                if (err3 || results.length === 0) return res.status(500).json({ message: 'Server error' });
-                const updated = results[0];
-                // Real-time: notify both parties
-                io.to(`user_${req.userId}`).emit('message_updated', updated);
-                io.to(`user_${receiverId}`).emit('message_updated', updated);
-                res.json({ message: updated });
-            });
-        });
-    });
+    try {
+        const msgRes = await pool.query('SELECT sender_id, receiver_id FROM messages WHERE id = $1', [id]);
+        if (msgRes.rows.length === 0) return res.status(404).json({ message: 'Message not found' });
+        if (msgRes.rows[0].sender_id !== req.userId) return res.status(403).json({ message: 'Not allowed' });
+        const receiverId = msgRes.rows[0].receiver_id;
+        await pool.query('UPDATE messages SET message = $1, is_edited = TRUE WHERE id = $2', [message.trim(), id]);
+        const updatedRes = await pool.query('SELECT * FROM messages WHERE id = $1', [id]);
+        if (updatedRes.rows.length === 0) return res.status(500).json({ message: 'Server error' });
+        const updated = updatedRes.rows[0];
+        // Real-time: notify both parties
+        io.to(`user_${req.userId}`).emit('message_updated', updated);
+        io.to(`user_${receiverId}`).emit('message_updated', updated);
+        res.json({ message: updated });
+    } catch (err) {
+        return res.status(500).json({ message: 'Server error' });
+    }
 });
 
 // ═══════════════════════════════════════════════════════════════
 // NOTIFICATIONS ENDPOINTS
 // ═══════════════════════════════════════════════════════════════
 
-app.get('/api/notifications', verifyToken, (req, res) => {
-    const sql = 'SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 50';
-    db.query(sql, [req.userId], (err, results) => {
-        if (err) return res.status(500).json({ message: 'Server error' });
-        res.json({ notifications: results });
-    });
+app.get('/api/notifications', verifyToken, async (req, res) => {
+    try {
+        const result = await pool.query(
+            'SELECT * FROM notifications WHERE user_id = $1 ORDER BY created_at DESC LIMIT 50',
+            [req.userId]
+        );
+        res.json({ notifications: result.rows });
+    } catch (err) {
+        return res.status(500).json({ message: 'Server error' });
+    }
 });
 
-app.post('/api/notifications/mark-all-read', verifyToken, (req, res) => {
-    const sql = 'UPDATE notifications SET is_read = 1 WHERE user_id = ? AND is_read = 0';
-    db.query(sql, [req.userId], (err) => {
-        if (err) return res.status(500).json({ message: 'Server error' });
+app.post('/api/notifications/mark-all-read', verifyToken, async (req, res) => {
+    try {
+        await pool.query(
+            'UPDATE notifications SET is_read = TRUE WHERE user_id = $1 AND is_read = FALSE',
+            [req.userId]
+        );
         res.json({ message: 'All notifications marked as read' });
-    });
+    } catch (err) {
+        return res.status(500).json({ message: 'Server error' });
+    }
 });
 
-app.post('/api/notifications/:id/read', verifyToken, (req, res) => {
-    const sql = 'UPDATE notifications SET is_read = 1 WHERE id = ? AND user_id = ?';
-    db.query(sql, [req.params.id, req.userId], (err) => {
-        if (err) return res.status(500).json({ message: 'Server error' });
+app.post('/api/notifications/:id/read', verifyToken, async (req, res) => {
+    try {
+        await pool.query(
+            'UPDATE notifications SET is_read = TRUE WHERE id = $1 AND user_id = $2',
+            [req.params.id, req.userId]
+        );
         res.json({ message: 'Notification marked as read' });
-    });
+    } catch (err) {
+        return res.status(500).json({ message: 'Server error' });
+    }
 });
 
 // ═══════════════════════════════════════════════════════════════
 // SOCKET.IO — REAL-TIME CHAT
-
 // ═══════════════════════════════════════════════════════════════
 
 // Track online users: userId → Set of socketIds
@@ -1805,15 +1840,18 @@ io.use((socket, next) => {
                       .find(c => c.trim().startsWith('token='))?.split('=')[1];
     if (!token) return next(new Error('Not authenticated'));
 
-    jwt.verify(token, JWT_SECRET, (err, decoded) => {
+    jwt.verify(token, JWT_SECRET, async (err, decoded) => {
         if (err) return next(new Error('Invalid token'));
-        db.query('SELECT id, full_name, role FROM users WHERE id = ?', [decoded.id], (dbErr, rows) => {
-            if (dbErr || rows.length === 0) return next(new Error('User not found'));
-            socket.userId   = rows[0].id;
-            socket.userRole = rows[0].role;
-            socket.userName = rows[0].full_name;
+        try {
+            const result = await pool.query('SELECT id, full_name, role FROM users WHERE id = $1', [decoded.id]);
+            if (result.rows.length === 0) return next(new Error('User not found'));
+            socket.userId   = result.rows[0].id;
+            socket.userRole = result.rows[0].role;
+            socket.userName = result.rows[0].full_name;
             next();
-        });
+        } catch (dbErr) {
+            return next(new Error('DB error'));
+        }
     });
 });
 
@@ -1829,59 +1867,54 @@ io.on('connection', (socket) => {
     onlineUsers.get(userId).add(socket.id);
     io.emit('online_users', [...onlineUsers.keys()]);
 
-    // ── Send a message in real-time + persist to MySQL ──────────
-    socket.on('send_message', ({ receiverId, message, fileUrl, fileType, fileName }) => {
+    // ── Send a message in real-time + persist to PostgreSQL ──────────
+    socket.on('send_message', async ({ receiverId, message, fileUrl, fileType, fileName }) => {
         const hasText  = message && message.trim();
         const hasFile  = fileUrl && fileType;
         if (!receiverId || (!hasText && !hasFile)) return;
 
         const text = hasText ? message.trim() : (fileName || 'Attachment');
-        const sql = 'INSERT INTO messages (sender_id, receiver_id, message, file_url, file_type, file_name) VALUES (?, ?, ?, ?, ?, ?)';
 
-        db.query(sql, [userId, receiverId, text, fileUrl || null, fileType || null, fileName || null], (err, result) => {
-            if (err) {
-                console.error('❌ Message save error:', err.message);
-                socket.emit('message_error', { error: 'Failed to save message' });
-                return;
-            }
+        try {
+            const insertResult = await pool.query(
+                'INSERT INTO messages (sender_id, receiver_id, message, file_url, file_type, file_name) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
+                [userId, receiverId, text, fileUrl || null, fileType || null, fileName || null]
+            );
 
-            db.query('SELECT * FROM messages WHERE id = ?', [result.insertId], (err2, rows) => {
-                if (err2 || rows.length === 0) return;
-                const savedMsg = rows[0];
+            const msgResult = await pool.query('SELECT * FROM messages WHERE id = $1', [insertResult.rows[0].id]);
+            if (msgResult.rows.length === 0) return;
+            const savedMsg = msgResult.rows[0];
 
-                // Emit to sender (confirmation)
-                socket.emit('receive_message', savedMsg);
+            // Emit to sender (confirmation)
+            socket.emit('receive_message', savedMsg);
 
-                // Emit to receiver's room (real-time delivery)
-                socket.to(`user_${receiverId}`).emit('receive_message', savedMsg);
+            // Emit to receiver's room (real-time delivery)
+            socket.to(`user_${receiverId}`).emit('receive_message', savedMsg);
 
-                console.log(`💬 Message ${savedMsg.id}: user ${userId} → user ${receiverId}${hasFile ? ' [file: ' + fileName + ']' : ''}`);
+            console.log(`💬 Message ${savedMsg.id}: user ${userId} → user ${receiverId}${hasFile ? ' [file: ' + fileName + ']' : ''}`);
 
-                // ── Create in-app notification for the receiver ──────────────
-                const notifTitle = `New message from ${socket.userName}`;
-                const rawBody = hasFile
-                    ? (hasText ? text : `📎 ${fileName || 'File attachment'}`)
-                    : text;
-                const notifBody = rawBody.length > 120 ? rawBody.slice(0, 117) + '...' : rawBody;
+            // ── Create in-app notification for the receiver ──────────────
+            const notifTitle = `New message from ${socket.userName}`;
+            const rawBody = hasFile
+                ? (hasText ? text : `📎 ${fileName || 'File attachment'}`)
+                : text;
+            const notifBody = rawBody.length > 120 ? rawBody.slice(0, 117) + '...' : rawBody;
 
-                db.query(
-                    'INSERT INTO notifications (user_id, type, title, body, action_url, action_label) VALUES (?, ?, ?, ?, ?, ?)',
-                    [receiverId, 'new_message', notifTitle, notifBody, '/chat', 'Open Chat'],
-                    (notifErr, notifRes) => {
-                        if (notifErr) {
-                            console.warn('⚠️  Chat notification insert warning:', notifErr.message);
-                            return;
-                        }
-                        // Emit real-time notification to receiver
-                        db.query('SELECT * FROM notifications WHERE id = ?', [notifRes.insertId], (nErr, nRows) => {
-                            if (!nErr && nRows.length > 0) {
-                                io.to(`user_${receiverId}`).emit('new_notification', nRows[0]);
-                            }
-                        });
-                    }
+            try {
+                const notifInsert = await pool.query(
+                    'INSERT INTO notifications (user_id, type, title, body, action_url, action_label) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+                    [receiverId, 'new_message', notifTitle, notifBody, '/chat', 'Open Chat']
                 );
-            });
-        });
+                if (notifInsert.rows.length > 0) {
+                    io.to(`user_${receiverId}`).emit('new_notification', notifInsert.rows[0]);
+                }
+            } catch (notifErr) {
+                console.warn('⚠️  Chat notification insert warning:', notifErr.message);
+            }
+        } catch (err) {
+            console.error('❌ Message save error:', err.message);
+            socket.emit('message_error', { error: 'Failed to save message' });
+        }
     });
 
     // ── Typing indicators ────────────────────────────────────────

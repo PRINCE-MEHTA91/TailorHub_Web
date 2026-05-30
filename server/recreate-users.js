@@ -1,57 +1,64 @@
 require('dotenv').config();
-const mysql = require('mysql2');
+const { Pool } = require('pg');
 
-const db = mysql.createConnection({
-    host: process.env.DB_HOST,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME,
-    port: process.env.DB_PORT || 3306,
-    multipleStatements: true,
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false },
 });
 
-db.connect((err) => {
-    if (err) { console.error('CONNECT FAIL:', err.message); process.exit(1); }
-    console.log('Connected OK');
+async function main() {
+    const client = await pool.connect();
+    try {
+        console.log('Connected to PostgreSQL (Neon).');
 
-    // Drop and recreate with exactly the right schema
-    const recreate = `
-DROP TABLE IF EXISTS users;
-CREATE TABLE users (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    full_name VARCHAR(255) NOT NULL,
-    email VARCHAR(255) NOT NULL UNIQUE,
-    password VARCHAR(255) NOT NULL,
-    reset_token VARCHAR(255) DEFAULT NULL,
-    reset_token_expiry DATETIME DEFAULT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-`;
-    db.query(recreate, (err2) => {
-        if (err2) { console.error('RECREATE FAIL:', err2.message); db.end(); return; }
+        // Drop and recreate with exactly the right schema
+        await client.query('DROP TABLE IF EXISTS users CASCADE');
+        await client.query(`
+            CREATE TABLE users (
+                id               SERIAL PRIMARY KEY,
+                full_name        VARCHAR(255) NOT NULL,
+                email            VARCHAR(255) NOT NULL UNIQUE,
+                password         VARCHAR(255) NOT NULL,
+                role             VARCHAR(20)  NOT NULL DEFAULT 'customer'
+                                     CHECK (role IN ('customer', 'tailor')),
+                avg_rating       DECIMAL(3,2) DEFAULT 0.00,
+                total_reviews    INT          DEFAULT 0,
+                reset_token      VARCHAR(255) DEFAULT NULL,
+                reset_token_expiry TIMESTAMP  DEFAULT NULL,
+                created_at       TIMESTAMP    DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
         console.log('Table recreated OK');
 
-        // Verify
-        db.query("DESCRIBE users", (e3, rows) => {
-            if (e3) { console.error('DESCRIBE FAIL:', e3.message); db.end(); return; }
-            console.log('\nNew table columns:');
-            rows.forEach(r => console.log(' -', r.Field, '| Null=' + r.Null + ' | Default=' + r.Default));
+        // Verify by listing columns
+        const colRes = await client.query(`
+            SELECT column_name, data_type, is_nullable, column_default
+            FROM information_schema.columns
+            WHERE table_name = 'users' AND table_schema = 'public'
+            ORDER BY ordinal_position
+        `);
+        console.log('\nNew table columns:');
+        colRes.rows.forEach(r => console.log(` - ${r.column_name} | Null=${r.is_nullable} | Default=${r.column_default}`));
 
-            // Test INSERT
-            db.query(
-                "INSERT INTO users (full_name, email, password) VALUES (?, ?, ?)",
-                ['FixUser', 'fix_' + Date.now() + '@test.com', 'hashed'],
-                (e4, r4) => {
-                    if (e4) { console.error('\n❌ INSERT STILL FAILING:', e4.sqlMessage); }
-                    else {
-                        console.log('\n✅ INSERT works! id:', r4.insertId);
-                        db.query("DELETE FROM users WHERE id=?", [r4.insertId], () => {
-                            console.log('✅ Cleaned up.\n\nSignup should now work!');
-                        });
-                    }
-                    db.end();
-                }
-            );
-        });
-    });
-});
+        // Test INSERT
+        const insertRes = await client.query(
+            'INSERT INTO users (full_name, email, password) VALUES ($1, $2, $3) RETURNING id',
+            ['FixUser', 'fix_' + Date.now() + '@test.com', 'hashed']
+        );
+        console.log('\n✅ INSERT works! id:', insertRes.rows[0].id);
+
+        // Clean up
+        await client.query('DELETE FROM users WHERE id = $1', [insertRes.rows[0].id]);
+        console.log('✅ Cleaned up.\n\nSignup should now work!');
+
+        process.exit(0);
+    } catch (err) {
+        console.error('\n❌ Error:', err.message);
+        process.exit(1);
+    } finally {
+        client.release();
+        await pool.end();
+    }
+}
+
+main();

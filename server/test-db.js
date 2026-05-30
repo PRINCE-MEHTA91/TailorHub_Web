@@ -1,64 +1,61 @@
 require('dotenv').config();
-const mysql = require('mysql2');
+const { Pool } = require('pg');
 
-console.log('Connecting with:');
-console.log('  host:', process.env.DB_HOST);
-console.log('  user:', process.env.DB_USER);
-console.log('  database:', process.env.DB_NAME);
-console.log('  port:', process.env.DB_PORT || 3306);
-console.log('  password set:', !!process.env.DB_PASSWORD);
+console.log('Connecting to Neon PostgreSQL:');
+console.log('  DATABASE_URL set:', !!process.env.DATABASE_URL);
 
-const db = mysql.createConnection({
-    host: process.env.DB_HOST,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME,
-    port: process.env.DB_PORT || 3306,
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false },
 });
 
-db.connect((err) => {
-    if (err) {
-        console.error('\n❌ DB CONNECTION FAILED:', err.code, '-', err.message);
-        if (err.code === 'ER_BAD_DB_ERROR') {
-            console.error('   → Database "' + process.env.DB_NAME + '" does NOT exist. Run the db.sql script first.');
-        } else if (err.code === 'ER_ACCESS_DENIED_ERROR') {
-            console.error('   → Wrong username/password in .env');
-        } else if (err.code === 'ECONNREFUSED') {
-            console.error('   → MySQL is not running, or wrong host/port');
-        }
-        process.exit(1);
-    }
+async function main() {
+    const client = await pool.connect();
+    try {
+        console.log('\n✅ Connected to PostgreSQL OK\n');
 
-    console.log('\n✅ Connected to MySQL OK\n');
+        // Check if users table exists and list columns
+        const colRes = await client.query(`
+            SELECT column_name, data_type, is_nullable
+            FROM information_schema.columns
+            WHERE table_name = 'users' AND table_schema = 'public'
+            ORDER BY ordinal_position
+        `);
 
-    // Check if users table exists with correct columns
-    db.query("DESCRIBE users", (err2, rows) => {
-        if (err2) {
-            console.error('❌ users table error:', err2.message);
-            console.error('   → Run the db.sql script to create the table');
-            db.end();
-            return;
+        if (colRes.rows.length === 0) {
+            console.error('❌ users table not found.');
+            console.error('   → Run the db.sql script against your Neon database.');
+            process.exit(1);
         }
+
         console.log('✅ users table columns:');
-        rows.forEach(r => console.log('  -', r.Field, '|', r.Type, '|', r.Null === 'NO' ? 'NOT NULL' : 'NULLABLE'));
+        colRes.rows.forEach(r => console.log(`  - ${r.column_name} | ${r.data_type} | ${r.is_nullable === 'NO' ? 'NOT NULL' : 'NULLABLE'}`));
 
         // Test INSERT
         console.log('\nTesting INSERT...');
-        db.query(
-            "INSERT INTO users (full_name, email, password) VALUES (?, ?, ?)",
-            ['Test User', 'test_' + Date.now() + '@test.com', 'hashedpassword'],
-            (err3, result) => {
-                if (err3) {
-                    console.error('❌ INSERT failed:', err3.code, '-', err3.message);
-                } else {
-                    console.log('✅ INSERT succeeded, new user id:', result.insertId);
-                    // Clean up test row
-                    db.query("DELETE FROM users WHERE id = ?", [result.insertId], () => {
-                        console.log('✅ Cleaned up test row');
-                    });
-                }
-                db.end();
-            }
+        const insertRes = await client.query(
+            'INSERT INTO users (full_name, email, password) VALUES ($1, $2, $3) RETURNING id',
+            ['Test User', 'test_' + Date.now() + '@test.com', 'hashedpassword']
         );
-    });
-});
+        console.log('✅ INSERT succeeded, new user id:', insertRes.rows[0].id);
+
+        // Clean up test row
+        await client.query('DELETE FROM users WHERE id = $1', [insertRes.rows[0].id]);
+        console.log('✅ Cleaned up test row');
+
+        process.exit(0);
+    } catch (err) {
+        console.error('\n❌ DB ERROR:', err.message);
+        if (err.message.includes('connect')) {
+            console.error('   → Check your DATABASE_URL in .env');
+        } else if (err.message.includes('password')) {
+            console.error('   → Wrong password in DATABASE_URL');
+        }
+        process.exit(1);
+    } finally {
+        client.release();
+        await pool.end();
+    }
+}
+
+main();

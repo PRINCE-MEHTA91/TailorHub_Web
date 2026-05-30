@@ -1,71 +1,69 @@
 require('dotenv').config();
-const mysql = require('mysql2');
-const db = mysql.createConnection({
-  host: process.env.DB_HOST,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
-  port: process.env.DB_PORT || 3306,
+const { Pool } = require('pg');
+
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false },
 });
 
-db.connect(err => {
-  if (err) { console.error('DB error:', err.message); process.exit(1); }
-  console.log('Connected to DB');
+async function main() {
+    const client = await pool.connect();
+    try {
+        console.log('Connected to PostgreSQL (Neon).');
 
-  db.query('SELECT id, full_name, email, role FROM users WHERE role = "tailor"', (e, tailors) => {
-    if (e) { console.error('Query error:', e.message); db.end(); return; }
-    console.log('\n=== TAILORS ===');
-    console.log(JSON.stringify(tailors, null, 2));
+        const tailorsRes = await client.query("SELECT id, full_name, email, role FROM users WHERE role = 'tailor'");
+        console.log('\n=== TAILORS ===');
+        console.log(JSON.stringify(tailorsRes.rows, null, 2));
 
-    db.query('SELECT * FROM offers', (e2, offers) => {
-      if (e2) { console.error('Offers query error:', e2.message); db.end(); return; }
-      console.log('\n=== OFFERS IN DB ===');
-      console.log(JSON.stringify(offers, null, 2));
-      console.log('Total offers:', offers.length);
+        const offersRes = await client.query('SELECT * FROM offers');
+        console.log('\n=== OFFERS IN DB ===');
+        console.log(JSON.stringify(offersRes.rows, null, 2));
+        console.log('Total offers:', offersRes.rows.length);
 
-      db.query('SELECT user_id, shop_name, JSON_LENGTH(deals) as deal_count FROM tailor_profiles', (e3, profiles) => {
-        if (e3) { console.error('Profiles query error:', e3.message); db.end(); return; }
+        const profilesRes = await client.query(
+            'SELECT user_id, shop_name, jsonb_array_length(COALESCE(deals, \'[]\'::jsonb)) as deal_count FROM tailor_profiles'
+        );
         console.log('\n=== PROFILES (deal counts) ===');
-        console.log(JSON.stringify(profiles, null, 2));
+        console.log(JSON.stringify(profilesRes.rows, null, 2));
+
+        const tailors = tailorsRes.rows;
+        const offers  = offersRes.rows;
 
         // If no tailors, just exit
         if (!tailors || tailors.length === 0) {
-          console.log('\nNo tailors found - cannot insert test offer');
-          db.end();
-          return;
+            console.log('\nNo tailors found - cannot insert test offer');
+            process.exit(0);
         }
 
         // Insert a test offer for the first tailor if no offers exist
         if (offers.length === 0) {
-          const tailorId = tailors[0].id;
-          const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-          const futureDate = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]; // +60 days
+            const tailorId = tailors[0].id;
+            const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+            const futureDate = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]; // +60 days
 
-          const sql = `INSERT INTO offers (tailor_id, title, description, discount, discount_type, start_date, end_date)
-                       VALUES (?, ?, ?, ?, ?, ?, ?)`;
-          db.query(sql, [
-            tailorId,
-            'Summer Special Sale',
-            'Flat 30% off on all stitching services this summer!',
-            '30',
-            'percent',
-            today,
-            futureDate
-          ], (insertErr, result) => {
-            if (insertErr) {
-              console.error('\nInsert error:', insertErr.message);
-            } else {
-              console.log('\n✅ Test offer inserted! ID:', result.insertId);
-              console.log('   Tailor:', tailors[0].full_name, '(id:', tailorId + ')');
-              console.log('   Valid:', today, 'to', futureDate);
+            try {
+                const insertRes = await client.query(
+                    'INSERT INTO offers (tailor_id, title, description, discount, discount_type, start_date, end_date) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
+                    [tailorId, 'Summer Special Sale', 'Flat 30% off on all stitching services this summer!', '30', 'percent', today, futureDate]
+                );
+                console.log('\n✅ Test offer inserted! ID:', insertRes.rows[0].id);
+                console.log('   Tailor:', tailors[0].full_name, '(id:', tailorId + ')');
+                console.log('   Valid:', today, 'to', futureDate);
+            } catch (insertErr) {
+                console.error('\nInsert error:', insertErr.message);
             }
-            db.end();
-          });
         } else {
-          console.log('\nOffers already exist - no insert needed');
-          db.end();
+            console.log('\nOffers already exist - no insert needed');
         }
-      });
-    });
-  });
-});
+
+        process.exit(0);
+    } catch (err) {
+        console.error('Error:', err.message);
+        process.exit(1);
+    } finally {
+        client.release();
+        await pool.end();
+    }
+}
+
+main();

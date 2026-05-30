@@ -20,6 +20,7 @@
     "cors": "^2.8.6",
     "express": "^5.2.1",
     "mysql2": "^3.20.0",
+    "pg": "^8.21.0",
     "react-router-dom": "^7.13.0"
   },
   "repository": {

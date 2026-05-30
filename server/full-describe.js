@@ -1,28 +1,43 @@
 require('dotenv').config();
-const mysql = require('mysql2');
+const { Pool } = require('pg');
 
-const db = mysql.createConnection({
-    host: process.env.DB_HOST,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME,
-    port: process.env.DB_PORT || 3306,
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false },
 });
 
-db.connect((err) => {
-    if (err) { console.error('CONNECT FAIL:', err.message); process.exit(1); }
+async function main() {
+    const client = await pool.connect();
+    try {
+        console.log('Connected to PostgreSQL (Neon).');
 
-    db.query("DESCRIBE users", (e, rows) => {
-        if (e) { console.error('DESCRIBE FAIL:', e.message); db.end(); return; }
+        // List all columns in the live users table
+        const colRes = await client.query(`
+            SELECT column_name, data_type, is_nullable, column_default, character_maximum_length
+            FROM information_schema.columns
+            WHERE table_name = 'users' AND table_schema = 'public'
+            ORDER BY ordinal_position
+        `);
         console.log('ALL COLUMNS IN LIVE users TABLE:');
-        rows.forEach(r => {
-            console.log(`  ${r.Field} | ${r.Type} | Null=${r.Null} | Default=${r.Default} | Extra=${r.Extra}`);
+        colRes.rows.forEach(r => {
+            const type = r.character_maximum_length
+                ? `${r.data_type}(${r.character_maximum_length})`
+                : r.data_type;
+            console.log(`  ${r.column_name} | ${type} | Null=${r.is_nullable} | Default=${r.column_default}`);
         });
 
-        // Also check sql_mode
-        db.query("SELECT @@sql_mode as mode", (e2, r2) => {
-            console.log('\nSQL MODE:', r2 && r2[0] && r2[0].mode);
-            db.end();
-        });
-    });
-});
+        // Also check search_path and current database
+        const dbRes = await client.query("SELECT current_database() as db, current_schema() as schema");
+        console.log('\nCurrent DB:', dbRes.rows[0].db, '| Schema:', dbRes.rows[0].schema);
+
+        process.exit(0);
+    } catch (err) {
+        console.error('Error:', err.message);
+        process.exit(1);
+    } finally {
+        client.release();
+        await pool.end();
+    }
+}
+
+main();
