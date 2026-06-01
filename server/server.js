@@ -28,30 +28,24 @@ const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET;
 const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:3001';
 
+const isAllowedOrigin = (origin, callback) => {
+    if (!origin) return callback(null, true);
+    if (/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return callback(null, true);
+    if (origin.startsWith(CLIENT_URL) || origin.includes('vercel.app')) return callback(null, true);
+    return callback(new Error('Not allowed by CORS'));
+};
+
 // ── Socket.IO real-time server ──────────────────────────────────────────────
 const io = new SocketIOServer(httpServer, {
     cors: {
-        origin: (origin, callback) => {
-            // Allow any localhost / 127.0.0.1 port (dev), or the configured CLIENT_URL (prod)
-            if (!origin || /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin) || origin === CLIENT_URL) {
-                callback(null, true);
-            } else {
-                callback(new Error('Not allowed by CORS'));
-            }
-        },
+        origin: isAllowedOrigin,
         credentials: true,
     },
     connectionStateRecovery: {},
 });
 
 app.use(cors({
-    origin: (origin, callback) => {
-        if (!origin || /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin) || origin === CLIENT_URL) {
-            callback(null, true);
-        } else {
-            callback(new Error('Not allowed by CORS'));
-        }
-    },
+    origin: isAllowedOrigin,
     credentials: true
 }));
 app.use(express.json({ limit: '10mb' }));
@@ -299,9 +293,15 @@ const normalizeImgPath = (img) => {
 
 const verifyToken = async (req, res, next) => {
     const token = req.cookies.token;
-    if (!token) return res.status(401).json({ message: 'Not authenticated' });
+    if (!token) {
+        console.warn(`⚠️  401 Unauthorized: Missing token for ${req.method} ${req.originalUrl}`);
+        return res.status(401).json({ message: 'Not authenticated' });
+    }
     jwt.verify(token, JWT_SECRET, async (err, decoded) => {
-        if (err) return res.status(401).json({ message: 'Invalid or expired token' });
+        if (err) {
+            console.warn(`⚠️  401 Unauthorized: Invalid token for ${req.method} ${req.originalUrl} - ${err.message}`);
+            return res.status(401).json({ message: 'Invalid or expired token' });
+        }
         try {
             const result = await pool.query('SELECT id, role FROM users WHERE id = $1', [decoded.id]);
             if (result.rows.length === 0) return res.status(500).json({ message: 'Server error' });
@@ -317,13 +317,22 @@ const verifyToken = async (req, res, next) => {
 // Role-guard middleware — usage: requireRole('tailor') or requireRole('customer')
 const requireRole = (role) => async (req, res, next) => {
     const token = req.cookies.token;
-    if (!token) return res.status(401).json({ message: 'Not authenticated' });
+    if (!token) {
+        console.warn(`⚠️  401 Unauthorized: Missing token for ${req.method} ${req.originalUrl}`);
+        return res.status(401).json({ message: 'Not authenticated' });
+    }
     jwt.verify(token, JWT_SECRET, async (err, decoded) => {
-        if (err) return res.status(401).json({ message: 'Invalid or expired token' });
+        if (err) {
+            console.warn(`⚠️  401 Unauthorized: Invalid token for ${req.method} ${req.originalUrl} - ${err.message}`);
+            return res.status(401).json({ message: 'Invalid or expired token' });
+        }
         try {
             const result = await pool.query('SELECT id, role FROM users WHERE id = $1', [decoded.id]);
             if (result.rows.length === 0) return res.status(500).json({ message: 'Server error' });
-            if (result.rows[0].role !== role) return res.status(403).json({ message: `Access denied. ${role} role required.` });
+            if (result.rows[0].role !== role) {
+                console.warn(`⚠️  403 Forbidden: User ${decoded.id} lacks role ${role} for ${req.method} ${req.originalUrl}`);
+                return res.status(403).json({ message: `Access denied. ${role} role required.` });
+            }
             req.userId = decoded.id;
             req.userRole = result.rows[0].role;
             next();
@@ -337,8 +346,8 @@ const setTokenCookie = (res, userId) => {
     const token = jwt.sign({ id: userId }, JWT_SECRET, { expiresIn: '7d' });
     res.cookie('token', token, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
+        secure: true,
+        sameSite: 'none',
         maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 };
@@ -404,7 +413,7 @@ app.get('/api/auth/me', verifyToken, async (req, res) => {
 });
 
 app.post('/api/auth/logout', (req, res) => {
-    res.clearCookie('token', { httpOnly: true, sameSite: 'lax' });
+    res.clearCookie('token', { httpOnly: true, secure: true, sameSite: 'none' });
     res.json({ message: 'Logged out successfully' });
 });
 
