@@ -686,7 +686,9 @@ app.get('/api/tailor/profile', verifyToken, async (req, res) => {
                    tp.street, tp.city, tp.state, tp.pin,
                    tp.products, tp.gallery, tp.profile_img,
                    tp.shop_name, tp.tagline, tp.bio, tp.experience, tp.specialities, tp.timings, tp.deals,
-                   tp.price_listings, tp.latitude, tp.longitude
+                   tp.price_listings, tp.latitude, tp.longitude,
+                   (SELECT COUNT(*) FROM orders WHERE tailor_id = u.id) AS total_orders,
+                   (SELECT COUNT(DISTINCT customer_id) FROM orders WHERE tailor_id = u.id) AS total_clients
             FROM users u
             LEFT JOIN tailor_profiles tp ON u.id = tp.user_id
             WHERE u.id = $1 AND u.role = 'tailor'
@@ -705,6 +707,8 @@ app.get('/api/tailor/profile', verifyToken, async (req, res) => {
                 price_listings: safeParseJSON(p.price_listings, []),
                 latitude:       p.latitude != null ? parseFloat(p.latitude) : null,
                 longitude:      p.longitude != null ? parseFloat(p.longitude) : null,
+                total_orders:   Number(p.total_orders) || 0,
+                total_clients:  Number(p.total_clients) || 0,
             }
         });
     } catch (err) {
@@ -1247,6 +1251,7 @@ app.get('/api/tailor/dashboard-stats', verifyToken, requireRole('tailor'), async
         const orderStats = await pool.query(`
             SELECT
                 COUNT(*) AS total_orders,
+                COUNT(DISTINCT customer_id) AS total_clients,
                 SUM(CASE WHEN current_status NOT IN ('Completed','Delivered') THEN 1 ELSE 0 END) AS pending_count,
                 SUM(CASE WHEN current_status IN ('Completed','Delivered') THEN 1 ELSE 0 END) AS completed_count,
                 SUM(COALESCE(final_amount, total_amount)) AS total_earnings
@@ -1286,6 +1291,8 @@ app.get('/api/tailor/dashboard-stats', verifyToken, requireRole('tailor'), async
 
         const stats = orderStats.rows[0] || {};
         res.json({
+            totalOrders:       Number(stats.total_orders) || 0,
+            totalClients:      Number(stats.total_clients) || 0,
             pendingCount:      Number(stats.pending_count) || 0,
             completedCount:    Number(stats.completed_count) || 0,
             totalEarnings:     parseFloat(stats.total_earnings) || 0,

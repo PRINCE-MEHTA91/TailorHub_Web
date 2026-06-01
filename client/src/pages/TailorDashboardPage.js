@@ -937,6 +937,7 @@ function ProfileTab({ user, onLogout, onSaved }) {
   // gallery: array of { preview: string (blob or server URL), file: File|null }
   const [gallery, setGallery]               = useState([]);
   const [deals, setDeals]                   = useState([]);
+  const [profileStats, setProfileStats]     = useState({ orders: 0, clients: 0, rating: '0.0' });
   const [newDeal, setNewDeal]               = useState({ title:'', description:'', discount:'', occasion:'', validUntil:'', active:true });
   const [timings, setTimings] = useState({
     Mon:{open:'09:00',close:'20:00',closed:false}, Tue:{open:'09:00',close:'20:00',closed:false},
@@ -957,6 +958,8 @@ function ProfileTab({ user, onLogout, onSaved }) {
           return;
         }
         const p = data.profile;
+
+        setProfileStats({ orders: p.total_orders || 0, clients: p.total_clients || 0, rating: p.avg_rating || '0.0' });
 
         // Profile image
         if (p.profile_img) setProfileImg(p.profile_img.startsWith('/uploads') ? `${API_URL}${p.profile_img}` : p.profile_img);
@@ -1224,7 +1227,7 @@ function ProfileTab({ user, onLogout, onSaved }) {
         </div>
         <div className="h-px bg-white/20 my-4 relative z-10"/>
         <div className="grid grid-cols-4 relative z-10">
-          {[{v:'31',l:'Orders'},{v:'18',l:'Clients'},{v:'4.8★',l:'Rating'},{v:`${openDays}d`,l:'Open/Wk'}].map((s,i)=>(
+          {[{v:profileStats.orders,l:'Orders'},{v:profileStats.clients,l:'Clients'},{v:`${profileStats.rating}★`,l:'Rating'},{v:`${openDays}d`,l:'Open/Wk'}].map((s,i)=>(
             <div key={i} className={`text-center ${i>0?'border-l border-white/20':''}`}>
               <div className="text-white font-black text-xl leading-none" style={{fontFamily:'Sora,sans-serif'}}>{s.v}</div>
               <div className="text-orange-100/70 text-[10px] mt-0.5">{s.l}</div>
