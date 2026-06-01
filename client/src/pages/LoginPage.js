@@ -23,7 +23,7 @@ const LoginPage = () => {
         if (form.password.length < 6) return setError('Password must be at least 6 characters');
         setLoading(true);
         try {
-            const API_URL = process.env.REACT_APP_API_URL;
+            const API_URL = process.env.REACT_APP_API_URL || 'https://tailorhub-web.onrender.com';
             const res = await fetch(`${API_URL}/api/auth/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },

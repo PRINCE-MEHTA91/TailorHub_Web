@@ -20,7 +20,7 @@ const ResetPasswordPage = () => {
         if (form.password !== form.confirm) return setError('Passwords do not match');
         setLoading(true);
         try {
-            const API_URL = process.env.REACT_APP_API_URL;
+            const API_URL = process.env.REACT_APP_API_URL || 'https://tailorhub-web.onrender.com';
             const res = await fetch(`${API_URL}/api/auth/reset-password/${token}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },

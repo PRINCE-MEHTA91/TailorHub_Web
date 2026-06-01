@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import LocationModal from './LocationModal';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
+const API_URL = process.env.REACT_APP_API_URL || 'https://tailorhub-web.onrender.com';
 
 const Header = () => {
   const { user, logout } = useAuth();

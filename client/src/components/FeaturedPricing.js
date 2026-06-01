@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 
-const API_URL = process.env.REACT_APP_API_URL;
+const API_URL = process.env.REACT_APP_API_URL || 'https://tailorhub-web.onrender.com';
 const resolveImg = (p) => { if (!p) return null; return p.startsWith('http') ? p : `${API_URL}${p}`; };
 
 const GRADIENTS = [

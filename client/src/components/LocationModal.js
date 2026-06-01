@@ -73,7 +73,7 @@ const LocationModal = ({ onClose, onSave, currentProfile }) => {
                 whatsapp: currentProfile?.whatsapp || '',
                 ...address
             };
-            const API_URL = process.env.REACT_APP_API_URL;
+            const API_URL = process.env.REACT_APP_API_URL || 'https://tailorhub-web.onrender.com';
 
             const res = await fetch(`${API_URL}/api/customer/profile`, {
                 method: 'POST',

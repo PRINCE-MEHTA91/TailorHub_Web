@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import PhoneInput from '../components/PhoneInput';
 import { io } from 'socket.io-client';
 
-const API_URL = process.env.REACT_APP_API_URL;
+const API_URL = process.env.REACT_APP_API_URL || 'https://tailorhub-web.onrender.com';
 
 const DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
 const TIMING_PRESETS = ['06:00','07:00','08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00','21:00','22:00'];
@@ -364,7 +364,7 @@ function OrderCreateForm({ API_URL_O, newOrder, setNewOrder, createErr, creating
 
 /* ── Orders Tab ── */
 function OrdersTab() {
-  const API_URL_O = process.env.REACT_APP_API_URL;
+  const API_URL_O = process.env.REACT_APP_API_URL || 'https://tailorhub-web.onrender.com';
   const navigate = useNavigate();
   const [filter, setFilter] = useState('All');
   const filters = ['All', 'Order Placed', 'Cutting', 'Stitching', 'Trial Ready', 'Completed', 'Delivered'];
@@ -676,7 +676,7 @@ function OrdersTab() {
 const PRICE_CATS = ['Men\'s Wear','Women\'s Wear','Kids Wear','Bridal','Alterations','Other'];
 
 function ManagementTab() {
-  const API_URL_M = process.env.REACT_APP_API_URL;
+  const API_URL_M = process.env.REACT_APP_API_URL || 'https://tailorhub-web.onrender.com';
   const resolveImg = (p) => { if(!p) return null; return p.startsWith('http')?p:`${API_URL_M}${p}`; };
 
   const [listings, setListings]    = useState([]);
@@ -1666,7 +1666,7 @@ function ProfileTab({ user, onLogout, onSaved }) {
 
 /* ── Offers Tab ── */
 function OffersTab() {
-  const API_URL_M = process.env.REACT_APP_API_URL;
+  const API_URL_M = process.env.REACT_APP_API_URL || 'https://tailorhub-web.onrender.com';
   const [offers, setOffers] = useState([]);
   const [form, setForm] = useState({ title: '', description: '', discount: '', discount_type: 'percent', start_date: '', end_date: '' });
   const [loading, setLoading] = useState(true);
@@ -1786,7 +1786,7 @@ function OffersTab() {
 
 /* ── Feedback Tab ── */
 function FeedbackTab() {
-  const API_URL_F = process.env.REACT_APP_API_URL;
+  const API_URL_F = process.env.REACT_APP_API_URL || 'https://tailorhub-web.onrender.com';
   const [feedbacks, setFeedbacks] = useState([]);
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
@@ -1877,7 +1877,7 @@ export default function TailorDashboardPage() {
     }
   }, [location.state]);
 
-  const API_URL_MAIN = process.env.REACT_APP_API_URL;
+  const API_URL_MAIN = process.env.REACT_APP_API_URL || 'https://tailorhub-web.onrender.com';
   const resolveImgMain = (p) => { if (!p) return null; return p.startsWith('http') ? p : `${API_URL_MAIN}${p}`; };
 
   const [sidebarProfileImg, setSidebarProfileImg] = useState(null);

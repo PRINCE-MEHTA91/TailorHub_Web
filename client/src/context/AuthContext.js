@@ -7,7 +7,7 @@ export const AuthProvider = ({ children }) => {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        const API_URL = process.env.REACT_APP_API_URL;
+        const API_URL = process.env.REACT_APP_API_URL || 'https://tailorhub-web.onrender.com';
 
         fetch(`${API_URL}/api/auth/me`, { credentials: 'include' })
             .then((res) => (res.ok ? res.json() : null))
@@ -21,7 +21,7 @@ export const AuthProvider = ({ children }) => {
     const login = (userData) => setUser(userData);
 
     const logout = async () => {
-        const API_URL = process.env.REACT_APP_API_URL;
+        const API_URL = process.env.REACT_APP_API_URL || 'https://tailorhub-web.onrender.com';
         await fetch(`${API_URL}/api/auth/logout`, { method: 'POST', credentials: 'include' });
         setUser(null);
     };

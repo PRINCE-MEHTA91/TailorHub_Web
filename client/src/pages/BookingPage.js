@@ -30,7 +30,7 @@ const BookingPage = () => {
             return;
         }
 
-        const API_URL = process.env.REACT_APP_API_URL;
+        const API_URL = process.env.REACT_APP_API_URL || 'https://tailorhub-web.onrender.com';
 
         fetch(`${API_URL}/api/tailors/${id}`)
             .then(res => res.ok ? res.json() : Promise.reject('Not found'))
@@ -49,7 +49,7 @@ const handleSubmit = async (e) => {
     setIsSubmitting(true);
 
     try {
-        const API_URL = process.env.REACT_APP_API_URL;
+        const API_URL = process.env.REACT_APP_API_URL || 'https://tailorhub-web.onrender.com';
 
         const res = await fetch(`${API_URL}/api/bookings`, {
             method: 'POST',

@@ -9,7 +9,7 @@ import SearchResults from '../components/SearchResults';
 import IndexPage from './IndexPage';
 import { io } from 'socket.io-client';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
+const API_URL = process.env.REACT_APP_API_URL || 'https://tailorhub-web.onrender.com';
 
 // ── Professional Invoice Modal ──────────────────────────────────────────────
 const InvoiceModal = ({ order, onClose }) => {
@@ -336,7 +336,7 @@ const FeedbackModal = ({ order, onClose, onSuccess }) => {
         setSubmitting(true);
         setError('');
         try {
-            const API_URL = process.env.REACT_APP_API_URL;
+            const API_URL = process.env.REACT_APP_API_URL || 'https://tailorhub-web.onrender.com';
             const res = await fetch(`${API_URL}/api/add-feedback`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -431,7 +431,7 @@ const CustomerProfileTab = ({ user, onLogout }) => {
     const fileInputRef = React.useRef(null);
 
     useEffect(() => {
-        const API_URL = process.env.REACT_APP_API_URL;
+        const API_URL = process.env.REACT_APP_API_URL || 'https://tailorhub-web.onrender.com';
         fetch(`${API_URL}/api/customer/profile`, { credentials: 'include' })
             .then(res => res.ok ? res.json() : null)
             .then(data => {
@@ -461,7 +461,7 @@ const CustomerProfileTab = ({ user, onLogout }) => {
         setImgError('');
         setImgUploading(true);
         try {
-            const API_URL = process.env.REACT_APP_API_URL;
+            const API_URL = process.env.REACT_APP_API_URL || 'https://tailorhub-web.onrender.com';
             const formData = new FormData();
             formData.append('profile_img', file);
             const res = await fetch(`${API_URL}/api/customer/upload/profile-image`, {
@@ -496,7 +496,7 @@ const CustomerProfileTab = ({ user, onLogout }) => {
         setSaving(true);
         setSaveError('');
         try {
-            const API_URL = process.env.REACT_APP_API_URL;
+            const API_URL = process.env.REACT_APP_API_URL || 'https://tailorhub-web.onrender.com';
             const res = await fetch(`${API_URL}/api/customer/profile`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -668,7 +668,7 @@ const CustomerProfileTab = ({ user, onLogout }) => {
 };
 
 const OrdersTab = () => {
-    const API_URL_O = process.env.REACT_APP_API_URL;
+    const API_URL_O = process.env.REACT_APP_API_URL || 'https://tailorhub-web.onrender.com';
     const navigate = useNavigate();
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);

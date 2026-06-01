@@ -6,7 +6,7 @@ import Header from '../components/Header';
 import { io } from 'socket.io-client';
 import EmojiPicker from 'emoji-picker-react';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
+const API_URL = process.env.REACT_APP_API_URL || 'https://tailorhub-web.onrender.com';
 
 const TAILOR_TABS = [
   { id: 'home', icon: '🏠', label: 'Home' },

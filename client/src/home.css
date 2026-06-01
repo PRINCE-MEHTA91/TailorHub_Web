@@ -1419,3 +1419,106 @@
   transition: opacity 0.2s;
 }
 .sr-btn:hover { opacity: 0.88; }
+
+/* =====================================================
+   RESPONSIVE MEDIA QUERIES
+   ===================================================== */
+
+/* Extra small devices (mobile phones, 480px and below) */
+@media (max-width: 480px) {
+  .qa-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .fp-grid {
+    grid-template-columns: 1fr;
+  }
+  .cg-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .hero-title {
+    font-size: 1.5rem;
+  }
+  .hero-banner {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 1.5rem 1.25rem;
+    gap: 1.5rem;
+  }
+  .hero-illustration {
+    margin-left: 0;
+    width: 80px;
+    height: 80px;
+  }
+  .hero-illus-circle {
+    width: 60px;
+    height: 60px;
+  }
+  .header-actions {
+    gap: 0.2rem;
+  }
+  .deals-scroll {
+    gap: 0.5rem;
+  }
+  .tc-name-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.2rem;
+  }
+}
+
+/* Small devices (tablets and large phones, 481px to 768px) */
+@media (min-width: 481px) and (max-width: 768px) {
+  .qa-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+  .fp-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .cg-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .hero-banner {
+    padding: 2rem 1.5rem;
+  }
+  .tc-list {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+  }
+}
+
+/* Medium devices (desktops, 769px to 1024px) */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .fp-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .cg-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+  .tc-list {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+  }
+}
+
+/* Large devices (large desktops, 1025px and up) */
+@media (min-width: 1025px) {
+  .fp-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+  .cg-grid {
+    grid-template-columns: repeat(6, 1fr);
+  }
+  .tc-list {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.5rem;
+  }
+  .hero-banner {
+    min-height: 280px;
+  }
+  .hero-title {
+    font-size: 2.5rem;
+  }
+}

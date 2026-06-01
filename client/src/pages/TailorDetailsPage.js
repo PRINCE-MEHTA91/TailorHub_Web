@@ -8,7 +8,7 @@ import {
     FaStar, FaArrowLeft, FaClock, FaQuoteLeft
 } from 'react-icons/fa';
 
-const API_URL = process.env.REACT_APP_API_URL;
+const API_URL = process.env.REACT_APP_API_URL || 'https://tailorhub-web.onrender.com';
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 

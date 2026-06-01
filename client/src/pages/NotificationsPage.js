@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { io } from 'socket.io-client';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
+const API_URL = process.env.REACT_APP_API_URL || 'https://tailorhub-web.onrender.com';
 
 const NOTIF_ICONS = {
   order_placed:    { icon: '📦', bg: 'bg-blue-100',   ring: 'ring-blue-200',   text: 'text-blue-700'   },
