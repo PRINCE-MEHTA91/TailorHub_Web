@@ -1424,8 +1424,15 @@
    RESPONSIVE MEDIA QUERIES
    ===================================================== */
 
-/* Extra small devices (mobile phones, 480px and below) */
-@media (max-width: 480px) {
+/* Extra small devices (mobile phones, 640px and below) */
+@media (max-width: 640px) {
+  .header-profile-text,
+  .header-dashboard-btn {
+    display: none !important;
+  }
+  .header-inner {
+    padding: 0 0.5rem;
+  }
   .qa-grid {
     grid-template-columns: repeat(2, 1fr);
   }
@@ -1466,8 +1473,8 @@
   }
 }
 
-/* Small devices (tablets and large phones, 481px to 768px) */
-@media (min-width: 481px) and (max-width: 768px) {
+/* Small devices (tablets and large phones, 641px to 768px) */
+@media (min-width: 641px) and (max-width: 768px) {
   .qa-grid {
     grid-template-columns: repeat(4, 1fr);
   }
