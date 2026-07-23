@@ -1,4 +1,4 @@
-require('dotenv').config();
+require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 
 // ── Global crash guards — keep the server alive even on unhandled errors ──
 process.on('uncaughtException', (err) => {
@@ -27,6 +27,7 @@ const httpServer = http.createServer(app);
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET;
 const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:3001';
+const IS_PROD = process.env.NODE_ENV === 'production' || !!process.env.CLIENT_URL?.startsWith('https');
 
 const isAllowedOrigin = (origin, callback) => {
     if (!origin) return callback(null, true);
@@ -346,8 +347,8 @@ const setTokenCookie = (res, userId) => {
     const token = jwt.sign({ id: userId }, JWT_SECRET, { expiresIn: '7d' });
     res.cookie('token', token, {
         httpOnly: true,
-        secure: true,
-        sameSite: 'none',
+        secure: IS_PROD,            // true only on HTTPS (production)
+        sameSite: IS_PROD ? 'none' : 'lax', // 'none' requires HTTPS; use 'lax' for local
         maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 };
@@ -413,7 +414,11 @@ app.get('/api/auth/me', verifyToken, async (req, res) => {
 });
 
 app.post('/api/auth/logout', (req, res) => {
-    res.clearCookie('token', { httpOnly: true, secure: true, sameSite: 'none' });
+    res.clearCookie('token', {
+        httpOnly: true,
+        secure: IS_PROD,
+        sameSite: IS_PROD ? 'none' : 'lax',
+    });
     res.json({ message: 'Logged out successfully' });
 });
 

@@ -32,6 +32,14 @@ const actions = [
     desc: 'This week',
     path: '/collections?tab=trending',
   },
+  {
+    icon: '✨',
+    label: 'AI Recommended',
+    gradient: 'qa-ai',
+    desc: 'Just for you',
+    badge: 'AI',
+    path: '/collections?tab=ai-recommended',
+  },
 ];
 
 const containerVariants = {
