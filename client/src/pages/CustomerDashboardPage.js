@@ -1123,6 +1123,472 @@ const CategoryResults = ({ category, onBack }) => {
     );
 };
 
+// ── Helpers shared inside TailorsTab ────────────────────────────────────────
+const resolveImgUrl = (imgPath) => {
+    if (!imgPath) return null;
+    if (imgPath.startsWith('http')) return imgPath;
+    const base = process.env.REACT_APP_API_URL || 'https://tailorhub-web.onrender.com';
+    return `${base}${imgPath}`;
+};
+
+const getTodayTimingInfo = (timings) => {
+    if (!timings) return null;
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    return timings[days[new Date().getDay()]] || null;
+};
+
+const StarRating = ({ rating, count }) => {
+    const r = parseFloat(rating) || 0;
+    return (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+            {[1, 2, 3, 4, 5].map(s => (
+                <svg key={s} width="12" height="12" viewBox="0 0 24 24" fill={s <= Math.round(r) ? '#f59e0b' : '#e5e7eb'}>
+                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                </svg>
+            ))}
+            {r > 0 && <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 600, marginLeft: 2 }}>{r.toFixed(1)} ({count || 0})</span>}
+        </div>
+    );
+};
+
+const AVATAR_GRADIENTS = [
+    'linear-gradient(135deg,#6366f1,#8b5cf6)',
+    'linear-gradient(135deg,#ec4899,#f43f5e)',
+    'linear-gradient(135deg,#f59e0b,#ef4444)',
+    'linear-gradient(135deg,#10b981,#059669)',
+    'linear-gradient(135deg,#0ea5e9,#6366f1)',
+];
+
+const TailorCard = ({ tailor, idx, proximityLabel, navigate }) => {
+    const imgUrl = resolveImgUrl(tailor.profile_img);
+    const initials = (tailor.full_name || 'T').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+    const gradient = AVATAR_GRADIENTS[idx % AVATAR_GRADIENTS.length];
+    const todayTiming = getTodayTimingInfo(tailor.timings);
+    const isOpen = todayTiming && !todayTiming.closed;
+    const locationStr = [tailor.city, tailor.state].filter(Boolean).join(', ') || 'Location not set';
+    const products = tailor.products || [];
+    const startingPrice = products.length > 0
+        ? Math.min(...products.map(p => Number(p.price) || Infinity))
+        : null;
+    const specialities = Array.isArray(tailor.specialities) ? tailor.specialities.slice(0, 3) : [];
+    const rating = parseFloat(tailor.avg_rating) || 0;
+
+    const proximityColors = {
+        'Near You': { bg: '#d1fae5', color: '#065f46', dot: '#10b981' },
+        'Your State': { bg: '#dbeafe', color: '#1e3a8a', dot: '#3b82f6' },
+        'Other Areas': { bg: '#f3f4f6', color: '#4b5563', dot: '#9ca3af' },
+    };
+    const pc = proximityColors[proximityLabel] || proximityColors['Other Areas'];
+
+    return (
+        <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: Math.min(idx * 0.04, 0.4) }}
+            onClick={() => navigate(`/tailor-profile/${tailor.id}`)}
+            style={{
+                background: '#ffffff',
+                borderRadius: 20,
+                border: '1px solid #f0f0f0',
+                boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
+                padding: '16px',
+                cursor: 'pointer',
+                transition: 'transform 0.15s, box-shadow 0.15s',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 12,
+            }}
+            whileHover={{ y: -2, boxShadow: '0 8px 24px rgba(99,102,241,0.12)' }}
+            whileTap={{ scale: 0.98 }}
+        >
+            {/* Top row: avatar + info */}
+            <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                {/* Avatar */}
+                <div style={{ position: 'relative', flexShrink: 0 }}>
+                    {imgUrl ? (
+                        <img
+                            src={imgUrl}
+                            alt={tailor.full_name}
+                            style={{ width: 56, height: 56, borderRadius: '50%', objectFit: 'cover', border: '2px solid #e5e7eb' }}
+                        />
+                    ) : (
+                        <div style={{
+                            width: 56, height: 56, borderRadius: '50%',
+                            background: gradient,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            color: '#fff', fontWeight: 800, fontSize: 18,
+                        }}>
+                            {initials}
+                        </div>
+                    )}
+                    {todayTiming && (
+                        <span style={{
+                            position: 'absolute', bottom: 1, right: 1,
+                            width: 11, height: 11, borderRadius: '50%',
+                            background: isOpen ? '#22c55e' : '#ef4444',
+                            border: '2px solid #fff',
+                        }} />
+                    )}
+                </div>
+
+                {/* Name / location / rating */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 4 }}>
+                        <p style={{ margin: 0, fontSize: 15, fontWeight: 800, color: '#111827', lineHeight: 1.2 }}>
+                            {tailor.shop_name || tailor.full_name}
+                        </p>
+                        {/* Proximity badge */}
+                        <span style={{
+                            flexShrink: 0,
+                            fontSize: 10, fontWeight: 700,
+                            padding: '2px 8px', borderRadius: 999,
+                            background: pc.bg, color: pc.color,
+                            display: 'flex', alignItems: 'center', gap: 3,
+                        }}>
+                            <span style={{ width: 5, height: 5, borderRadius: '50%', background: pc.dot, display: 'inline-block' }} />
+                            {proximityLabel === 'Near You' ? '📍 Near You' :
+                             proximityLabel === 'Your State' ? '🗺️ ' + (tailor.state || 'Your State') :
+                             '🌍 ' + (tailor.city || 'Other')}
+                        </span>
+                    </div>
+
+                    {tailor.tagline && (
+                        <p style={{ margin: '2px 0 0', fontSize: 11, color: '#6b7280', fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            "{tailor.tagline}"
+                        </p>
+                    )}
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                        <StarRating rating={tailor.avg_rating} count={tailor.total_reviews} />
+                    </div>
+
+                    <p style={{ margin: '4px 0 0', fontSize: 11, color: '#9ca3af', display: 'flex', alignItems: 'center', gap: 3 }}>
+                        <span>📍</span>
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{locationStr}</span>
+                        {todayTiming && (
+                            <span style={{
+                                marginLeft: 4, fontSize: 10, fontWeight: 700,
+                                color: isOpen ? '#10b981' : '#ef4444',
+                                background: isOpen ? '#d1fae5' : '#fee2e2',
+                                padding: '1px 6px', borderRadius: 999,
+                            }}>
+                                {isOpen ? `Open · ${todayTiming.open}–${todayTiming.close}` : 'Closed Today'}
+                            </span>
+                        )}
+                    </p>
+                </div>
+            </div>
+
+            {/* Specialities */}
+            {specialities.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                    {specialities.map(s => (
+                        <span key={s} style={{
+                            fontSize: 10, fontWeight: 600,
+                            background: '#f0f0ff', color: '#4f46e5',
+                            padding: '2px 8px', borderRadius: 999,
+                        }}>
+                            {s}
+                        </span>
+                    ))}
+                    {tailor.experience && (
+                        <span style={{
+                            fontSize: 10, fontWeight: 600,
+                            background: '#fffbeb', color: '#92400e',
+                            padding: '2px 8px', borderRadius: 999,
+                        }}>
+                            🏆 {tailor.experience}
+                        </span>
+                    )}
+                </div>
+            )}
+
+            {/* Bottom: price + CTA */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                    {startingPrice !== null && startingPrice !== Infinity ? (
+                        <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: '#1f2937' }}>
+                            From <span style={{ color: '#4f46e5' }}>₹{startingPrice.toLocaleString('en-IN')}</span>
+                        </p>
+                    ) : (
+                        <p style={{ margin: 0, fontSize: 11, color: '#9ca3af' }}>{products.length > 0 ? `${products.length} services` : 'Contact for pricing'}</p>
+                    )}
+                </div>
+                <button
+                    onClick={e => { e.stopPropagation(); navigate(`/tailor-profile/${tailor.id}`); }}
+                    style={{
+                        fontSize: 12, fontWeight: 700,
+                        background: 'linear-gradient(135deg,#4f46e5,#7c3aed)',
+                        color: '#fff',
+                        border: 'none', borderRadius: 12,
+                        padding: '8px 16px',
+                        cursor: 'pointer',
+                        transition: 'opacity 0.15s',
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
+                    onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+                >
+                    View Profile →
+                </button>
+            </div>
+        </motion.div>
+    );
+};
+
+const TailorsTab = () => {
+    const navigate = useNavigate();
+    const [tailors, setTailors] = useState([]);
+    const [customerCity, setCustomerCity] = useState('');
+    const [customerState, setCustomerState] = useState('');
+    const [loading, setLoading] = useState(true);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [filterOpenNow, setFilterOpenNow] = useState(false);
+    const API = process.env.REACT_APP_API_URL || 'https://tailorhub-web.onrender.com';
+
+    useEffect(() => {
+        Promise.all([
+            fetch(`${API}/api/tailors`).then(r => r.ok ? r.json() : null).catch(() => null),
+            fetch(`${API}/api/customer/profile`, { credentials: 'include' }).then(r => r.ok ? r.json() : null).catch(() => null),
+        ]).then(([tailorData, profileData]) => {
+            if (tailorData?.tailors) setTailors(tailorData.tailors);
+            if (profileData?.profile) {
+                setCustomerCity((profileData.profile.city || '').toLowerCase().trim());
+                setCustomerState((profileData.profile.state || '').toLowerCase().trim());
+            }
+        }).finally(() => setLoading(false));
+    }, [API]);
+
+    const todayDayKey = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date().getDay()];
+
+    const isOpenNow = (tailor) => {
+        const t = (tailor.timings || {})[todayDayKey];
+        return t && !t.closed;
+    };
+
+    const filtered = tailors.filter(t => {
+        if (filterOpenNow && !isOpenNow(t)) return false;
+        if (!searchQuery.trim()) return true;
+        const q = searchQuery.toLowerCase();
+        return (
+            (t.full_name || '').toLowerCase().includes(q) ||
+            (t.shop_name || '').toLowerCase().includes(q) ||
+            (t.city || '').toLowerCase().includes(q) ||
+            (t.state || '').toLowerCase().includes(q) ||
+            (t.tagline || '').toLowerCase().includes(q) ||
+            (t.specialities || []).some(s => s.toLowerCase().includes(q))
+        );
+    });
+
+    const getProximity = (t) => {
+        const tCity = (t.city || '').toLowerCase().trim();
+        const tState = (t.state || '').toLowerCase().trim();
+        if (customerCity && tCity && tCity === customerCity) return 0; // Near You
+        if (customerState && tState && tState === customerState) return 1; // Your State
+        return 2; // Other Areas
+    };
+
+    const ratingSort = (a, b) => {
+        const rDiff = (parseFloat(b.avg_rating) || 0) - (parseFloat(a.avg_rating) || 0);
+        if (rDiff !== 0) return rDiff;
+        return (Number(b.total_reviews) || 0) - (Number(a.total_reviews) || 0);
+    };
+
+    const nearTailors  = filtered.filter(t => getProximity(t) === 0).sort(ratingSort);
+    const stateTailors = filtered.filter(t => getProximity(t) === 1).sort(ratingSort);
+    const otherTailors = filtered.filter(t => getProximity(t) === 2).sort(ratingSort);
+
+    const hasGroups = customerCity || customerState;
+
+    // Flat index for stagger animation
+    let globalIdx = 0;
+
+    const SectionHeader = ({ emoji, title, count, color }) => (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, marginTop: 4 }}>
+            <span style={{ fontSize: 18 }}>{emoji}</span>
+            <span style={{ fontSize: 14, fontWeight: 800, color: color || '#111827' }}>{title}</span>
+            <span style={{
+                fontSize: 11, fontWeight: 700,
+                background: '#f3f4f6', color: '#6b7280',
+                padding: '1px 8px', borderRadius: 999,
+            }}>{count}</span>
+            <div style={{ flex: 1, height: 1, background: '#f0f0f0' }} />
+        </div>
+    );
+
+    return (
+        <div style={{ minHeight: '60vh' }}>
+            {/* Hero banner */}
+            <div style={{
+                background: 'linear-gradient(135deg,#4f46e5 0%,#7c3aed 60%,#ec4899 100%)',
+                borderRadius: '0 0 28px 28px',
+                padding: '24px 20px 32px',
+                marginBottom: -16,
+                position: 'relative',
+                overflow: 'hidden',
+            }}>
+                <div style={{
+                    position: 'absolute', top: -30, right: -30,
+                    width: 120, height: 120, borderRadius: '50%',
+                    background: 'rgba(255,255,255,0.08)', pointerEvents: 'none',
+                }} />
+                <div style={{
+                    position: 'absolute', bottom: -20, left: -20,
+                    width: 90, height: 90, borderRadius: '50%',
+                    background: 'rgba(255,255,255,0.06)', pointerEvents: 'none',
+                }} />
+                <h1 style={{ margin: 0, fontSize: 22, fontWeight: 900, color: '#fff', letterSpacing: '-0.3px' }}>
+                    ✂️ Find Your Tailor
+                </h1>
+                <p style={{ margin: '4px 0 0', fontSize: 13, color: 'rgba(255,255,255,0.75)', fontWeight: 500 }}>
+                    {loading ? 'Loading tailors…' :
+                     tailors.length === 0 ? 'No tailors registered yet' :
+                     customerCity
+                        ? `Showing ${tailors.length} tailors · sorted near ${customerCity.replace(/\b\w/g, l => l.toUpperCase())}`
+                        : `${tailors.length} tailors across India`}
+                </p>
+            </div>
+
+            {/* Search & Filter bar */}
+            <div style={{
+                position: 'sticky', top: 0, zIndex: 20,
+                background: '#f9fafb',
+                padding: '20px 0 12px',
+                marginBottom: 4,
+            }}>
+                <div style={{ display: 'flex', gap: 8 }}>
+                    <div style={{
+                        flex: 1, display: 'flex', alignItems: 'center', gap: 8,
+                        background: '#fff', border: '1.5px solid #e5e7eb',
+                        borderRadius: 14, padding: '10px 14px',
+                        boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
+                    }}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2.5">
+                            <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
+                        </svg>
+                        <input
+                            type="text"
+                            value={searchQuery}
+                            onChange={e => setSearchQuery(e.target.value)}
+                            placeholder="Search by name, city, specialty…"
+                            style={{
+                                flex: 1, border: 'none', outline: 'none',
+                                fontSize: 13, color: '#111827', background: 'transparent',
+                            }}
+                        />
+                        {searchQuery && (
+                            <button onClick={() => setSearchQuery('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', fontSize: 16, padding: 0, lineHeight: 1 }}>✕</button>
+                        )}
+                    </div>
+                    <button
+                        onClick={() => setFilterOpenNow(f => !f)}
+                        style={{
+                            padding: '10px 14px', borderRadius: 14, fontSize: 12, fontWeight: 700,
+                            border: '1.5px solid',
+                            borderColor: filterOpenNow ? '#4f46e5' : '#e5e7eb',
+                            background: filterOpenNow ? '#4f46e5' : '#fff',
+                            color: filterOpenNow ? '#fff' : '#6b7280',
+                            cursor: 'pointer', whiteSpace: 'nowrap',
+                            transition: 'all 0.15s',
+                        }}
+                    >
+                        🟢 Open Now
+                    </button>
+                </div>
+                {!customerCity && !loading && (
+                    <p style={{ margin: '8px 0 0', fontSize: 11, color: '#9ca3af', textAlign: 'center' }}>
+                        💡 Set your city in <strong>Profile</strong> tab to see nearby tailors first
+                    </p>
+                )}
+            </div>
+
+            {/* Loading */}
+            {loading && (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '48px 0', gap: 12 }}>
+                    <span style={{
+                        width: 36, height: 36, border: '3px solid #e5e7eb',
+                        borderTopColor: '#4f46e5', borderRadius: '50%',
+                        animation: 'spin 0.8s linear infinite',
+                        display: 'block',
+                    }} />
+                    <p style={{ fontSize: 13, color: '#9ca3af', margin: 0 }}>Finding tailors near you…</p>
+                </div>
+            )}
+
+            {/* Empty search result */}
+            {!loading && filtered.length === 0 && tailors.length > 0 && (
+                <div style={{ textAlign: 'center', padding: '40px 0' }}>
+                    <span style={{ fontSize: 40 }}>🔍</span>
+                    <p style={{ fontSize: 14, fontWeight: 700, color: '#374151', margin: '10px 0 4px' }}>No tailors found</p>
+                    <p style={{ fontSize: 12, color: '#9ca3af', margin: 0 }}>Try a different name or city</p>
+                </div>
+            )}
+
+            {/* No tailors at all */}
+            {!loading && tailors.length === 0 && (
+                <div style={{ textAlign: 'center', padding: '48px 20px' }}>
+                    <span style={{ fontSize: 48 }}>🧵</span>
+                    <p style={{ fontSize: 15, fontWeight: 800, color: '#374151', margin: '12px 0 6px' }}>No Tailors Yet</p>
+                    <p style={{ fontSize: 12, color: '#9ca3af' }}>Be the first to join TailorHub as a tailor!</p>
+                </div>
+            )}
+
+            {/* Grouped sections */}
+            {!loading && filtered.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+                    {/* Near You */}
+                    {hasGroups && nearTailors.length > 0 && (
+                        <div>
+                            <SectionHeader emoji="📍" title="Near You" count={nearTailors.length} color="#065f46" />
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                {nearTailors.map((t, i) => {
+                                    const ci = globalIdx++;
+                                    return <TailorCard key={t.id} tailor={t} idx={ci} proximityLabel="Near You" navigate={navigate} />;
+                                })}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Your State */}
+                    {hasGroups && stateTailors.length > 0 && (
+                        <div>
+                            <SectionHeader
+                                emoji="🗺️"
+                                title={customerState ? customerState.replace(/\b\w/g, l => l.toUpperCase()) : 'Your State'}
+                                count={stateTailors.length}
+                                color="#1e3a8a"
+                            />
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                {stateTailors.map((t, i) => {
+                                    const ci = globalIdx++;
+                                    return <TailorCard key={t.id} tailor={t} idx={ci} proximityLabel="Your State" navigate={navigate} />;
+                                })}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Other Areas */}
+                    {otherTailors.length > 0 && (
+                        <div>
+                            <SectionHeader
+                                emoji="🌍"
+                                title={hasGroups ? 'Other Areas' : 'All Tailors'}
+                                count={otherTailors.length}
+                                color="#374151"
+                            />
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                {otherTailors.map((t, i) => {
+                                    const ci = globalIdx++;
+                                    return <TailorCard key={t.id} tailor={t} idx={ci} proximityLabel="Other Areas" navigate={navigate} />;
+                                })}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+};
+
 const NAV_TABS = [
     { id: 'home',          label: 'Home',    icon: '🏠' },
     { id: 'tailors',       label: 'Tailors', icon: '✂️' },
@@ -1354,7 +1820,7 @@ const CustomerDashboardPage = () => {
                     )}
                 </div>
             );
-            case 'tailors': return null;
+            case 'tailors': return <TailorsTab />;
             case 'orders': return <OrdersTab />;
             case 'profile': return <CustomerProfileTab user={user} onLogout={handleLogout} />;
             case 'notifications': return null;
