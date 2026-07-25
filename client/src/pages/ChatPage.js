@@ -22,6 +22,7 @@ const CUSTOMER_TABS = [
   { id: 'tailors', label: 'Tailors', icon: '✂️' },
   { id: 'orders', label: 'Orders', icon: '📦' },
   { id: 'chat', label: 'Chat', icon: '💬' },
+  { id: 'notifications', label: 'Alerts', icon: '🔔' },
   { id: 'profile', label: 'Profile', icon: '👤' },
 ];
 
@@ -107,8 +108,31 @@ const ChatPage = () => {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [attachedFile, setAttachedFile] = useState(null); // { file, preview, name, type }
   const [uploadingFile, setUploadingFile] = useState(false);
+  const [unreadNotifCount, setUnreadNotifCount] = useState(0);
   const emojiPickerRef = useRef(null);
   const fileInputRef = useRef(null);
+
+  /* ── Fetch unread notification count ── */
+  useEffect(() => {
+    if (!user) return;
+    const fetchCount = () => {
+      fetch(`${API_URL}/api/notifications`, { credentials: 'include' })
+        .then(r => r.ok ? r.json() : null)
+        .then(d => { if (d?.notifications) setUnreadNotifCount(d.notifications.filter(n => !n.is_read).length); })
+        .catch(() => {});
+    };
+    fetchCount();
+    const onNew = () => setUnreadNotifCount(prev => prev + 1);
+    const onReset = (e) => setUnreadNotifCount(e.detail ?? 0);
+    window.addEventListener('tailorhub_new_notification', onNew);
+    window.addEventListener('tailorhub_notif_count', onReset);
+    window.addEventListener('focus', fetchCount);
+    return () => {
+      window.removeEventListener('tailorhub_new_notification', onNew);
+      window.removeEventListener('tailorhub_notif_count', onReset);
+      window.removeEventListener('focus', fetchCount);
+    };
+  }, [user]);
 
   const messagesEndRef = useRef(null);
   const autoOpenedRef = useRef(null);
@@ -388,6 +412,10 @@ const ChatPage = () => {
   /* ── Nav ── */
   const handleNavClick = (tabId) => {
     if (tabId === 'chat') return;
+    if (tabId === 'notifications') {
+      navigate('/notifications');
+      return;
+    }
     navigate(user?.role === 'tailor' ? '/tailor/dashboard' : '/customer/dashboard', { state: { tab: tabId } });
   };
   const navTabs = user?.role === 'customer' ? CUSTOMER_TABS : TAILOR_TABS;
@@ -818,7 +846,23 @@ const ChatPage = () => {
           return (
             <button key={tab.id} onClick={() => handleNavClick(tab.id)} className="flex-1 flex flex-col items-center justify-center py-3 relative transition-colors">
               {isActive && <motion.div layoutId="customer-tab-indicator" className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-indigo-600 rounded-full" />}
-              <span className={`text-2xl transition-transform ${isActive ? 'scale-110' : 'scale-100'}`}>{tab.icon}</span>
+              <span className="relative inline-block">
+                <span className={`text-2xl transition-transform ${isActive ? 'scale-110' : 'scale-100'}`}>{tab.icon}</span>
+                {tab.id === 'notifications' && unreadNotifCount > 0 && (
+                  <span style={{
+                    position: 'absolute', top: '-4px', right: '-6px',
+                    background: '#ef4444', color: '#fff',
+                    fontSize: '9px', fontWeight: 800,
+                    minWidth: '15px', height: '15px',
+                    borderRadius: '999px',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    padding: '0 2px', border: '1.5px solid #fff',
+                    pointerEvents: 'none',
+                  }}>
+                    {unreadNotifCount > 99 ? '99+' : unreadNotifCount}
+                  </span>
+                )}
+              </span>
               <span className={`text-xs mt-1 font-medium ${isActive ? 'text-indigo-600' : 'text-gray-400'}`}>{tab.label}</span>
             </button>
           );

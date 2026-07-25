@@ -3,10 +3,12 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 
 const NAV_TABS = [
-    { id: 'home',    label: 'Home',    icon: '🏠', path: '/customer/dashboard' },
-    { id: 'tailors', label: 'Tailors', icon: '✂️', path: '/browse-deals' },
-    { id: 'orders',  label: 'Orders',  icon: '📦', path: '/customer/dashboard?tab=orders' },
-    { id: 'profile', label: 'Profile', icon: '👤', path: '/customer/dashboard?tab=profile' },
+    { id: 'home',          label: 'Home',    icon: '🏠', path: '/customer/dashboard' },
+    { id: 'tailors',       label: 'Tailors', icon: '✂️', path: '/browse-deals' },
+    { id: 'orders',        label: 'Orders',  icon: '📦', path: '/customer/dashboard?tab=orders' },
+    { id: 'chat',          label: 'Chat',    icon: '💬', path: '/chat' },
+    { id: 'notifications', label: 'Alerts',  icon: '🔔', path: '/notifications' },
+    { id: 'profile',       label: 'Profile', icon: '👤', path: '/customer/dashboard?tab=profile' },
 ];
 
 const CustomerBottomNav = ({ activeTab }) => {
@@ -18,6 +20,8 @@ const CustomerBottomNav = ({ activeTab }) => {
         const p = location.pathname;
         if (p.includes('browse-deals')) return 'tailors';
         if (p.includes('tailor-profile') || p.includes('book-appointment')) return 'tailors';
+        if (p.includes('/chat')) return 'chat';
+        if (p.includes('/notifications')) return 'notifications';
         return 'home';
     };
 
