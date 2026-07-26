@@ -38,7 +38,7 @@ const actions = [
     gradient: 'qa-ai',
     desc: 'Just for you',
     badge: 'AI',
-    path: '/collections?tab=ai-recommended',
+    path: '/ai-recommendations',
   },
 ];
 

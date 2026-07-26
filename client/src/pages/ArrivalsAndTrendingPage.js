@@ -130,7 +130,7 @@ const ArrivalsAndTrendingPage = () => {
   const location = useLocation();
   const queryParams = new URLSearchParams(location.search);
   const tabParam = queryParams.get('tab');
-  const initialTab = tabParam === 'trending' ? 'trending' : tabParam === 'ai-recommended' ? 'ai-recommended' : 'arrivals';
+  const initialTab = tabParam === 'trending' ? 'trending' : 'arrivals';
 
   const [activeTab, setActiveTab] = useState(initialTab);
   const [tailors, setTailors] = useState([]);
@@ -240,8 +240,8 @@ const ArrivalsAndTrendingPage = () => {
             📈 Trending
           </button>
           <button
-            onClick={() => setActiveTab('ai-recommended')}
-            className={`flex-1 py-3 px-4 rounded-xl text-sm font-black transition-all relative z-10 ${activeTab === 'ai-recommended' ? 'bg-cyan-50 text-cyan-700 shadow-sm border border-cyan-100' : 'text-stone-400 hover:text-stone-600'}`}
+            onClick={() => navigate('/ai-recommendations')}
+            className={`flex-1 py-3 px-4 rounded-xl text-sm font-black transition-all relative z-10 text-stone-400 hover:text-cyan-600 hover:bg-cyan-50`}
           >
             ✨ AI Pick
           </button>
