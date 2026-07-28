@@ -36,28 +36,6 @@ const EXPERIENCE_OPTIONS = [
   { id: 'master', label: 'Master Tailor', desc: '7+ years', icon: '🏆' },
 ];
 
-const GENDER_OPTIONS = [
-  { id: 'male', label: 'Male', emoji: '👨', accent: '#6366f1' },
-  { id: 'female', label: 'Female', emoji: '👩', accent: '#ec4899' },
-  { id: 'nonbinary', label: 'Non-binary', emoji: '🧑', accent: '#8b5cf6' },
-];
-
-const SKIN_TONES = [
-  { id: 'fair', label: 'Fair', color: '#FDDBB4' },
-  { id: 'light', label: 'Light', color: '#F0C08A' },
-  { id: 'medium', label: 'Medium', color: '#D4925A' },
-  { id: 'olive', label: 'Olive', color: '#B87040' },
-  { id: 'tan', label: 'Tan', color: '#8B5E3C' },
-  { id: 'deep', label: 'Deep', color: '#4A2C1A' },
-];
-
-const BODY_SHAPES = [
-  { id: 'slim', label: 'Slim / Lean', desc: 'Narrow, slim build', color: '#06b6d4', topY: '79' },
-  { id: 'athletic', label: 'Athletic', desc: 'Broad shoulders, V-shape', color: '#6366f1', topY: '76' },
-  { id: 'average', label: 'Average', desc: 'Proportional, balanced', color: '#f59e0b', topY: '79' },
-  { id: 'plus', label: 'Plus Size', desc: 'Fuller, rounder build', color: '#10b981', topY: '72' },
-];
-
 const SCORE_KEY = 'tailorhub_ai_recommendations';
 
 function scoreAndRankTailors(tailors, prefs) {
@@ -125,154 +103,6 @@ const fadeUp = {
 const stagger = {
   hidden: {},
   show: { transition: { staggerChildren: 0.08 } },
-};
-
-// ── Step 3: Body Profile ──────────────────────────────────────────────────────
-
-const BodyProfileStep = ({ prefs, setPrefs }) => {
-  const bp = prefs.bodyProfile || {};
-  const updateBP = (field, value) =>
-    setPrefs((p) => ({ ...p, bodyProfile: { ...(p.bodyProfile || {}), [field]: value } }));
-
-  const bodyShapePaths = {
-    slim: 'M22 26 L20 60 L24 60 L25 80 L35 80 L36 60 L40 60 L38 26 Z',
-    athletic: 'M18 26 L14 56 L22 60 L24 76 L36 76 L38 60 L46 56 L42 26 Z',
-    average: 'M19 26 L16 58 L24 62 L25 79 L35 79 L36 62 L44 58 L41 26 Z',
-    plus: 'M15 26 Q8 40 8 56 Q12 68 30 72 Q48 68 52 56 Q52 40 45 26 Z',
-  };
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-      {/* Gender */}
-      <div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: '0.85rem' }}>
-          <span style={{ fontSize: 18 }}>🧬</span>
-          <span style={{ fontWeight: 800, fontSize: 15, color: '#0f172a', fontFamily: 'Sora, sans-serif' }}>What is your gender?</span>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
-          {GENDER_OPTIONS.map((g) => {
-            const active = bp.gender === g.id;
-            return (
-              <motion.button key={g.id} whileHover={{ y: -4, scale: 1.03 }} whileTap={{ scale: 0.96 }} onClick={() => updateBP('gender', g.id)}
-                style={{ background: active ? `linear-gradient(160deg, ${g.accent}20, ${g.accent}08)` : '#fff', border: active ? `2.5px solid ${g.accent}` : '2px solid #e2e8f0', borderRadius: 20, padding: '1.5rem 0.75rem', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, boxShadow: active ? `0 8px 24px ${g.accent}30` : '0 2px 8px rgba(0,0,0,0.04)', transition: 'all 0.25s', position: 'relative' }}>
-                {active && (
-                  <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }}
-                    style={{ position: 'absolute', top: 8, right: 8, width: 20, height: 20, borderRadius: '50%', background: g.accent, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={3.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-                  </motion.div>
-                )}
-                <span style={{ fontSize: 36 }}>{g.emoji}</span>
-                <span style={{ fontWeight: 800, fontSize: 13, color: active ? g.accent : '#374151', fontFamily: 'Sora, sans-serif' }}>{g.label}</span>
-              </motion.button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Skin Tone */}
-      <div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: '0.85rem' }}>
-          <span style={{ fontSize: 18 }}>🎨</span>
-          <span style={{ fontWeight: 800, fontSize: 15, color: '#0f172a', fontFamily: 'Sora, sans-serif' }}>
-            Your skin tone <span style={{ fontWeight: 500, fontSize: 12, color: '#94a3b8' }}>(optional)</span>
-          </span>
-        </div>
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          {SKIN_TONES.map((st) => {
-            const active = bp.skinTone === st.id;
-            return (
-              <motion.button key={st.id} whileHover={{ scale: 1.12 }} whileTap={{ scale: 0.95 }} onClick={() => updateBP('skinTone', st.id)} title={st.label}
-                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
-                <div style={{ width: 46, height: 46, borderRadius: '50%', background: st.color, border: active ? '3px solid #6366f1' : '3px solid transparent', boxShadow: active ? '0 0 0 2px #6366f1, 0 4px 12px rgba(99,102,241,0.3)' : '0 2px 8px rgba(0,0,0,0.15)', transition: 'all 0.2s' }} />
-                <span style={{ fontSize: 10, fontWeight: 700, color: active ? '#6366f1' : '#94a3b8', fontFamily: 'Sora, sans-serif' }}>{st.label}</span>
-              </motion.button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Body Shape */}
-      <div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: '0.85rem' }}>
-          <span style={{ fontSize: 18 }}>🧍</span>
-          <span style={{ fontWeight: 800, fontSize: 15, color: '#0f172a', fontFamily: 'Sora, sans-serif' }}>
-            Your body shape <span style={{ fontWeight: 500, fontSize: 12, color: '#94a3b8' }}>(optional)</span>
-          </span>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
-          {BODY_SHAPES.map((bs) => {
-            const active = bp.bodyShape === bs.id;
-            return (
-              <motion.button key={bs.id} whileHover={{ y: -3, scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={() => updateBP('bodyShape', bs.id)}
-                style={{ background: active ? `linear-gradient(160deg, ${bs.color}18, ${bs.color}05)` : '#fff', border: active ? `2.5px solid ${bs.color}` : '2px solid #e2e8f0', borderRadius: 20, padding: '1.25rem', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, boxShadow: active ? `0 8px 24px ${bs.color}35` : '0 2px 8px rgba(0,0,0,0.04)', transition: 'all 0.25s', position: 'relative' }}>
-                {active && (
-                  <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }}
-                    style={{ position: 'absolute', top: 10, right: 10, width: 22, height: 22, borderRadius: '50%', background: bs.color, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={3.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-                  </motion.div>
-                )}
-                <svg viewBox="0 0 60 110" width="52" height="90" fill="none">
-                  <circle cx="30" cy="13" r={bs.id === 'plus' ? 11 : 10} fill={bs.color} opacity="0.85" />
-                  <path d={bodyShapePaths[bs.id]} fill={bs.color} opacity="0.72" />
-                  <rect x="22" y={bs.topY} width="9" height="28" rx="4" fill={bs.color} opacity="0.6" />
-                  <rect x="29" y={bs.topY} width="9" height="28" rx="4" fill={bs.color} opacity="0.6" />
-                  {bs.id !== 'plus' && <>
-                    <rect x="7" y="27" width="10" height="25" rx="4" fill={bs.color} opacity="0.5" />
-                    <rect x="43" y="27" width="10" height="25" rx="4" fill={bs.color} opacity="0.5" />
-                  </>}
-                  {bs.id === 'plus' && <>
-                    <rect x="4" y="28" width="11" height="26" rx="5" fill={bs.color} opacity="0.5" />
-                    <rect x="45" y="28" width="11" height="26" rx="5" fill={bs.color} opacity="0.5" />
-                  </>}
-                </svg>
-                <div>
-                  <p style={{ fontWeight: 900, fontSize: 14, fontFamily: 'Sora, sans-serif', color: active ? bs.color : '#0f172a', textAlign: 'center' }}>{bs.label}</p>
-                  <p style={{ fontSize: 11, color: active ? bs.color : '#94a3b8', opacity: active ? 0.85 : 1, textAlign: 'center', marginTop: 2 }}>{bs.desc}</p>
-                </div>
-              </motion.button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Height & Weight */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-        <div style={{ background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: 20, padding: '1.25rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: '0.75rem' }}>
-            <span style={{ fontSize: 16 }}>📏</span>
-            <span style={{ fontWeight: 800, fontSize: 13, color: '#0f172a', fontFamily: 'Sora, sans-serif' }}>Height</span>
-            <span style={{ fontSize: 11, color: '#94a3b8', marginLeft: 'auto' }}>cm</span>
-          </div>
-          <div style={{ fontSize: 28, fontWeight: 900, color: '#6366f1', fontFamily: 'Sora, sans-serif', textAlign: 'center', marginBottom: '0.5rem' }}>{bp.height || 170}</div>
-          <input type="range" min={130} max={220} value={bp.height || 170} onChange={(e) => updateBP('height', parseInt(e.target.value))} style={{ width: '100%', accentColor: '#6366f1', cursor: 'pointer' }} />
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
-            <span style={{ fontSize: 10, color: '#cbd5e1' }}>130cm</span>
-            <span style={{ fontSize: 10, color: '#cbd5e1' }}>220cm</span>
-          </div>
-        </div>
-        <div style={{ background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: 20, padding: '1.25rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: '0.75rem' }}>
-            <span style={{ fontSize: 16 }}>⚖️</span>
-            <span style={{ fontWeight: 800, fontSize: 13, color: '#0f172a', fontFamily: 'Sora, sans-serif' }}>Weight</span>
-            <span style={{ fontSize: 11, color: '#94a3b8', marginLeft: 'auto' }}>kg</span>
-          </div>
-          <div style={{ fontSize: 28, fontWeight: 900, color: '#8b5cf6', fontFamily: 'Sora, sans-serif', textAlign: 'center', marginBottom: '0.5rem' }}>{bp.weight || 65}</div>
-          <input type="range" min={30} max={200} value={bp.weight || 65} onChange={(e) => updateBP('weight', parseInt(e.target.value))} style={{ width: '100%', accentColor: '#8b5cf6', cursor: 'pointer' }} />
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
-            <span style={{ fontSize: 10, color: '#cbd5e1' }}>30kg</span>
-            <span style={{ fontSize: 10, color: '#cbd5e1' }}>200kg</span>
-          </div>
-        </div>
-      </div>
-
-      <div style={{ background: 'linear-gradient(135deg, #eef2ff, #f0fdf4)', border: '1.5px solid #c7d2fe', borderRadius: 16, padding: '0.85rem 1rem', display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-        <span style={{ fontSize: 16, flexShrink: 0, marginTop: 2 }}>💡</span>
-        <p style={{ fontSize: 12, color: '#4338ca', lineHeight: 1.6, fontWeight: 500 }}>
-          Your body profile helps us find tailors who specialise in creating flattering fits for your unique shape and measurements.
-        </p>
-      </div>
-    </div>
-  );
 };
 
 // ── Step 1: Hero ──────────────────────────────────────────────────────────────
@@ -666,7 +496,7 @@ const TailorResultCard = ({ tailor, rank, navigate }) => {
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
-const QUIZ_TOTAL_STEPS = 4;
+const QUIZ_TOTAL_STEPS = 3;
 
 const AiRecommendationsPage = () => {
   const navigate = useNavigate();
@@ -674,7 +504,7 @@ const AiRecommendationsPage = () => {
 
   const [phase, setPhase] = useState('hero'); // hero | quiz | results | previous
   const [quizStep, setQuizStep] = useState(1);
-  const [prefs, setPrefs] = useState({ style: '', budget: '', bodyProfile: { gender: '', skinTone: '', bodyShape: '', height: 170, weight: 65 }, experience: 'any' });
+  const [prefs, setPrefs] = useState({ style: '', budget: '', experience: 'any' });
   const [tailors, setTailors] = useState([]);
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState([]);
@@ -703,7 +533,7 @@ const AiRecommendationsPage = () => {
   const handleGetStarted = () => {
     loadTailors();
     setQuizStep(1);
-    setPrefs({ style: '', budget: '', bodyProfile: { gender: '', skinTone: '', bodyShape: '', height: 170, weight: 65 }, experience: 'any' });
+    setPrefs({ style: '', budget: '', experience: 'any' });
     setPhase('quiz');
   };
 
@@ -740,24 +570,10 @@ const AiRecommendationsPage = () => {
   const canProceed = () => {
     if (quizStep === 1) return !!prefs.style;
     if (quizStep === 2) return !!prefs.budget;
-    if (quizStep === 3) return !!(prefs.bodyProfile?.gender);
     return true;
   };
 
   const greeting = user?.full_name ? `, ${user.full_name.split(' ')[0]}` : '';
-
-  const stepTitles = [
-    `What style${greeting}?`,
-    "What's your budget?",
-    'Tell us about yourself',
-    'Preferred experience level?',
-  ];
-  const stepSubtitles = [
-    'Pick the clothing category you need stitched.',
-    "We'll surface tailors who match your price range.",
-    'Help us personalise your perfect fit recommendations.',
-    'Filter by years of craftsmanship.',
-  ];
 
   return (
     <div style={{
@@ -842,8 +658,16 @@ const AiRecommendationsPage = () => {
               <QuizStep
                 step={quizStep}
                 total={QUIZ_TOTAL_STEPS}
-                title={stepTitles[quizStep - 1]}
-                subtitle={stepSubtitles[quizStep - 1]}
+                title={
+                  quizStep === 1 ? `What style${greeting}?` :
+                  quizStep === 2 ? 'What\'s your budget?' :
+                  'Preferred experience level?'
+                }
+                subtitle={
+                  quizStep === 1 ? 'Pick the clothing category you need stitched.' :
+                  quizStep === 2 ? 'We\'ll surface tailors who match your price range.' :
+                  'Filter by years of craftsmanship.'
+                }
               >
                 {/* Step 1: Style */}
                 {quizStep === 1 && (
@@ -963,11 +787,8 @@ const AiRecommendationsPage = () => {
                   </motion.div>
                 )}
 
-                {/* Step 3: Body Profile */}
-                {quizStep === 3 && <BodyProfileStep prefs={prefs} setPrefs={setPrefs} />}
-
-                {/* Step 4: Experience */}
-                {quizStep === 4 && (
+                {/* Step 3: Experience */}
+                {quizStep === 3 && (
                   <motion.div variants={stagger} initial="hidden" animate="show"
                     style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
                     {EXPERIENCE_OPTIONS.map((e) => (
@@ -1098,14 +919,9 @@ const AiRecommendationsPage = () => {
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
                     {(phase === 'previous' ? previousRecs?.prefs : prefs) && (() => {
                       const p = phase === 'previous' ? previousRecs.prefs : prefs;
-                      const bp = p.bodyProfile || {};
                       return [
                         p.style && STYLE_CATEGORIES.find((s) => s.id === p.style)?.label,
                         p.budget && BUDGET_OPTIONS.find((b) => b.id === p.budget)?.label,
-                        bp.gender && GENDER_OPTIONS.find((g) => g.id === bp.gender)?.label,
-                        bp.bodyShape && BODY_SHAPES.find((b) => b.id === bp.bodyShape)?.label,
-                        bp.height && `${bp.height}cm`,
-                        bp.weight && `${bp.weight}kg`,
                         p.experience && p.experience !== 'any' && EXPERIENCE_OPTIONS.find((e) => e.id === p.experience)?.label,
                       ].filter(Boolean).map((chip) => (
                         <span key={chip} style={{
@@ -1132,7 +948,7 @@ const AiRecommendationsPage = () => {
                   { icon: '⭐', label: 'Rating Score', desc: 'Highest rated first' },
                   { icon: '🧵', label: 'Style Match', desc: 'Speciality aligned' },
                   { icon: '💰', label: 'Budget Fit', desc: 'Price range checked' },
-                  { icon: '🧍', label: 'Body Profile', desc: 'Personalised for you' },
+                  { icon: '📍', label: 'Availability', desc: 'Active tailors only' },
                 ].map((item) => (
                   <div key={item.label} style={{
                     background: '#fff',
@@ -1254,8 +1070,6 @@ const AiRecommendationsPage = () => {
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        input[type=range] { -webkit-appearance: none; height: 6px; border-radius: 100px; outline: none; background: #e2e8f0; }
-        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; border-radius: 50%; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
       `}</style>
     </div>
   );
