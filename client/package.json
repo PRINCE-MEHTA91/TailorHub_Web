@@ -13,9 +13,9 @@
     "socket.io-client": "^4.7.5"
   },
   "scripts": {
-    "start": "react-scripts start",
-    "dev": "react-scripts start",
-    "build": "react-scripts build",
+    "start": "SET NODE_PATH=../node_modules && react-scripts start",
+    "dev": "SET NODE_PATH=../node_modules && react-scripts start",
+    "build": "SET NODE_PATH=../node_modules && react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
   },

@@ -284,7 +284,7 @@ const HeroSection = ({ onGetStarted, onViewPrevious, hasPrevious }) => (
     initial="hidden"
     animate="show"
     exit="exit"
-    style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', padding: '0 1rem' }}
+    style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', padding: '0 1.5rem', maxWidth: 700, margin: '0 auto' }}
   >
     {/* Animated sparkle orbs */}
     <div style={{ position: 'relative', marginBottom: '2rem' }}>
@@ -664,9 +664,150 @@ const TailorResultCard = ({ tailor, rank, navigate }) => {
   );
 };
 
+// ── AI Style Advice Panel ─────────────────────────────────────────────────────
+
+const SKIN_COLORS = { fair: '#FDDBB4', light: '#F0C08A', medium: '#D4925A', olive: '#B87040', tan: '#8B5E3C', deep: '#4A2C1A' };
+
+const StyleAdvicePanel = ({ advice, loading, error }) => {
+  if (loading) return (
+    <div style={{ background: 'linear-gradient(135deg, #1e1b4b, #312e81)', borderRadius: 24, padding: '2rem', marginBottom: '1.5rem', overflow: 'hidden', position: 'relative' }}>
+      <div style={{ position: 'absolute', top: -40, right: -40, width: 150, height: 150, borderRadius: '50%', background: 'rgba(139,92,246,0.15)', filter: 'blur(30px)' }} />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1.5rem' }}>
+        <motion.div animate={{ rotate: 360 }} transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }}
+          style={{ width: 36, height: 36, borderRadius: '50%', border: '3px solid rgba(139,92,246,0.4)', borderTopColor: '#8b5cf6', flexShrink: 0 }} />
+        <div>
+          <p style={{ fontWeight: 900, fontSize: 16, color: '#fff', fontFamily: 'Sora, sans-serif' }}>✨ Gemini AI is styling you...</p>
+          <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>Personalising advice based on your body profile</p>
+        </div>
+      </div>
+      {[80, 60, 90, 50].map((w, i) => (
+        <motion.div key={i} animate={{ opacity: [0.3, 0.7, 0.3] }} transition={{ duration: 1.5, repeat: Infinity, delay: i * 0.2 }}
+          style={{ height: 12, background: 'rgba(255,255,255,0.1)', borderRadius: 8, marginBottom: 10, width: `${w}%` }} />
+      ))}
+    </div>
+  );
+
+  if (!advice) return null;
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}
+      style={{ background: 'linear-gradient(135deg, #1e1b4b, #312e81)', borderRadius: 24, padding: '1.75rem', marginBottom: '1.5rem', overflow: 'hidden', position: 'relative' }}>
+      {/* Background orbs */}
+      <div style={{ position: 'absolute', top: -50, right: -50, width: 180, height: 180, borderRadius: '50%', background: 'rgba(139,92,246,0.12)', filter: 'blur(40px)' }} />
+      <div style={{ position: 'absolute', bottom: -30, left: -30, width: 120, height: 120, borderRadius: '50%', background: 'rgba(6,182,212,0.08)', filter: 'blur(30px)' }} />
+
+      <div style={{ position: 'relative', zIndex: 1 }}>
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: '1.25rem' }}>
+          <div style={{ width: 44, height: 44, borderRadius: 14, background: 'linear-gradient(135deg, #8b5cf6, #06b6d4)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>✨</div>
+          <div>
+            <p style={{ fontSize: 10, fontWeight: 800, color: '#a78bfa', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 2 }}>GEMINI AI • PERSONALISED STYLE ADVICE</p>
+            <h3 style={{ fontWeight: 900, fontSize: 18, color: '#fff', fontFamily: 'Sora, sans-serif', lineHeight: 1.2 }}>{advice.headline}</h3>
+          </div>
+        </div>
+
+        <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.75)', lineHeight: 1.7, marginBottom: '1.5rem', borderLeft: '3px solid #8b5cf6', paddingLeft: 12 }}>
+          {advice.summary}
+        </p>
+
+        {/* Color Palette */}
+        <div style={{ background: 'rgba(255,255,255,0.06)', borderRadius: 16, padding: '1rem', marginBottom: '1rem' }}>
+          <p style={{ fontSize: 11, fontWeight: 800, color: '#a78bfa', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '0.75rem' }}>🎨 Your Color Palette</p>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+            {advice.colorPalette?.recommended?.map((c, i) => (
+              <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                <div style={{ width: 32, height: 32, borderRadius: '50%', background: SKIN_COLORS[c.toLowerCase()] || `hsl(${i * 47 + 200}, 60%, 65%)`, border: '2px solid rgba(255,255,255,0.2)', boxShadow: '0 2px 8px rgba(0,0,0,0.3)' }} />
+                <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.6)', fontWeight: 600, whiteSpace: 'nowrap', maxWidth: 44, textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c}</span>
+              </div>
+            ))}
+            <div style={{ width: 1, background: 'rgba(255,255,255,0.15)', margin: '0 4px' }} />
+            {advice.colorPalette?.avoid?.map((c, i) => (
+              <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                <div style={{ width: 32, height: 32, borderRadius: '50%', background: `hsl(${i * 30 + 10}, 45%, 55%)`, border: '2px solid rgba(239,68,68,0.5)', opacity: 0.6, position: 'relative' }}>
+                  <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, color: '#ef4444' }}>✕</div>
+                </div>
+                <span style={{ fontSize: 9, color: 'rgba(239,68,68,0.7)', fontWeight: 600 }}>{c}</span>
+              </div>
+            ))}
+          </div>
+          {advice.colorPalette?.reason && <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', fontStyle: 'italic' }}>{advice.colorPalette.reason}</p>}
+        </div>
+
+        {/* 2-column grid: Fabrics + Fit Tips */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: '1rem' }}>
+          <div style={{ background: 'rgba(255,255,255,0.06)', borderRadius: 14, padding: '0.9rem' }}>
+            <p style={{ fontSize: 11, fontWeight: 800, color: '#a78bfa', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '0.6rem' }}>🧶 Fabrics</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+              {advice.fabrics?.map((f, i) => (
+                <span key={i} style={{ fontSize: 11, color: 'rgba(255,255,255,0.8)', display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#8b5cf6', flexShrink: 0 }} />{f}
+                </span>
+              ))}
+            </div>
+          </div>
+          <div style={{ background: 'rgba(255,255,255,0.06)', borderRadius: 14, padding: '0.9rem' }}>
+            <p style={{ fontSize: 11, fontWeight: 800, color: '#a78bfa', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '0.6rem' }}>📐 Fit Tips</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+              {advice.fitTips?.map((t, i) => (
+                <span key={i} style={{ fontSize: 11, color: 'rgba(255,255,255,0.8)', display: 'flex', alignItems: 'flex-start', gap: 5, lineHeight: 1.4 }}>
+                  <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#06b6d4', flexShrink: 0, marginTop: 4 }} />{t}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Outfit Ideas */}
+        <div style={{ background: 'rgba(255,255,255,0.06)', borderRadius: 14, padding: '0.9rem', marginBottom: '1rem' }}>
+          <p style={{ fontSize: 11, fontWeight: 800, color: '#a78bfa', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '0.6rem' }}>👔 Outfit Ideas</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {advice.outfitIdeas?.map((idea, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                <span style={{ background: 'linear-gradient(135deg, #8b5cf6, #06b6d4)', borderRadius: '50%', width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 900, color: '#fff', flexShrink: 0, marginTop: 1 }}>{i + 1}</span>
+                <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.85)', lineHeight: 1.5 }}>{idea}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Dos & Don'ts */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: '1rem' }}>
+          <div style={{ background: 'rgba(16,185,129,0.1)', borderRadius: 14, padding: '0.9rem', border: '1px solid rgba(16,185,129,0.2)' }}>
+            <p style={{ fontSize: 11, fontWeight: 800, color: '#34d399', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '0.6rem' }}>✅ Do</p>
+            {advice.dos?.map((d, i) => (
+              <p key={i} style={{ fontSize: 11, color: 'rgba(255,255,255,0.8)', marginBottom: 4, lineHeight: 1.4, display: 'flex', gap: 5 }}>
+                <span style={{ color: '#34d399', flexShrink: 0 }}>✓</span>{d}
+              </p>
+            ))}
+          </div>
+          <div style={{ background: 'rgba(239,68,68,0.08)', borderRadius: 14, padding: '0.9rem', border: '1px solid rgba(239,68,68,0.15)' }}>
+            <p style={{ fontSize: 11, fontWeight: 800, color: '#f87171', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '0.6rem' }}>❌ Don't</p>
+            {advice.donts?.map((d, i) => (
+              <p key={i} style={{ fontSize: 11, color: 'rgba(255,255,255,0.8)', marginBottom: 4, lineHeight: 1.4, display: 'flex', gap: 5 }}>
+                <span style={{ color: '#f87171', flexShrink: 0 }}>✗</span>{d}
+              </p>
+            ))}
+          </div>
+        </div>
+
+        {/* Accessory Tip */}
+        {advice.accessoryTip && (
+          <div style={{ background: 'linear-gradient(135deg, rgba(251,191,36,0.12), rgba(245,158,11,0.06))', borderRadius: 14, padding: '0.9rem', border: '1px solid rgba(251,191,36,0.2)', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+            <span style={{ fontSize: 18, flexShrink: 0 }}>💍</span>
+            <div>
+              <p style={{ fontSize: 10, fontWeight: 800, color: '#fbbf24', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 4 }}>Accessory Tip</p>
+              <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.8)', lineHeight: 1.5 }}>{advice.accessoryTip}</p>
+            </div>
+          </div>
+        )}
+      </div>
+    </motion.div>
+  );
+};
+
 // ── Main Component ────────────────────────────────────────────────────────────
 
-const QUIZ_TOTAL_STEPS = 4;
+const QUIZ_TOTAL_STEPS = 3;
 
 const AiRecommendationsPage = () => {
   const navigate = useNavigate();
@@ -679,6 +820,9 @@ const AiRecommendationsPage = () => {
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState([]);
   const [previousRecs, setPreviousRecs] = useState(null);
+  const [styleAdvice, setStyleAdvice] = useState(null);
+  const [adviceLoading, setAdviceLoading] = useState(false);
+  const [adviceError, setAdviceError] = useState(null);
 
   // Load tailors once
   const loadTailors = useCallback(async () => {
@@ -714,6 +858,63 @@ const AiRecommendationsPage = () => {
     }
   };
 
+  const getClientFallbackAdvice = (style = 'formal', bp = {}) => {
+    const { skinTone = 'medium', bodyShape = 'average', height = 170 } = bp;
+    return {
+      headline: `Tailored ${style.charAt(0).toUpperCase() + style.slice(1)} Wear Personalized For You`,
+      summary: `Based on your ${bodyShape} build and ${skinTone} skin tone, our AI recommends structured silhouettes and rich color contrasts designed to flatter your ${height}cm frame.`,
+      colorPalette: {
+        recommended: ['Royal Blue', 'Emerald Green', 'Deep Wine', 'Rich Navy'],
+        avoid: ['Pale Yellow', 'Washed Pastels'],
+        reason: 'Rich jewel tones contrast beautifully with your natural complexion.'
+      },
+      fabrics: ['Premium Merino Wool', 'Handloom Pure Silk', 'Breathable Organic Cotton', 'Rich Linen'],
+      fitTips: [
+        'Opt for layered outfits and structured fabrics to add subtle dimension.',
+        'Choose tailored fits that follow the silhouette without clinging too tightly.',
+        'Ensure proper sleeve and hem lengths for a sharp, polished appearance.'
+      ],
+      outfitIdeas: [
+        'Bespoke two-piece tailored ensemble in premium fabric with crisp detailing.',
+        'Single-breasted structured jacket paired with tapered tailored trousers.',
+        'Classic ceremonial outfit tailored with subtle contrast buttons.'
+      ],
+      dos: [
+        'Always request a second fitting to refine waist and shoulder alignment.',
+        'Choose fabrics that match the climate and formality of your occasion.',
+        'Communicate your comfort preferences clearly with your tailor.'
+      ],
+      donts: [
+        'Don\'t settle for off-the-rack shoulder fits without custom alteration.',
+        'Avoid heavy fabrics in high humidity or tight fits without stretch.',
+        'Don\'t ignore hemline lengths—proper shoe break is essential.'
+      ],
+      accessoryTip: 'Pair with a subtle silk pocket square or handcrafted leather footwear to complete the look.'
+    };
+  };
+
+  const fetchStyleAdvice = async (currentPrefs) => {
+    setAdviceLoading(true);
+    setAdviceError(null);
+    setStyleAdvice(null);
+    try {
+      const res = await fetch(`${API_URL}/api/ai-style-advice`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ style: currentPrefs.style, bodyProfile: currentPrefs.bodyProfile }),
+      });
+      const data = await res.json();
+      if (data && (data.success || data.advice)) {
+        setStyleAdvice(data.advice);
+      } else {
+        setStyleAdvice(getClientFallbackAdvice(currentPrefs.style, currentPrefs.bodyProfile));
+      }
+    } catch {
+      setStyleAdvice(getClientFallbackAdvice(currentPrefs.style, currentPrefs.bodyProfile));
+    }
+    setAdviceLoading(false);
+  };
+
   const handleNextStep = () => {
     if (quizStep < QUIZ_TOTAL_STEPS) {
       setQuizStep((s) => s + 1);
@@ -724,6 +925,8 @@ const AiRecommendationsPage = () => {
       setResults(top);
       // Persist
       localStorage.setItem(SCORE_KEY, JSON.stringify({ prefs, results: top, savedAt: new Date().toISOString() }));
+      // Fetch AI style advice
+      fetchStyleAdvice(prefs);
       setPhase('results');
     }
   };
@@ -740,7 +943,6 @@ const AiRecommendationsPage = () => {
   const canProceed = () => {
     if (quizStep === 1) return !!prefs.style;
     if (quizStep === 2) return !!prefs.budget;
-    if (quizStep === 3) return !!(prefs.bodyProfile?.gender);
     return true;
   };
 
@@ -750,13 +952,11 @@ const AiRecommendationsPage = () => {
     `What style${greeting}?`,
     "What's your budget?",
     'Tell us about yourself',
-    'Preferred experience level?',
   ];
   const stepSubtitles = [
     'Pick the clothing category you need stitched.',
     "We'll surface tailors who match your price range.",
     'Help us personalise your perfect fit recommendations.',
-    'Filter by years of craftsmanship.',
   ];
 
   return (
@@ -823,7 +1023,7 @@ const AiRecommendationsPage = () => {
       </div>
 
       {/* ── Main content ── */}
-      <div style={{ maxWidth: 680, margin: '0 auto', padding: '2.5rem 1.25rem 6rem' }}>
+      <div style={{ maxWidth: '100%', width: '100%', margin: '0 auto', padding: '2rem 1.5rem 6rem', boxSizing: 'border-box' }}>
         <AnimatePresence mode="wait">
 
           {/* ── HERO ── */}
@@ -839,6 +1039,7 @@ const AiRecommendationsPage = () => {
           {/* ── QUIZ ── */}
           {phase === 'quiz' && (
             <motion.div key={`quiz-${quizStep}`} variants={fadeUp} initial="hidden" animate="show" exit="exit">
+              <div style={{ maxWidth: 700, margin: '0 auto' }}>
               <QuizStep
                 step={quizStep}
                 total={QUIZ_TOTAL_STEPS}
@@ -848,7 +1049,7 @@ const AiRecommendationsPage = () => {
                 {/* Step 1: Style */}
                 {quizStep === 1 && (
                   <motion.div variants={stagger} initial="hidden" animate="show"
-                    style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
+                    style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
                     {STYLE_CATEGORIES.map((s) => (
                       <motion.button
                         key={s.id}
@@ -965,48 +1166,12 @@ const AiRecommendationsPage = () => {
 
                 {/* Step 3: Body Profile */}
                 {quizStep === 3 && <BodyProfileStep prefs={prefs} setPrefs={setPrefs} />}
-
-                {/* Step 4: Experience */}
-                {quizStep === 4 && (
-                  <motion.div variants={stagger} initial="hidden" animate="show"
-                    style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
-                    {EXPERIENCE_OPTIONS.map((e) => (
-                      <motion.button
-                        key={e.id}
-                        variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } }}
-                        whileHover={{ y: -3 }}
-                        whileTap={{ scale: 0.97 }}
-                        onClick={() => setPrefs((p) => ({ ...p, experience: e.id }))}
-                        style={{
-                          background: prefs.experience === e.id
-                            ? 'linear-gradient(135deg, #6366f1, #8b5cf6)'
-                            : '#fff',
-                          border: prefs.experience === e.id ? '2px solid #6366f1' : '2px solid #e2e8f0',
-                          borderRadius: 20,
-                          padding: '1.25rem',
-                          textAlign: 'left',
-                          cursor: 'pointer',
-                          transition: 'all 0.25s',
-                          boxShadow: prefs.experience === e.id ? '0 8px 24px rgba(99,102,241,0.25)' : '0 2px 8px rgba(0,0,0,0.04)',
-                        }}
-                      >
-                        <span style={{ fontSize: 28, display: 'block', marginBottom: 8 }}>{e.icon}</span>
-                        <p style={{
-                          fontWeight: 900, fontSize: 14, fontFamily: 'Sora, sans-serif',
-                          color: prefs.experience === e.id ? '#fff' : '#0f172a',
-                        }}>{e.label}</p>
-                        <p style={{
-                          fontSize: 12, marginTop: 4,
-                          color: prefs.experience === e.id ? 'rgba(255,255,255,0.7)' : '#94a3b8',
-                        }}>{e.desc}</p>
-                      </motion.button>
-                    ))}
-                  </motion.div>
-                )}
               </QuizStep>
 
+              </div>
+
               {/* Navigation buttons */}
-              <div style={{ display: 'flex', gap: 12, marginTop: '2rem' }}>
+              <div style={{ display: 'flex', gap: 12, marginTop: '2rem', maxWidth: 700, margin: '2rem auto 0' }}>
                 <button
                   onClick={handleBack}
                   style={{
@@ -1125,7 +1290,7 @@ const AiRecommendationsPage = () => {
 
               {/* How AI works row */}
               <div style={{
-                display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10,
+                display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 10,
                 marginBottom: '1.5rem',
               }}>
                 {[
@@ -1148,6 +1313,29 @@ const AiRecommendationsPage = () => {
                     </div>
                   </div>
                 ))}
+              </div>
+
+              {/* ── Gemini AI Style Advice ── */}
+              {phase === 'results' && (
+                <StyleAdvicePanel advice={styleAdvice} loading={adviceLoading} error={adviceError} />
+              )}
+
+              {/* Recommended Tailors Heading */}
+              <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                marginBottom: 16, marginTop: 28
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontSize: 24 }}>🧵</span>
+                  <div>
+                    <h3 style={{ fontWeight: 900, fontSize: 20, color: '#0f172a', fontFamily: 'Sora, sans-serif' }}>
+                      Recommended Tailors For Your Style
+                    </h3>
+                    <p style={{ fontSize: 13, color: '#64748b' }}>
+                      Top tailors ranked by compatibility with your preferences
+                    </p>
+                  </div>
+                </div>
               </div>
 
               {/* Tailor cards */}
@@ -1185,7 +1373,7 @@ const AiRecommendationsPage = () => {
                   variants={stagger}
                   initial="hidden"
                   animate="show"
-                  style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
+                  style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(420px, 1fr))', gap: 16 }}
                 >
                   {results.map((tailor, i) => (
                     <TailorResultCard

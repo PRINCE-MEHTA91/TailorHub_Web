@@ -21,6 +21,7 @@ const nodemailer = require('nodemailer');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const { GoogleGenAI } = require('@google/genai');
 
 const app = express();
 const httpServer = http.createServer(app);
@@ -1957,6 +1958,10 @@ io.on('connection', (socket) => {
         console.log(`🔌 Socket disconnected: user ${userId}`);
     });
 });
+
+// ── AI Style Advice Routes (MVC) ─────────────────────────────────────────────
+const aiRoutes = require('./routes/ai.routes');
+app.use('/api', aiRoutes);
 
 httpServer.listen(PORT, '0.0.0.0', () => {
     console.log(`✅ Server is running on port ${PORT} (HTTP + Socket.IO)`);
