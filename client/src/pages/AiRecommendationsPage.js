@@ -88,10 +88,14 @@ function getHexForColorName(colorName = '', idx = 0) {
     'mustard gold': '#D97706',
     'sunset gold': '#F59E0B',
     'gold': '#D97706',
+    'gold zari': '#C8971A',
     'ivory white': '#F8FAFC',
     'ivory': '#FDFBF7',
     'ivory gold': '#FEF3C7',
     'white': '#F8FAFC',
+    'off-white': '#F5F5F0',
+    'cream white': '#FEFCE8',
+    'cream': '#FFFBEB',
     'teal blue': '#0D9488',
     'teal': '#14B8A6',
     'bright teal': '#06B6D4',
@@ -104,6 +108,8 @@ function getHexForColorName(colorName = '', idx = 0) {
     'neon green': '#22C55E',
     'dark charcoal': '#334155',
     'charcoal gray': '#475569',
+    'charcoal grey': '#475569',
+    'charcoal': '#334155',
     'pale yellow': '#FEF08A',
     'beige': '#D6C5B3',
     'pale beige': '#E7E5E4',
@@ -111,7 +117,22 @@ function getHexForColorName(colorName = '', idx = 0) {
     'ash gray': '#94A3B8',
     'washed pastels': '#E0E7FF',
     'washed-out pastels': '#E0E7FF',
-    'washed peach': '#FFDAB9'
+    'washed peach': '#FFDAB9',
+    // New combo colors
+    'lavender': '#C4B5FD',
+    'terracotta': '#C2694F',
+    'dusty rose': '#D4908A',
+    'sage green': '#87A878',
+    'sky blue': '#7DD3FC',
+    'camel brown': '#C19A6B',
+    'camel': '#C19A6B',
+    'rose gold': '#B76E79',
+    'coral': '#FF7F6E',
+    'indigo': '#4338CA',
+    'deep navy': '#1E3A5F',
+    'deep plum': '#4A1942',
+    'deep wine': '#6B1A2E',
+    'rich navy': '#1E3A6E',
   };
   if (exactMap[c]) return exactMap[c];
   if (c.includes('blue') || c.includes('navy')) return '#2563EB';
@@ -929,6 +950,85 @@ const StyleAdvicePanel = ({ advice, loading, error, lang = 'english', onLangChan
           {advice.colorPalette?.reason && <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', fontStyle: 'italic' }}>{advice.colorPalette.reason}</p>}
         </div>
 
+        {/* Top + Bottom Color Combinations */}
+        {advice.topBottomCombos?.length > 0 && (
+          <div style={{ background: 'rgba(255,255,255,0.06)', borderRadius: 16, padding: '1rem', marginBottom: '1rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.85rem' }}>
+              <p style={{ fontSize: 11, fontWeight: 800, color: '#a78bfa', letterSpacing: '0.08em', textTransform: 'uppercase', margin: 0 }}>
+                👕 Trending Color Combos
+              </p>
+              <span style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.4)', background: 'rgba(255,255,255,0.08)', padding: '2px 8px', borderRadius: 20 }}>
+                2025 Trends
+              </span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {advice.topBottomCombos.map((combo, i) => (
+                <div key={i} style={{ background: 'rgba(0,0,0,0.2)', borderRadius: 14, padding: '0.8rem', border: '1px solid rgba(255,255,255,0.07)', display: 'flex', gap: 12, alignItems: 'center' }}>
+                  {/* Visual top+bottom swatch stack */}
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, flexShrink: 0 }}>
+                    <div style={{ position: 'relative' }}>
+                      {/* Top garment color block */}
+                      <div style={{
+                        width: 44, height: 30, borderRadius: '10px 10px 4px 4px',
+                        background: getHexForColorName(combo.top, i),
+                        border: '2px solid rgba(255,255,255,0.2)',
+                        boxShadow: `0 2px 8px ${getHexForColorName(combo.top, i)}55`
+                      }} />
+                      {/* Bottom garment color block */}
+                      <div style={{
+                        width: 44, height: 30, borderRadius: '4px 4px 10px 10px',
+                        background: getHexForColorName(combo.bottom, i + 3),
+                        border: '2px solid rgba(255,255,255,0.2)',
+                        borderTop: 'none',
+                        boxShadow: `0 2px 8px ${getHexForColorName(combo.bottom, i + 3)}55`
+                      }} />
+                      {/* Number badge */}
+                      <div style={{ position: 'absolute', top: -6, right: -6, width: 16, height: 16, borderRadius: '50%', background: 'linear-gradient(135deg, #8b5cf6, #06b6d4)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 900, color: '#fff' }}>
+                        {i + 1}
+                      </div>
+                    </div>
+                  </div>
+                  {/* Combo details */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                      <span style={{ fontSize: 12, fontWeight: 900, color: '#fff', fontFamily: 'Sora, sans-serif' }}>{combo.name}</span>
+                    </div>
+                    {/* Top row */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 3 }}>
+                      <div style={{ width: 8, height: 8, borderRadius: 2, background: getHexForColorName(combo.top, i), flexShrink: 0, border: '1px solid rgba(255,255,255,0.25)' }} />
+                      <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.85)', fontWeight: 600 }}>
+                        <span style={{ color: 'rgba(255,255,255,0.45)', fontWeight: 500 }}>Top: </span>{combo.top}
+                        {combo.topItem && <span style={{ color: 'rgba(255,255,255,0.35)' }}> — {combo.topItem}</span>}
+                      </span>
+                    </div>
+                    {/* Bottom row */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 5 }}>
+                      <div style={{ width: 8, height: 8, borderRadius: 2, background: getHexForColorName(combo.bottom, i + 3), flexShrink: 0, border: '1px solid rgba(255,255,255,0.25)' }} />
+                      <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.85)', fontWeight: 600 }}>
+                        <span style={{ color: 'rgba(255,255,255,0.45)', fontWeight: 500 }}>Bottom: </span>{combo.bottom}
+                        {combo.bottomItem && <span style={{ color: 'rgba(255,255,255,0.35)' }}> — {combo.bottomItem}</span>}
+                      </span>
+                    </div>
+                    {/* Occasion + Trend badges */}
+                    <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                      {combo.occasion && (
+                        <span style={{ fontSize: 9, fontWeight: 700, color: '#06b6d4', background: 'rgba(6,182,212,0.12)', border: '1px solid rgba(6,182,212,0.25)', borderRadius: 20, padding: '2px 7px', letterSpacing: '0.02em' }}>
+                          📍 {combo.occasion}
+                        </span>
+                      )}
+                      {combo.trend && (
+                        <span style={{ fontSize: 9, fontWeight: 700, color: '#fbbf24', background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.2)', borderRadius: 20, padding: '2px 7px', letterSpacing: '0.02em' }}>
+                          🔥 {combo.trend}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* 2-column grid: Fabrics + Fit Tips */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: '1rem' }}>
           <div style={{ background: 'rgba(255,255,255,0.06)', borderRadius: 14, padding: '0.9rem' }}>
@@ -1177,10 +1277,72 @@ const AiRecommendationsPage = () => {
     const fitTips = shapeFitMap[bodyShape.toLowerCase()] || shapeFitMap.average;
     const palette = getIndividualPalette(skinTone, style, isFemale);
 
+    const topBottomCombosMap = {
+      male: {
+        formal: [
+          { name: 'Power Navy', top: 'Rich Navy', bottom: 'Charcoal Grey', topItem: 'Structured Blazer', bottomItem: 'Tailored Trousers', occasion: 'Corporate / Boardroom', trend: 'Tonal Dressing 2025' },
+          { name: 'Cobalt Classic', top: 'Cobalt Blue', bottom: 'Off-White', topItem: 'Single-Breasted Suit Jacket', bottomItem: 'Crisp Dress Trousers', occasion: 'Formal Events', trend: 'Bold Suiting 2025' },
+          { name: 'Earth Executive', top: 'Camel Brown', bottom: 'Ivory White', topItem: 'Bandhgala Jacket', bottomItem: 'Straight-Cut Pants', occasion: 'Business Dinner', trend: 'Warm Neutrals 2025' },
+        ],
+        ethnic: [
+          { name: 'Royal Contrast', top: 'Maroon', bottom: 'Ivory Gold', topItem: 'Silk Kurta', bottomItem: 'Churidar', occasion: 'Festivals & Puja', trend: 'Rich Ethnic Pairing 2025' },
+          { name: 'Sage & Earth', top: 'Sage Green', bottom: 'Dark Brown', topItem: 'Cotton Kurta', bottomItem: 'Pajama', occasion: 'Casual Ethnic Day', trend: 'Earthy Ethnic 2025' },
+          { name: 'Navy Nehru', top: 'Deep Navy', bottom: 'Off-White', topItem: 'Nehru Jacket', bottomItem: 'Linen Churidar', occasion: 'Cultural Celebration', trend: 'Indo-Western Fusion 2025' },
+        ],
+        wedding: [
+          { name: 'Groom Gold', top: 'Ivory Gold', bottom: 'Deep Wine', topItem: 'Embroidered Sherwani', bottomItem: 'Silk Churidar', occasion: 'Wedding Ceremony', trend: 'Regal Groom 2025' },
+          { name: 'Teal Royale', top: 'Teal Blue', bottom: 'Cream', topItem: 'Velvet Jodhpuri Jacket', bottomItem: 'Slim Trousers', occasion: 'Sangeet / Cocktail', trend: 'Jewel Tone Groom 2025' },
+          { name: 'Rose Gold Groom', top: 'Rose Gold', bottom: 'Charcoal', topItem: 'Brocade Sherwani', bottomItem: 'Patiala-style Churidar', occasion: 'Reception', trend: 'Metallic Ethnic 2025' },
+        ],
+        casual: [
+          { name: 'Street Sage', top: 'Sage Green', bottom: 'Beige', topItem: 'Linen Overshirt', bottomItem: 'Chino Trousers', occasion: 'Weekend Outing', trend: 'Quiet Luxury Casual 2025' },
+          { name: 'Blue Mono', top: 'Sky Blue', bottom: 'Indigo', topItem: 'Cotton Shirt', bottomItem: 'Straight-Cut Jeans', occasion: 'Everyday Casual', trend: 'Monochromatic Dressing 2025' },
+          { name: 'Rust & Olive', top: 'Rust Orange', bottom: 'Olive Green', topItem: 'Half-Sleeve Shirt', bottomItem: 'Cargo Trousers', occasion: 'Weekend Hangout', trend: 'Earthy Street Style 2025' },
+        ],
+        default: [
+          { name: 'Navy Neutrals', top: 'Navy Blue', bottom: 'Beige', topItem: 'Shirt / Jacket', bottomItem: 'Trousers', occasion: 'Versatile', trend: 'Classic Pairing 2025' },
+          { name: 'Cobalt & Cream', top: 'Cobalt Blue', bottom: 'Cream White', topItem: 'Top Layer', bottomItem: 'Bottom', occasion: 'Versatile', trend: 'Bold + Neutral 2025' },
+          { name: 'Earth Tones', top: 'Camel', bottom: 'Ivory', topItem: 'Jacket', bottomItem: 'Pants', occasion: 'Smart Casual', trend: 'Warm Neutrals 2025' },
+        ],
+      },
+      female: {
+        formal: [
+          { name: 'Power Plum', top: 'Deep Plum', bottom: 'Charcoal Grey', topItem: 'Structured Blazer', bottomItem: 'Tailored Pencil Skirt', occasion: 'Corporate / Boardroom', trend: 'Jewel-Tone Power Suit 2025' },
+          { name: 'Cobalt & Ivory', top: 'Cobalt Blue', bottom: 'Ivory White', topItem: 'Fitted Blazer', bottomItem: 'Wide-Leg Trousers', occasion: 'Formal Events', trend: 'Bold Suiting 2025' },
+          { name: 'Burgundy Boss', top: 'Burgundy', bottom: 'Cream', topItem: 'Single-Button Jacket', bottomItem: 'Straight Trousers', occasion: 'Business Dinner', trend: 'Rich Minimal 2025' },
+        ],
+        ethnic: [
+          { name: 'Jewel Glow', top: 'Rani Pink', bottom: 'Emerald Green', topItem: 'Embroidered Blouse', bottomItem: 'Silk Skirt / Lehenga', occasion: 'Festivals & Puja', trend: 'Vivid Ethnic 2025' },
+          { name: 'Coral & Gold', top: 'Coral', bottom: 'Mustard Gold', topItem: 'Silk Kurta Top', bottomItem: 'Straight Pants', occasion: 'Casual Ethnic', trend: 'Warm Ethnic Pairing 2025' },
+          { name: 'Teal & Maroon', top: 'Teal Blue', bottom: 'Maroon', topItem: 'Anarkali Top', bottomItem: 'Sharara Pants', occasion: 'Cultural Celebration', trend: 'Contrast Ethnic 2025' },
+        ],
+        wedding: [
+          { name: 'Bridal Bliss', top: 'Ruby Red', bottom: 'Gold', topItem: 'Embroidered Blouse', bottomItem: 'Bridal Lehenga', occasion: 'Wedding Ceremony', trend: 'Classic Bridal 2025' },
+          { name: 'Pastel Dream', top: 'Dusty Rose', bottom: 'Ivory', topItem: 'Silk Blouse', bottomItem: 'Organza Lehenga', occasion: 'Mehendi / Haldi', trend: 'Pastel Bridal 2025' },
+          { name: 'Emerald Queen', top: 'Emerald Green', bottom: 'Gold Zari', topItem: 'Velvet Choli', bottomItem: 'Heavy Lehenga', occasion: 'Reception', trend: 'Jewel Bridal 2025' },
+        ],
+        casual: [
+          { name: 'Lavender Cloud', top: 'Lavender', bottom: 'White', topItem: 'Relaxed Kurta Top', bottomItem: 'Straight Palazzo', occasion: 'Casual Outing', trend: 'Soft Feminine 2025' },
+          { name: 'Terracotta & Cream', top: 'Terracotta', bottom: 'Cream', topItem: 'Linen Shirt / Tunic', bottomItem: 'Wide-Leg Pants', occasion: 'Everyday Wear', trend: 'Earthy Everyday 2025' },
+          { name: 'Olive & Beige', top: 'Olive Green', bottom: 'Beige', topItem: 'Cotton Top', bottomItem: 'Relaxed Trousers', occasion: 'Weekend Casual', trend: 'Quiet Luxury 2025' },
+        ],
+        default: [
+          { name: 'Jewel & Neutral', top: 'Rani Pink', bottom: 'Ivory', topItem: 'Top Layer', bottomItem: 'Bottom', occasion: 'Versatile', trend: 'Classic Pairing 2025' },
+          { name: 'Bold Contrast', top: 'Cobalt Blue', bottom: 'Cream', topItem: 'Top', bottomItem: 'Bottom', occasion: 'Versatile', trend: 'Bold + Neutral 2025' },
+          { name: 'Earthy Glow', top: 'Terracotta', bottom: 'Beige', topItem: 'Top', bottomItem: 'Pants', occasion: 'Smart Casual', trend: 'Warm Neutrals 2025' },
+        ],
+      },
+    };
+
+    const comboGender = isFemale ? 'female' : 'male';
+    const comboStyle = style.toLowerCase();
+    const topBottomCombos = (topBottomCombosMap[comboGender][comboStyle]) || topBottomCombosMap[comboGender].default;
+
     return {
       headline: `Tailored ${style.charAt(0).toUpperCase() + style.slice(1)} Elegance For ${isFemale ? 'Women' : isMale ? 'Men' : 'You'}`,
       summary: `Based on your ${bodyShape} build and ${skinTone} skin tone, our AI recommends structured silhouettes and rich color contrasts designed to flatter your ${height}cm frame.`,
       colorPalette: palette,
+      topBottomCombos,
       fabrics: isFemale ? ['Handloom Pure Silk', 'Organza & Chiffon', 'Breathable Organic Cotton', 'Rich Linen Weave'] : ['Premium Merino Wool', 'Handloom Pure Silk', 'Breathable Organic Cotton', 'Rich Linen Weave'],
       fitTips,
       outfitIdeas,
@@ -1194,11 +1356,12 @@ const AiRecommendationsPage = () => {
         'Avoid heavy fabrics in high humidity or tight fits without stretch.',
         'Don\'t ignore hemline lengths—proper shoe break is essential.'
       ],
-      accessoryTip: isFemale 
+      accessoryTip: isFemale
         ? 'Pair with traditional Kundan/Jhumka earrings and a handcrafted embroidered Potli bag or chic statement accessories.'
         : 'Complete the look with a contrasting silk pocket square, classic cufflinks, or handcrafted leather footwear.'
     };
   };
+
 
   const fetchStyleAdvice = async (currentPrefs, lang = adviceLang) => {
     setAdviceLoading(true);

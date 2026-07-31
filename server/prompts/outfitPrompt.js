@@ -46,10 +46,15 @@ Please provide personalized style advice in the following JSON format ONLY (no m
   "headline": "A short punchy style headline for this person (max 10 words)",
   "summary": "2-3 sentence personalized overview of what suits them best",
   "colorPalette": {
-    "recommended": ["Color 1", "Color 2", "Color 3", "Color 4"],
-    "avoid": ["Color A", "Color B"],
+    "recommended": ["Color 1", "Color 2", "Color 3", "Color 4", "Color 5", "Color 6"],
+    "avoid": ["Color A", "Color B", "Color C"],
     "reason": "Brief reason based on skin tone and style"
   },
+  "topBottomCombos": [
+    { "name": "Combo name (e.g. Power Blue)", "top": "Top garment color name", "bottom": "Bottom garment color name", "topItem": "Top garment type (e.g. Blazer)", "bottomItem": "Bottom garment type (e.g. Trousers)", "occasion": "Best occasion label", "trend": "2025 trend name this follows" },
+    { "name": "Combo name", "top": "Color name", "bottom": "Color name", "topItem": "Garment", "bottomItem": "Garment", "occasion": "Occasion", "trend": "Trend" },
+    { "name": "Combo name", "top": "Color name", "bottom": "Color name", "topItem": "Garment", "bottomItem": "Garment", "occasion": "Occasion", "trend": "Trend" }
+  ],
   "fabrics": ["Fabric 1", "Fabric 2", "Fabric 3"],
   "fitTips": ["Tip 1 about their body shape", "Tip 2", "Tip 3"],
   "outfitIdeas": ["Outfit idea 1 specific to ${style} and ${gender || 'user'}", "Outfit idea 2", "Outfit idea 3"],
@@ -304,24 +309,82 @@ function getSmartFallbackAdvice(style = 'formal', bodyProfile = {}, language = '
         }
     };
 
-    const palette     = getIndividualPalette(skinTone, style, isFemale, lang);
-    const fitTips     = shapeFitMap[lang][bodyShape.toLowerCase()]       || shapeFitMap[lang].average;
-    const genderMap   = isFemale ? styleOutfitMap[lang].female : styleOutfitMap[lang].male;
-    const outfitIdeas = (genderMap && genderMap[style.toLowerCase()])    || genderMap.formal;
-    const textGroup   = textByGender[lang][isFemale ? 'female' : 'male'];
+    // ── 2025 Trending Top+Bottom Color Combos ──
+    const topBottomCombosMap = {
+        male: {
+            formal: [
+                { name: 'Power Navy', top: 'Rich Navy', bottom: 'Charcoal Grey', topItem: 'Structured Blazer', bottomItem: 'Tailored Trousers', occasion: 'Corporate / Boardroom', trend: 'Tonal Dressing 2025' },
+                { name: 'Cobalt Classic', top: 'Cobalt Blue', bottom: 'Off-White', topItem: 'Single-Breasted Suit Jacket', bottomItem: 'Crisp Dress Trousers', occasion: 'Formal Events', trend: 'Bold Suiting 2025' },
+                { name: 'Earth Executive', top: 'Camel Brown', bottom: 'Ivory White', topItem: 'Bandhgala Jacket', bottomItem: 'Straight-Cut Pants', occasion: 'Business Dinner', trend: 'Warm Neutrals 2025' },
+            ],
+            ethnic: [
+                { name: 'Royal Contrast', top: 'Maroon', bottom: 'Ivory Gold', topItem: 'Silk Kurta', bottomItem: 'Churidar', occasion: 'Festivals & Puja', trend: 'Rich Ethnic Pairing 2025' },
+                { name: 'Sage & Earth', top: 'Sage Green', bottom: 'Dark Brown', topItem: 'Cotton Kurta', bottomItem: 'Pajama', occasion: 'Casual Ethnic Day', trend: 'Earthy Ethnic 2025' },
+                { name: 'Navy Nehru', top: 'Deep Navy', bottom: 'Off-White', topItem: 'Nehru Jacket', bottomItem: 'Linen Churidar', occasion: 'Cultural Celebration', trend: 'Indo-Western Fusion 2025' },
+            ],
+            wedding: [
+                { name: 'Groom Gold', top: 'Ivory Gold', bottom: 'Deep Wine', topItem: 'Embroidered Sherwani', bottomItem: 'Silk Churidar', occasion: 'Wedding Ceremony', trend: 'Regal Groom 2025' },
+                { name: 'Teal Royale', top: 'Teal Blue', bottom: 'Cream', topItem: 'Velvet Jodhpuri Jacket', bottomItem: 'Slim Trousers', occasion: 'Sangeet / Cocktail', trend: 'Jewel Tone Groom 2025' },
+                { name: 'Rose Gold Groom', top: 'Rose Gold', bottom: 'Charcoal', topItem: 'Brocade Sherwani', bottomItem: 'Patiala-style Churidar', occasion: 'Reception', trend: 'Metallic Ethnic 2025' },
+            ],
+            casual: [
+                { name: 'Street Sage', top: 'Sage Green', bottom: 'Beige', topItem: 'Linen Overshirt', bottomItem: 'Chino Trousers', occasion: 'Weekend Outing', trend: 'Quiet Luxury Casual 2025' },
+                { name: 'Blue Mono', top: 'Sky Blue', bottom: 'Indigo', topItem: 'Cotton Shirt', bottomItem: 'Straight-Cut Jeans', occasion: 'Everyday Casual', trend: 'Monochromatic Dressing 2025' },
+                { name: 'Rust & Olive', top: 'Rust Orange', bottom: 'Olive Green', topItem: 'Half-Sleeve Shirt', bottomItem: 'Cargo Trousers', occasion: 'Weekend Hangout', trend: 'Earthy Street Style 2025' },
+            ],
+            default: [
+                { name: 'Navy Neutrals', top: 'Navy Blue', bottom: 'Beige', topItem: 'Shirt / Jacket', bottomItem: 'Trousers', occasion: 'Versatile', trend: 'Classic Pairing 2025' },
+                { name: 'Cobalt & Cream', top: 'Cobalt Blue', bottom: 'Cream White', topItem: 'Top Layer', bottomItem: 'Bottom', occasion: 'Versatile', trend: 'Bold + Neutral 2025' },
+                { name: 'Earth Tones', top: 'Camel', bottom: 'Ivory', topItem: 'Jacket', bottomItem: 'Pants', occasion: 'Smart Casual', trend: 'Warm Neutrals 2025' },
+            ],
+        },
+        female: {
+            formal: [
+                { name: 'Power Plum', top: 'Deep Plum', bottom: 'Charcoal Grey', topItem: 'Structured Blazer', bottomItem: 'Tailored Pencil Skirt', occasion: 'Corporate / Boardroom', trend: 'Jewel-Tone Power Suit 2025' },
+                { name: 'Cobalt & Ivory', top: 'Cobalt Blue', bottom: 'Ivory White', topItem: 'Fitted Blazer', bottomItem: 'Wide-Leg Trousers', occasion: 'Formal Events', trend: 'Bold Suiting 2025' },
+                { name: 'Burgundy Boss', top: 'Burgundy', bottom: 'Cream', topItem: 'Single-Button Jacket', bottomItem: 'Straight Trousers', occasion: 'Business Dinner', trend: 'Rich Minimal 2025' },
+            ],
+            ethnic: [
+                { name: 'Jewel Glow', top: 'Rani Pink', bottom: 'Emerald Green', topItem: 'Embroidered Blouse', bottomItem: 'Silk Skirt / Lehenga', occasion: 'Festivals & Puja', trend: 'Vivid Ethnic 2025' },
+                { name: 'Coral & Gold', top: 'Coral', bottom: 'Mustard Gold', topItem: 'Silk Kurta Top', bottomItem: 'Straight Pants', occasion: 'Casual Ethnic', trend: 'Warm Ethnic Pairing 2025' },
+                { name: 'Teal & Maroon', top: 'Teal Blue', bottom: 'Maroon', topItem: 'Anarkali Top', bottomItem: 'Sharara Pants', occasion: 'Cultural Celebration', trend: 'Contrast Ethnic 2025' },
+            ],
+            wedding: [
+                { name: 'Bridal Bliss', top: 'Ruby Red', bottom: 'Gold', topItem: 'Embroidered Blouse', bottomItem: 'Bridal Lehenga', occasion: 'Wedding Ceremony', trend: 'Classic Bridal 2025' },
+                { name: 'Pastel Dream', top: 'Dusty Rose', bottom: 'Ivory', topItem: 'Silk Blouse', bottomItem: 'Organza Lehenga', occasion: 'Mehendi / Haldi', trend: 'Pastel Bridal 2025' },
+                { name: 'Emerald Queen', top: 'Emerald Green', bottom: 'Gold Zari', topItem: 'Velvet Choli', bottomItem: 'Heavy Lehenga', occasion: 'Reception', trend: 'Jewel Bridal 2025' },
+            ],
+            casual: [
+                { name: 'Lavender Cloud', top: 'Lavender', bottom: 'White', topItem: 'Relaxed Kurta Top', bottomItem: 'Straight Palazzo', occasion: 'Casual Outing', trend: 'Soft Feminine 2025' },
+                { name: 'Terracotta & Cream', top: 'Terracotta', bottom: 'Cream', topItem: 'Linen Shirt / Tunic', bottomItem: 'Wide-Leg Pants', occasion: 'Everyday Wear', trend: 'Earthy Everyday 2025' },
+                { name: 'Olive & Beige', top: 'Olive Green', bottom: 'Beige', topItem: 'Cotton Top', bottomItem: 'Relaxed Trousers', occasion: 'Weekend Casual', trend: 'Quiet Luxury 2025' },
+            ],
+            default: [
+                { name: 'Jewel & Neutral', top: 'Rani Pink', bottom: 'Ivory', topItem: 'Top Layer', bottomItem: 'Bottom', occasion: 'Versatile', trend: 'Classic Pairing 2025' },
+                { name: 'Bold Contrast', top: 'Cobalt Blue', bottom: 'Cream', topItem: 'Top', bottomItem: 'Bottom', occasion: 'Versatile', trend: 'Bold + Neutral 2025' },
+                { name: 'Earthy Glow', top: 'Terracotta', bottom: 'Beige', topItem: 'Top', bottomItem: 'Pants', occasion: 'Smart Casual', trend: 'Warm Neutrals 2025' },
+            ],
+        },
+    };
+
+    const comboGender = isFemale ? 'female' : 'male';
+    const comboStyle = style.toLowerCase();
+    const topBottomCombos = (topBottomCombosMap[comboGender][comboStyle]) || topBottomCombosMap[comboGender].default;
 
     return {
-        headline:     textGroup.headline,
-        summary:      textGroup.summary,
-        colorPalette: palette,
-        fabrics:      textGroup.fabrics,
+        headline:       textGroup.headline,
+        summary:        textGroup.summary,
+        colorPalette:   palette,
+        topBottomCombos,
+        fabrics:        textGroup.fabrics,
         fitTips,
         outfitIdeas,
-        dos:          textGroup.dos,
-        donts:        textGroup.donts,
-        accessoryTip: textGroup.accessoryTip,
+        dos:            textGroup.dos,
+        donts:          textGroup.donts,
+        accessoryTip:   textGroup.accessoryTip,
     };
 }
+
 
 module.exports = {
     getOutfitPrompt,
