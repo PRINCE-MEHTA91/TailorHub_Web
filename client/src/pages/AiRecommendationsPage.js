@@ -14,8 +14,8 @@ function resolveImg(path) {
 // ── Data ─────────────────────────────────────────────────────────────────────
 
 const STYLE_CATEGORIES = [
-  { id: 'formal', icon: '👔', label: 'Formal Wear', desc: 'Suits, Blazers, Sherwanis', color: '#1e293b', badge: 'Classic' },
-  { id: 'ethnic', icon: '👗', label: 'Ethnic Wear', desc: 'Sarees, Salwar, Lehenga', color: '#9f1239', badge: 'Trending' },
+  { id: 'formal', icon: '👔', label: 'Formal Wear', desc: 'Suits, Blazers, Trousers & Dresses', color: '#1e293b', badge: 'Classic' },
+  { id: 'ethnic', icon: '👗', label: 'Ethnic Wear', desc: 'Kurtas, Sherwanis, Sarees, Lehengas', color: '#9f1239', badge: 'Trending' },
   { id: 'custom', icon: '🧵', label: 'Custom Stitch', desc: 'Your design, their craft', color: '#4c1d95', badge: 'Popular' },
   { id: 'casual', icon: '🎽', label: 'Casual Wear', desc: 'Everyday comfort fits', color: '#0369a1', badge: 'New' },
   { id: 'wedding', icon: '🤵', label: 'Wedding Outfit', desc: 'Groom & Bridal wear', color: '#92400e', badge: 'Season' },
@@ -59,6 +59,171 @@ const BODY_SHAPES = [
 ];
 
 const SCORE_KEY = 'tailorhub_ai_recommendations';
+const HISTORY_KEY = 'tailorhub_ai_history';
+const MAX_HISTORY = 5;
+
+function getHexForColorName(colorName = '', idx = 0) {
+  const c = String(colorName).trim().toLowerCase();
+  const exactMap = {
+    'cobalt blue': '#0047AB',
+    'royal blue': '#1E40AF',
+    'navy blue': '#1E293B',
+    'rich navy': '#0F172A',
+    'navy': '#1E293B',
+    'emerald green': '#10B981',
+    'emerald': '#059669',
+    'deep plum': '#6D28D9',
+    'deep wine': '#701A75',
+    'wine': '#701A75',
+    'burgundy': '#800020',
+    'maroon': '#800000',
+    'maroon gold': '#9A3412',
+    'rust orange': '#C85A32',
+    'burnt orange': '#EA580C',
+    'rani pink': '#EC4899',
+    'royal pink': '#F472B6',
+    'coral pink': '#FB7185',
+    'ruby red': '#BE123C',
+    'crimson red': '#DC2626',
+    'mustard gold': '#D97706',
+    'sunset gold': '#F59E0B',
+    'gold': '#D97706',
+    'ivory white': '#F8FAFC',
+    'ivory': '#FDFBF7',
+    'ivory gold': '#FEF3C7',
+    'white': '#F8FAFC',
+    'teal blue': '#0D9488',
+    'teal': '#14B8A6',
+    'bright teal': '#06B6D4',
+    'olive green': '#556B2F',
+    'olive': '#556B2F',
+    'muddy browns': '#78350F',
+    'muddy brown': '#78350F',
+    'dark brown': '#451A03',
+    'olive brown': '#4A5D23',
+    'neon green': '#22C55E',
+    'dark charcoal': '#334155',
+    'charcoal gray': '#475569',
+    'pale yellow': '#FEF08A',
+    'beige': '#D6C5B3',
+    'pale beige': '#E7E5E4',
+    'light gray': '#CBD5E1',
+    'ash gray': '#94A3B8',
+    'washed pastels': '#E0E7FF',
+    'washed-out pastels': '#E0E7FF',
+    'washed peach': '#FFDAB9'
+  };
+  if (exactMap[c]) return exactMap[c];
+  if (c.includes('blue') || c.includes('navy')) return '#2563EB';
+  if (c.includes('green') || c.includes('emerald')) return '#10B981';
+  if (c.includes('orange') || c.includes('rust')) return '#EA580C';
+  if (c.includes('red') || c.includes('wine') || c.includes('maroon') || c.includes('ruby')) return '#9F1239';
+  if (c.includes('plum') || c.includes('purple') || c.includes('violet')) return '#6D28D9';
+  if (c.includes('gold') || c.includes('mustard') || c.includes('yellow')) return '#D97706';
+  if (c.includes('brown') || c.includes('tan') || c.includes('beige')) return '#78350F';
+  if (c.includes('white') || c.includes('ivory')) return '#F8FAFC';
+  if (c.includes('black') || c.includes('charcoal')) return '#1E293B';
+  if (c.includes('teal')) return '#0D9488';
+  if (c.includes('pink') || c.includes('rose') || c.includes('magenta')) return '#EC4899';
+  if (c.includes('gray') || c.includes('grey')) return '#64748B';
+  const fallbackHsl = ['#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899', '#06B6D4'];
+  return fallbackHsl[idx % fallbackHsl.length];
+}
+
+function getOutfitExampleImage(style = 'formal', gender = 'female', idx = 0) {
+  const s = String(style).toLowerCase();
+  const isMale = gender && ['male', 'man', 'men', 'm', 'boy'].includes(String(gender).toLowerCase());
+  const images = {
+    formal: {
+      female: [
+        'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=600&auto=format&fit=crop&q=80',  // woman professional suit
+        'https://images.unsplash.com/photo-1548142813-c348350df52b?w=600&auto=format&fit=crop&q=80',  // woman formal outfit
+        'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600&auto=format&fit=crop&q=80'  // woman formal dress
+      ],
+      male: [
+        'https://images.unsplash.com/photo-1507679799987-c73779587ccf?w=600&auto=format&fit=crop&q=80',  // man in formal suit
+        'https://images.unsplash.com/photo-1617137984095-74e4e5e3613f?w=600&auto=format&fit=crop&q=80',  // man in blazer
+        'https://images.unsplash.com/photo-1490578474895-699cd4e2cf59?w=600&auto=format&fit=crop&q=80'   // man formal wear
+      ]
+    },
+    ethnic: {
+      female: [
+        'https://images.unsplash.com/photo-1610030469983-98e550d6193c?w=600&auto=format&fit=crop&q=80',  // woman in saree
+        'https://images.unsplash.com/photo-1585487000160-6ebcfceb0d03?w=600&auto=format&fit=crop&q=80',  // woman ethnic Indian
+        'https://images.unsplash.com/photo-1583391733956-3750e0ff4e8b?w=600&auto=format&fit=crop&q=80'   // woman in lehenga
+      ],
+      male: [
+        'https://images.unsplash.com/photo-1622350600745-ec1f37e08d8f?w=600&auto=format&fit=crop&q=80',  // man in kurta sherwani
+        'https://images.unsplash.com/photo-1631333148151-7e9dd6ae79c9?w=600&auto=format&fit=crop&q=80',  // man in Indian ethnic wear
+        'https://images.unsplash.com/photo-1594938298603-c8148c4dae35?w=600&auto=format&fit=crop&q=80'   // man ethnic formal
+      ]
+    },
+    wedding: {
+      female: [
+        'https://images.unsplash.com/photo-1583391733956-3750e0ff4e8b?w=600&auto=format&fit=crop&q=80',  // bridal lehenga
+        'https://images.unsplash.com/photo-1610030469983-98e550d6193c?w=600&auto=format&fit=crop&q=80',  // bride saree
+        'https://images.unsplash.com/photo-1585487000160-6ebcfceb0d03?w=600&auto=format&fit=crop&q=80'   // bride ethnic
+      ],
+      male: [
+        'https://images.unsplash.com/photo-1621607512214-68297480165e?w=600&auto=format&fit=crop&q=80',  // groom sherwani
+        'https://images.unsplash.com/photo-1617137984095-74e4e5e3613f?w=600&auto=format&fit=crop&q=80',  // groom formal suit
+        'https://images.unsplash.com/photo-1507679799987-c73779587ccf?w=600&auto=format&fit=crop&q=80'   // groom wedding suit
+      ]
+    },
+    casual: {
+      female: [
+        'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=600&auto=format&fit=crop&q=80',  // woman casual
+        'https://images.unsplash.com/photo-1529139574466-a303027c1d8b?w=600&auto=format&fit=crop&q=80',  // woman casual outfit
+        'https://images.unsplash.com/photo-1483985988355-763728e1935b?w=600&auto=format&fit=crop&q=80'   // woman shopping casual
+      ],
+      male: [
+        'https://images.unsplash.com/photo-1516826957135-700dedea698c?w=600&auto=format&fit=crop&q=80',  // man casual outfit
+        'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&auto=format&fit=crop&q=80',  // man casual style
+        'https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=600&auto=format&fit=crop&q=80'   // man casual street
+      ]
+    },
+    custom: {
+      female: [
+        'https://images.unsplash.com/photo-1539109136881-3be0616acf4b?w=600&auto=format&fit=crop&q=80',
+        'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?w=600&auto=format&fit=crop&q=80',
+        'https://images.unsplash.com/photo-1558769132-cb1aea458c5e?w=600&auto=format&fit=crop&q=80'
+      ],
+      male: [
+        'https://images.unsplash.com/photo-1617137984095-74e4e5e3613f?w=600&auto=format&fit=crop&q=80',
+        'https://images.unsplash.com/photo-1507679799987-c73779587ccf?w=600&auto=format&fit=crop&q=80',
+        'https://images.unsplash.com/photo-1490578474895-699cd4e2cf59?w=600&auto=format&fit=crop&q=80'
+      ]
+    },
+    alteration: {
+      female: [
+        'https://images.unsplash.com/photo-1558769132-cb1aea458c5e?w=600&auto=format&fit=crop&q=80',
+        'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?w=600&auto=format&fit=crop&q=80',
+        'https://images.unsplash.com/photo-1539109136881-3be0616acf4b?w=600&auto=format&fit=crop&q=80'
+      ],
+      male: [
+        'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&auto=format&fit=crop&q=80',
+        'https://images.unsplash.com/photo-1594938298603-c8148c4dae35?w=600&auto=format&fit=crop&q=80',
+        'https://images.unsplash.com/photo-1516826957135-700dedea698c?w=600&auto=format&fit=crop&q=80'
+      ]
+    },
+    default: {
+      female: [
+        'https://images.unsplash.com/photo-1539109136881-3be0616acf4b?w=600&auto=format&fit=crop&q=80',
+        'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?w=600&auto=format&fit=crop&q=80',
+        'https://images.unsplash.com/photo-1558769132-cb1aea458c5e?w=600&auto=format&fit=crop&q=80'
+      ],
+      male: [
+        'https://images.unsplash.com/photo-1507679799987-c73779587ccf?w=600&auto=format&fit=crop&q=80',
+        'https://images.unsplash.com/photo-1594938298603-c8148c4dae35?w=600&auto=format&fit=crop&q=80',
+        'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&auto=format&fit=crop&q=80'
+      ]
+    }
+  };
+  const cat = images[s] || images.default;
+  const list = isMale ? cat.male : cat.female;
+  return list[idx % list.length];
+}
+
 
 function scoreAndRankTailors(tailors, prefs) {
   return tailors
@@ -666,9 +831,14 @@ const TailorResultCard = ({ tailor, rank, navigate }) => {
 
 // ── AI Style Advice Panel ─────────────────────────────────────────────────────
 
-const SKIN_COLORS = { fair: '#FDDBB4', light: '#F0C08A', medium: '#D4925A', olive: '#B87040', tan: '#8B5E3C', deep: '#4A2C1A' };
 
-const StyleAdvicePanel = ({ advice, loading, error }) => {
+const LANG_OPTIONS = [
+  { id: 'english',  label: 'English',  flag: '🇬🇧' },
+  { id: 'hinglish', label: 'Hinglish', flag: '🇮🇳' },
+  { id: 'hindi',    label: 'हिंदी',    flag: '🇮🇳' },
+];
+
+const StyleAdvicePanel = ({ advice, loading, error, lang = 'english', onLangChange, prefs }) => {
   if (loading) return (
     <div style={{ background: 'linear-gradient(135deg, #1e1b4b, #312e81)', borderRadius: 24, padding: '2rem', marginBottom: '1.5rem', overflow: 'hidden', position: 'relative' }}>
       <div style={{ position: 'absolute', top: -40, right: -40, width: 150, height: 150, borderRadius: '50%', background: 'rgba(139,92,246,0.15)', filter: 'blur(30px)' }} />
@@ -697,12 +867,38 @@ const StyleAdvicePanel = ({ advice, loading, error }) => {
       <div style={{ position: 'absolute', bottom: -30, left: -30, width: 120, height: 120, borderRadius: '50%', background: 'rgba(6,182,212,0.08)', filter: 'blur(30px)' }} />
 
       <div style={{ position: 'relative', zIndex: 1 }}>
-        {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: '1.25rem' }}>
-          <div style={{ width: 44, height: 44, borderRadius: 14, background: 'linear-gradient(135deg, #8b5cf6, #06b6d4)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>✨</div>
-          <div>
-            <p style={{ fontSize: 10, fontWeight: 800, color: '#a78bfa', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 2 }}>GEMINI AI • PERSONALISED STYLE ADVICE</p>
-            <h3 style={{ fontWeight: 900, fontSize: 18, color: '#fff', fontFamily: 'Sora, sans-serif', lineHeight: 1.2 }}>{advice.headline}</h3>
+        {/* Header row: icon + title + language toggle */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: '1.25rem', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+            <div style={{ width: 44, height: 44, borderRadius: 14, background: 'linear-gradient(135deg, #8b5cf6, #06b6d4)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>✨</div>
+            <div>
+              <p style={{ fontSize: 10, fontWeight: 800, color: '#a78bfa', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 2 }}>GEMINI AI • PERSONALISED STYLE ADVICE</p>
+              <h3 style={{ fontWeight: 900, fontSize: 18, color: '#fff', fontFamily: 'Sora, sans-serif', lineHeight: 1.2 }}>{advice.headline}</h3>
+            </div>
+          </div>
+          {/* Language Toggle */}
+          <div style={{ display: 'flex', background: 'rgba(255,255,255,0.08)', borderRadius: 100, padding: 3, gap: 2, flexShrink: 0 }}>
+            {LANG_OPTIONS.map(opt => (
+              <motion.button
+                key={opt.id}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => onLangChange && onLangChange(opt.id)}
+                style={{
+                  background: lang === opt.id ? 'linear-gradient(135deg, #8b5cf6, #6366f1)' : 'transparent',
+                  color: lang === opt.id ? '#fff' : 'rgba(255,255,255,0.5)',
+                  border: 'none', borderRadius: 100,
+                  padding: '5px 12px',
+                  fontSize: 11, fontWeight: 800,
+                  cursor: 'pointer',
+                  fontFamily: 'Sora, sans-serif',
+                  boxShadow: lang === opt.id ? '0 2px 10px rgba(139,92,246,0.5)' : 'none',
+                  transition: 'all 0.2s',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {opt.flag} {opt.label}
+              </motion.button>
+            ))}
           </div>
         </div>
 
@@ -715,18 +911,18 @@ const StyleAdvicePanel = ({ advice, loading, error }) => {
           <p style={{ fontSize: 11, fontWeight: 800, color: '#a78bfa', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '0.75rem' }}>🎨 Your Color Palette</p>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
             {advice.colorPalette?.recommended?.map((c, i) => (
-              <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-                <div style={{ width: 32, height: 32, borderRadius: '50%', background: SKIN_COLORS[c.toLowerCase()] || `hsl(${i * 47 + 200}, 60%, 65%)`, border: '2px solid rgba(255,255,255,0.2)', boxShadow: '0 2px 8px rgba(0,0,0,0.3)' }} />
-                <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.6)', fontWeight: 600, whiteSpace: 'nowrap', maxWidth: 44, textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c}</span>
+              <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, minWidth: 64, flex: '1 1 auto' }}>
+                <div style={{ width: 36, height: 36, borderRadius: '50%', background: getHexForColorName(c, i), border: '2.5px solid rgba(255,255,255,0.35)', boxShadow: '0 4px 12px rgba(0,0,0,0.3)' }} />
+                <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.9)', fontWeight: 700, maxWidth: 85, textAlign: 'center', lineHeight: 1.2, wordBreak: 'break-word' }}>{c}</span>
               </div>
             ))}
             <div style={{ width: 1, background: 'rgba(255,255,255,0.15)', margin: '0 4px' }} />
             {advice.colorPalette?.avoid?.map((c, i) => (
-              <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-                <div style={{ width: 32, height: 32, borderRadius: '50%', background: `hsl(${i * 30 + 10}, 45%, 55%)`, border: '2px solid rgba(239,68,68,0.5)', opacity: 0.6, position: 'relative' }}>
-                  <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, color: '#ef4444' }}>✕</div>
+              <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, minWidth: 64, flex: '1 1 auto' }}>
+                <div style={{ width: 36, height: 36, borderRadius: '50%', background: getHexForColorName(c, i + 3), border: '2.5px solid rgba(239,68,68,0.7)', opacity: 0.75, position: 'relative', boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }}>
+                  <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, fontWeight: 900, color: '#ef4444' }}>✕</div>
                 </div>
-                <span style={{ fontSize: 9, color: 'rgba(239,68,68,0.7)', fontWeight: 600 }}>{c}</span>
+                <span style={{ fontSize: 10, color: 'rgba(239,68,68,0.85)', fontWeight: 700, maxWidth: 85, textAlign: 'center', lineHeight: 1.2, wordBreak: 'break-word' }}>{c}</span>
               </div>
             ))}
           </div>
@@ -757,16 +953,43 @@ const StyleAdvicePanel = ({ advice, loading, error }) => {
           </div>
         </div>
 
-        {/* Outfit Ideas */}
-        <div style={{ background: 'rgba(255,255,255,0.06)', borderRadius: 14, padding: '0.9rem', marginBottom: '1rem' }}>
-          <p style={{ fontSize: 11, fontWeight: 800, color: '#a78bfa', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '0.6rem' }}>👔 Outfit Ideas</p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {advice.outfitIdeas?.map((idea, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-                <span style={{ background: 'linear-gradient(135deg, #8b5cf6, #06b6d4)', borderRadius: '50%', width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 900, color: '#fff', flexShrink: 0, marginTop: 1 }}>{i + 1}</span>
-                <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.85)', lineHeight: 1.5 }}>{idea}</span>
-              </div>
-            ))}
+        {/* Outfit Ideas & Visual Examples */}
+        <div style={{ background: 'rgba(255,255,255,0.06)', borderRadius: 16, padding: '1.1rem', marginBottom: '1rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.85rem' }}>
+            <p style={{ fontSize: 11, fontWeight: 800, color: '#a78bfa', letterSpacing: '0.08em', textTransform: 'uppercase', margin: 0 }}>👔 Outfit Ideas & Example Looks</p>
+            <span style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.5)', background: 'rgba(255,255,255,0.1)', padding: '2px 8px', borderRadius: 20 }}>
+              {prefs?.bodyProfile?.gender ? `${prefs.bodyProfile.gender.charAt(0).toUpperCase() + prefs.bodyProfile.gender.slice(1)} • ` : ''}{prefs?.style ? prefs.style.charAt(0).toUpperCase() + prefs.style.slice(1) : 'Custom'}
+            </span>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12 }}>
+            {advice.outfitIdeas?.map((idea, i) => {
+              const imgUrl = getOutfitExampleImage(prefs?.style || 'formal', prefs?.bodyProfile?.gender || 'female', i);
+              return (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'rgba(0,0,0,0.25)', borderRadius: 14, padding: '0.75rem', border: '1px solid rgba(255,255,255,0.08)' }}>
+                  <div style={{ position: 'relative', flexShrink: 0, width: 72, height: 76, borderRadius: 10, overflow: 'hidden', background: '#1e293b' }}>
+                    <img
+                      src={imgUrl}
+                      alt={`Outfit Example ${i + 1}`}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      onError={(e) => {
+                        e.target.style.display = 'none';
+                      }}
+                    />
+                    <div style={{ position: 'absolute', top: 4, left: 4, background: 'linear-gradient(135deg, #8b5cf6, #06b6d4)', borderRadius: '50%', width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 900, color: '#fff', boxShadow: '0 2px 4px rgba(0,0,0,0.5)' }}>
+                      {i + 1}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <span style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.92)', lineHeight: 1.45, fontWeight: 500 }}>
+                      {idea}
+                    </span>
+                    <span style={{ fontSize: 10, color: '#a78bfa', fontWeight: 700, letterSpacing: '0.03em' }}>
+                      ✨ Personalized for {prefs?.bodyProfile?.gender || 'your'} profile
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
 
@@ -813,16 +1036,18 @@ const AiRecommendationsPage = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  const [phase, setPhase] = useState('hero'); // hero | quiz | results | previous
+  const [phase, setPhase] = useState('hero'); // hero | quiz | results | previous | history
   const [quizStep, setQuizStep] = useState(1);
   const [prefs, setPrefs] = useState({ style: '', budget: '', bodyProfile: { gender: '', skinTone: '', bodyShape: '', height: 170, weight: 65 }, experience: 'any' });
   const [tailors, setTailors] = useState([]);
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState([]);
-  const [previousRecs, setPreviousRecs] = useState(null);
+  const [historyRecs, setHistoryRecs] = useState([]); // array of up to 5 sessions
+  const [selectedHistory, setSelectedHistory] = useState(null); // the one being viewed
   const [styleAdvice, setStyleAdvice] = useState(null);
   const [adviceLoading, setAdviceLoading] = useState(false);
   const [adviceError, setAdviceError] = useState(null);
+  const [adviceLang, setAdviceLang] = useState('english'); // 'english' | 'hinglish' | 'hindi'
 
   // Load tailors once
   const loadTailors = useCallback(async () => {
@@ -836,12 +1061,23 @@ const AiRecommendationsPage = () => {
     finally { setLoading(false); }
   }, [tailors.length]);
 
-  // Load previous recommendations from localStorage
+  // Load history from localStorage (array, fallback to legacy single-entry key)
   useEffect(() => {
-    const stored = localStorage.getItem(SCORE_KEY);
-    if (stored) {
-      try { setPreviousRecs(JSON.parse(stored)); } catch (_) {}
-    }
+    try {
+      const storedHistory = localStorage.getItem(HISTORY_KEY);
+      if (storedHistory) {
+        setHistoryRecs(JSON.parse(storedHistory));
+      } else {
+        // Migrate legacy single-entry key
+        const legacy = localStorage.getItem(SCORE_KEY);
+        if (legacy) {
+          const parsed = JSON.parse(legacy);
+          const migrated = [parsed];
+          setHistoryRecs(migrated);
+          localStorage.setItem(HISTORY_KEY, JSON.stringify(migrated));
+        }
+      }
+    } catch (_) {}
   }, []);
 
   const handleGetStarted = () => {
@@ -852,33 +1088,102 @@ const AiRecommendationsPage = () => {
   };
 
   const handleViewPrevious = () => {
-    if (previousRecs) {
-      setResults(previousRecs.results);
-      setPhase('previous');
+    if (historyRecs.length > 0) {
+      setPhase('history');
     }
   };
 
+  const handleViewHistoryEntry = (entry) => {
+    setSelectedHistory(entry);
+    setResults(entry.results);
+    setStyleAdvice(null);
+    setPhase('previous');
+    // Fetch AI advice for this history entry's prefs
+    if (entry.prefs) fetchStyleAdvice(entry.prefs);
+  };
+
+  const handleDeleteHistoryEntry = (idx) => {
+    const updated = historyRecs.filter((_, i) => i !== idx);
+    setHistoryRecs(updated);
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(updated));
+  };
+
   const getClientFallbackAdvice = (style = 'formal', bp = {}) => {
-    const { skinTone = 'medium', bodyShape = 'average', height = 170 } = bp;
-    return {
-      headline: `Tailored ${style.charAt(0).toUpperCase() + style.slice(1)} Wear Personalized For You`,
-      summary: `Based on your ${bodyShape} build and ${skinTone} skin tone, our AI recommends structured silhouettes and rich color contrasts designed to flatter your ${height}cm frame.`,
-      colorPalette: {
-        recommended: ['Royal Blue', 'Emerald Green', 'Deep Wine', 'Rich Navy'],
-        avoid: ['Pale Yellow', 'Washed Pastels'],
-        reason: 'Rich jewel tones contrast beautifully with your natural complexion.'
+    const { skinTone = 'medium', bodyShape = 'average', height = 170, gender = '' } = bp;
+    const isFemale = gender && ['female', 'woman', 'women', 'f', 'girl'].includes(String(gender).toLowerCase());
+    const isMale = gender && ['male', 'man', 'men', 'm', 'boy'].includes(String(gender).toLowerCase());
+
+    const getIndividualPalette = (st, sty, fem) => {
+      const tone = (st || 'medium').toLowerCase();
+      const s = (sty || 'formal').toLowerCase();
+      const base = {
+        fair: {
+          female: { recommended: ['Rani Pink', 'Emerald Green', 'Royal Blue', 'Ruby Red'], avoid: ['Pale Yellow', 'Beige'], reason: 'Jewel tones contrast beautifully with fair complexion and enhance festive radiance.' },
+          male: { recommended: ['Royal Blue', 'Emerald Green', 'Mustard Gold', 'Deep Wine'], avoid: ['Pale Yellow', 'Light Beige'], reason: 'Deep traditional hues highlight fair complexion with royal elegance.' },
+          default: { recommended: ['Royal Blue', 'Emerald Green', 'Deep Wine', 'Rich Navy'], avoid: ['Pale Yellow', 'Beige'], reason: 'Jewel tones contrast beautifully with fair skin and bring out natural warmth.' }
+        },
+        light: {
+          female: { recommended: ['Maroon Gold', 'Teal Blue', 'Rani Pink', 'Olive Green'], avoid: ['Washed Pastels', 'Light Gray'], reason: 'Rich ethnic saturations bring out a radiant glow in light undertones.' },
+          male: { recommended: ['Navy Blue', 'Maroon', 'Teal Blue', 'Olive Green'], avoid: ['Washed Pastels', 'Light Gray'], reason: 'Deep traditional shades balance light skin tones perfectly.' },
+          default: { recommended: ['Navy Blue', 'Maroon', 'Teal', 'Olive Green'], avoid: ['Washed-out Pastels', 'Light Gray'], reason: 'Rich, deep shades create an elegant contrast against light skin tones.' }
+        },
+        medium: {
+          female: { recommended: ['Rani Pink', 'Emerald Green', 'Royal Blue', 'Maroon Gold'], avoid: ['Dull Olive', 'Pale Yellow'], reason: 'Vibrant jewel tones complement medium skin undertones perfectly.' },
+          male: { recommended: ['Cobalt Blue', 'Rust Orange', 'Rich Navy', 'Deep Plum'], avoid: ['Muddy Brown', 'Neon Green'], reason: 'Sharp cobalt and rich navy elevate formal and ethnic wear on medium skin tones.' },
+          default: { recommended: ['Cobalt Blue', 'Rust Orange', 'Emerald Green', 'Deep Plum'], avoid: ['Muddy Brown', 'Neon Green'], reason: 'Earthy and vibrant jewel tones complement medium skin undertones perfectly.' }
+        },
+        olive: {
+          default: { recommended: ['Ruby Red', 'Mustard Gold', 'Teal Blue', 'Ivory White'], avoid: ['Olive Brown', 'Pale Gray'], reason: 'Warm golds and deep rubies enhance natural olive undertones.' }
+        },
+        tan: {
+          default: { recommended: ['Ivory White', 'Crimson Red', 'Sapphire Blue', 'Burnt Orange'], avoid: ['Dull Olive', 'Ash Gray'], reason: 'Bright whites and rich saturations harmonize with tanned skin tones.' }
+        },
+        deep: {
+          default: { recommended: ['Ivory White', 'Bright Teal', 'Royal Purple', 'Sunset Gold'], avoid: ['Dark Charcoal', 'Dark Brown'], reason: 'Bold, bright colors and clean whites create a stunning radiant appearance.' }
+        }
+      };
+      const toneMap = base[tone] || base.medium;
+      return (fem ? toneMap.female : toneMap.male) || toneMap.default || toneMap;
+    };
+
+    const styleOutfitMap = {
+      female: {
+        formal: ['Custom tailored trouser suit with structured shoulders in premium Italian wool.', 'Elegant pencil skirt paired with a tailored silk blouse and single-breasted blazer.', 'Double-breasted structured coat dress with custom waist tapering.'],
+        ethnic: ['Banarasi Pure Silk Saree paired with a bespoke embroidered contrast blouse.', 'Hand-crafted Anarkali Suit with intricate Zari embroidery and sheer dupatta.', 'Contemporary Sharara Set with silk Kurta and tailored side slits.'],
+        casual: ['Tailored linen tunic paired with custom high-waisted straight trousers.', 'Breathable organic cotton co-ord set for relaxed yet chic everyday styling.', 'Custom asymmetrical kurta dress with functional pockets and smart collar.'],
+        wedding: ['Bridal Lehenga with royal Zardozi and Kundan hand-embroidery in rich jewel tones.', 'Handwoven Kanjivaram Bridal Saree customized with a designer gold zari border.', 'Designer Velvet Anarkali wedding gown tailored for effortless draping.'],
+        custom: ['Bespoke fusion ensemble combining western tailoring with Indian textile artistry.', 'Tailored draped saree-gown with a structured embroidered jacket.', 'Signature custom piece crafted to your exact body measurements.'],
+        alteration: ['Precision waist tapering and bust dart shaping for your favorite gowns and dresses.', 'Sleeve shortening and hemline customization for sarees, lehengas, and blouses.', 'Custom resizing to transform ready-made garments into luxury bespoke fits.']
       },
-      fabrics: ['Premium Merino Wool', 'Handloom Pure Silk', 'Breathable Organic Cotton', 'Rich Linen'],
-      fitTips: [
-        'Opt for layered outfits and structured fabrics to add subtle dimension.',
-        'Choose tailored fits that follow the silhouette without clinging too tightly.',
-        'Ensure proper sleeve and hem lengths for a sharp, polished appearance.'
-      ],
-      outfitIdeas: [
-        'Bespoke two-piece tailored ensemble in premium fabric with crisp detailing.',
-        'Single-breasted structured jacket paired with tapered tailored trousers.',
-        'Classic ceremonial outfit tailored with subtle contrast buttons.'
-      ],
+      male: {
+        formal: ['Bespoke two-piece suit in premium Italian wool with a crisp cotton dress shirt.', 'Single-breasted structured blazer paired with tailored tapered trousers.', 'Classic Bandhgala or Jodhpuri suit for ceremonial elegance.'],
+        ethnic: ['Handcrafted raw silk Kurta with churidar and contrasting Nehru jacket.', 'Regal sherwani with intricate zardozi embroidery and matching stole.', 'Classic silk festive Kurta ensemble tailored with comfortable side slits.'],
+        casual: ['Custom linen shirt with tailored chinos for relaxed yet sophisticated styling.', 'Unstructured breathable cotton jacket over a fitted shirt.', 'Smart-casual tailored overshirt paired with stretch-weave trousers.'],
+        wedding: ['Royal velvet or brocade Sherwani with regal gold embroidery and silk stole.', 'Three-piece ceremonial wedding Jodhpuri suit with silk pocket square.', 'Hand-loom silk ethnic groom attire customized for long ceremonial celebrations.'],
+        custom: ['Signature fusion wear combining classic western tailoring with Indian textile motifs.', 'Tailored asymmetrical draped kurta with structured Nehru jacket.', 'Bespoke statement piece crafted to your precise measurements.'],
+        alteration: ['Precision waist tapering and hem adjustment for your wardrobe favorites.', 'Sleeve shortening and shoulder realignment for a bespoke finish.', 'Custom reshaping to give off-the-rack garments a luxury tailored feel.']
+      }
+    };
+
+    const shapeFitMap = {
+      slim: ['Opt for layered outfits and structured fabrics to add subtle dimension.', 'Choose tailored fits that follow the silhouette without clinging too tightly.', 'Lightweight shoulder padding or structured collars enhance upper torso proportion.'],
+      athletic: ['Highlight broad shoulders with sharp shoulder seams and clean waist tapering.', 'Choose slightly stretchy weaves or bespoke cuts for freedom of movement.', 'Avoid overly baggy garments that obscure your natural proportions.'],
+      average: ['Balanced proportions mean you can experiment with both slim and classic fits.', 'Focus on proper sleeve and hem lengths for a sharp, polished appearance.', 'Use contrasting top and bottom shades to define the waistline.'],
+      plus: ['Choose matte fabrics with nice drape that flow smoothly over curves.', 'Vertical seams, pin-stripes, and monochrome layers create a sleek silhouette.', 'Ensure comfortable room around the chest and hips without excess fabric.']
+    };
+
+    const genderMap = isFemale ? styleOutfitMap.female : styleOutfitMap.male;
+    const outfitIdeas = (genderMap && genderMap[style.toLowerCase()]) || genderMap.formal;
+    const fitTips = shapeFitMap[bodyShape.toLowerCase()] || shapeFitMap.average;
+    const palette = getIndividualPalette(skinTone, style, isFemale);
+
+    return {
+      headline: `Tailored ${style.charAt(0).toUpperCase() + style.slice(1)} Elegance For ${isFemale ? 'Women' : isMale ? 'Men' : 'You'}`,
+      summary: `Based on your ${bodyShape} build and ${skinTone} skin tone, our AI recommends structured silhouettes and rich color contrasts designed to flatter your ${height}cm frame.`,
+      colorPalette: palette,
+      fabrics: isFemale ? ['Handloom Pure Silk', 'Organza & Chiffon', 'Breathable Organic Cotton', 'Rich Linen Weave'] : ['Premium Merino Wool', 'Handloom Pure Silk', 'Breathable Organic Cotton', 'Rich Linen Weave'],
+      fitTips,
+      outfitIdeas,
       dos: [
         'Always request a second fitting to refine waist and shoulder alignment.',
         'Choose fabrics that match the climate and formality of your occasion.',
@@ -889,11 +1194,13 @@ const AiRecommendationsPage = () => {
         'Avoid heavy fabrics in high humidity or tight fits without stretch.',
         'Don\'t ignore hemline lengths—proper shoe break is essential.'
       ],
-      accessoryTip: 'Pair with a subtle silk pocket square or handcrafted leather footwear to complete the look.'
+      accessoryTip: isFemale 
+        ? 'Pair with traditional Kundan/Jhumka earrings and a handcrafted embroidered Potli bag or chic statement accessories.'
+        : 'Complete the look with a contrasting silk pocket square, classic cufflinks, or handcrafted leather footwear.'
     };
   };
 
-  const fetchStyleAdvice = async (currentPrefs) => {
+  const fetchStyleAdvice = async (currentPrefs, lang = adviceLang) => {
     setAdviceLoading(true);
     setAdviceError(null);
     setStyleAdvice(null);
@@ -901,7 +1208,7 @@ const AiRecommendationsPage = () => {
       const res = await fetch(`${API_URL}/api/ai-style-advice`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ style: currentPrefs.style, bodyProfile: currentPrefs.bodyProfile }),
+        body: JSON.stringify({ style: currentPrefs.style, bodyProfile: currentPrefs.bodyProfile, language: lang }),
       });
       const data = await res.json();
       if (data && (data.success || data.advice)) {
@@ -915,6 +1222,12 @@ const AiRecommendationsPage = () => {
     setAdviceLoading(false);
   };
 
+  const handleAdviceLangChange = (lang, currentPrefs) => {
+    setAdviceLang(lang);
+    setStyleAdvice(null);
+    fetchStyleAdvice(currentPrefs || prefs, lang);
+  };
+
   const handleNextStep = () => {
     if (quizStep < QUIZ_TOTAL_STEPS) {
       setQuizStep((s) => s + 1);
@@ -924,7 +1237,12 @@ const AiRecommendationsPage = () => {
       const top = ranked.slice(0, 8);
       setResults(top);
       // Persist
-      localStorage.setItem(SCORE_KEY, JSON.stringify({ prefs, results: top, savedAt: new Date().toISOString() }));
+      // Save to history array (max 5, newest first)
+      const newEntry = { prefs, results: top, savedAt: new Date().toISOString() };
+      const prevHistory = (() => { try { return JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; } catch { return []; } })();
+      const updatedHistory = [newEntry, ...prevHistory].slice(0, MAX_HISTORY);
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(updatedHistory));
+      setHistoryRecs(updatedHistory);
       // Fetch AI style advice
       fetchStyleAdvice(prefs);
       setPhase('results');
@@ -1005,20 +1323,25 @@ const AiRecommendationsPage = () => {
           </p>
         </div>
 
-        {(phase === 'results' || phase === 'previous') && (
-          <motion.button
-            whileTap={{ scale: 0.95 }}
-            onClick={handleGetStarted}
-            style={{
-              background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-              color: '#fff', fontWeight: 800, fontSize: 13,
-              border: 'none', borderRadius: 12,
-              padding: '8px 16px', cursor: 'pointer',
-              fontFamily: 'Sora, sans-serif',
-            }}
-          >
-            Re-run ✨
-          </motion.button>
+        {(phase === 'results' || phase === 'previous' || phase === 'history') && (
+          <div style={{ display: 'flex', gap: 8 }}>
+            {phase === 'previous' && (
+              <motion.button
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setPhase('history')}
+                style={{ background: '#f1f5f9', color: '#475569', fontWeight: 800, fontSize: 13, border: '1.5px solid #e2e8f0', borderRadius: 12, padding: '8px 14px', cursor: 'pointer', fontFamily: 'Sora, sans-serif' }}
+              >
+                ← History
+              </motion.button>
+            )}
+            <motion.button
+              whileTap={{ scale: 0.95 }}
+              onClick={handleGetStarted}
+              style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', color: '#fff', fontWeight: 800, fontSize: 13, border: 'none', borderRadius: 12, padding: '8px 16px', cursor: 'pointer', fontFamily: 'Sora, sans-serif' }}
+            >
+              Re-run ✨
+            </motion.button>
+          </div>
         )}
       </div>
 
@@ -1032,8 +1355,150 @@ const AiRecommendationsPage = () => {
               key="hero"
               onGetStarted={handleGetStarted}
               onViewPrevious={handleViewPrevious}
-              hasPrevious={!!previousRecs}
+              hasPrevious={historyRecs.length > 0}
             />
+          )}
+
+          {/* ── HISTORY LIST ── */}
+          {phase === 'history' && (
+            <motion.div key="history" variants={fadeUp} initial="hidden" animate="show" exit="exit">
+              {/* Header */}
+              <div style={{ marginBottom: '1.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                  <span style={{ fontSize: 28 }}>📋</span>
+                  <div>
+                    <h2 style={{ fontFamily: 'Sora, sans-serif', fontWeight: 900, fontSize: 22, color: '#0f172a', margin: 0 }}>Recommendation History</h2>
+                    <p style={{ fontSize: 13, color: '#64748b', margin: 0, marginTop: 2 }}>Your {historyRecs.length} most recent AI matching session{historyRecs.length !== 1 ? 's' : ''}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* History Cards */}
+              <motion.div variants={stagger} initial="hidden" animate="show" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                {historyRecs.map((entry, idx) => {
+                  const p = entry.prefs || {};
+                  const bp = p.bodyProfile || {};
+                  const styleLabel = STYLE_CATEGORIES.find(s => s.id === p.style)?.label || p.style || '—';
+                  const styleIcon = STYLE_CATEGORIES.find(s => s.id === p.style)?.icon || '🧵';
+                  const budgetLabel = BUDGET_OPTIONS.find(b => b.id === p.budget)?.label || p.budget || '—';
+                  const chips = [
+                    bp.gender && GENDER_OPTIONS.find(g => g.id === bp.gender)?.label,
+                    bp.bodyShape && BODY_SHAPES.find(b => b.id === bp.bodyShape)?.label,
+                    bp.height && `${bp.height}cm`,
+                    bp.weight && `${bp.weight}kg`,
+                    p.experience && p.experience !== 'any' && EXPERIENCE_OPTIONS.find(e => e.id === p.experience)?.label,
+                  ].filter(Boolean);
+                  const savedDate = entry.savedAt ? new Date(entry.savedAt) : null;
+                  const isToday = savedDate && new Date().toDateString() === savedDate.toDateString();
+                  const dateStr = savedDate ? (isToday ? `Today, ${savedDate.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}` : savedDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })) : 'Unknown date';
+                  return (
+                    <motion.div
+                      key={idx}
+                      variants={{ hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0 } }}
+                      style={{
+                        background: '#fff',
+                        borderRadius: 20,
+                        border: idx === 0 ? '2px solid #6366f1' : '1.5px solid #e2e8f0',
+                        boxShadow: idx === 0 ? '0 8px 32px rgba(99,102,241,0.12)' : '0 2px 12px rgba(0,0,0,0.04)',
+                        overflow: 'hidden',
+                        position: 'relative',
+                      }}
+                    >
+                      {idx === 0 && (
+                        <div style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', padding: '4px 14px', display: 'inline-block', position: 'absolute', top: 0, left: 0, borderRadius: '20px 0 16px 0' }}>
+                          <span style={{ fontSize: 10, fontWeight: 900, color: '#fff', letterSpacing: '0.06em', fontFamily: 'Sora, sans-serif', textTransform: 'uppercase' }}>Latest</span>
+                        </div>
+                      )}
+                      <div style={{ padding: '1.25rem', paddingTop: idx === 0 ? '2rem' : '1.25rem' }}>
+                        {/* Row 1: style + date */}
+                        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 10 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <div style={{ width: 46, height: 46, borderRadius: 14, background: 'linear-gradient(135deg, #eef2ff, #e0e7ff)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>
+                              {styleIcon}
+                            </div>
+                            <div>
+                              <p style={{ fontFamily: 'Sora, sans-serif', fontWeight: 900, fontSize: 16, color: '#0f172a', margin: 0 }}>{styleLabel}</p>
+                              <p style={{ fontSize: 12, color: '#6366f1', fontWeight: 700, margin: 0, marginTop: 2 }}>{budgetLabel}</p>
+                            </div>
+                          </div>
+                          <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                            <p style={{ fontSize: 11, color: '#94a3b8', margin: 0 }}>🕐 {dateStr}</p>
+                            <p style={{ fontSize: 12, fontWeight: 700, color: '#374151', margin: 0, marginTop: 3 }}>{entry.results?.length || 0} tailors matched</p>
+                          </div>
+                        </div>
+
+                        {/* Chips */}
+                        {chips.length > 0 && (
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+                            {chips.map(c => (
+                              <span key={c} style={{ background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 100, fontSize: 11, fontWeight: 600, color: '#475569', padding: '3px 10px' }}>{c}</span>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Tailor avatars preview */}
+                        {entry.results && entry.results.length > 0 && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 14 }}>
+                            <div style={{ display: 'flex' }}>
+                              {entry.results.slice(0, 4).map((t, ti) => {
+                                const initials = t.full_name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || 'T';
+                                return (
+                                  <div key={ti} style={{ width: 30, height: 30, borderRadius: '50%', border: '2px solid #fff', marginLeft: ti === 0 ? 0 : -8, background: t.profile_img ? 'transparent' : `hsl(${ti * 60 + 220},60%,55%)`, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', position: 'relative', zIndex: 4 - ti, boxShadow: '0 1px 4px rgba(0,0,0,0.15)' }}>
+                                    {t.profile_img
+                                      ? <img src={resolveImg(t.profile_img)} alt={t.full_name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                      : <span style={{ fontSize: 10, fontWeight: 900, color: '#fff' }}>{initials}</span>}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                            {entry.results.length > 4 && <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>+{entry.results.length - 4} more</span>}
+                            <span style={{ fontSize: 11, color: '#94a3b8', marginLeft: 4 }}>tailors</span>
+                          </div>
+                        )}
+
+                        {/* Actions */}
+                        <div style={{ display: 'flex', gap: 10 }}>
+                          <motion.button
+                            whileHover={{ scale: 1.02, y: -1 }}
+                            whileTap={{ scale: 0.97 }}
+                            onClick={() => handleViewHistoryEntry(entry)}
+                            style={{ flex: 1, background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', color: '#fff', fontFamily: 'Sora, sans-serif', fontWeight: 800, fontSize: 13, border: 'none', borderRadius: 12, padding: '10px 0', cursor: 'pointer' }}
+                          >
+                            View Results →
+                          </motion.button>
+                          <motion.button
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                            onClick={() => handleDeleteHistoryEntry(idx)}
+                            style={{ width: 42, background: '#fff5f5', color: '#ef4444', fontFamily: 'Sora, sans-serif', fontWeight: 800, fontSize: 16, border: '1.5px solid #fecaca', borderRadius: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                            title="Remove this entry"
+                          >
+                            🗑
+                          </motion.button>
+                        </div>
+                      </div>
+                    </motion.div>
+                  );
+                })}
+              </motion.div>
+
+              {/* Re-run CTA */}
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 }}
+                style={{ marginTop: '2rem', background: 'linear-gradient(135deg, #f0fdf4, #ecfdf5)', border: '1.5px solid #bbf7d0', borderRadius: 20, padding: '1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                <div>
+                  <p style={{ fontFamily: 'Sora, sans-serif', fontWeight: 900, fontSize: 15, color: '#0f172a', margin: 0 }}>Want fresher results?</p>
+                  <p style={{ fontSize: 12, color: '#64748b', margin: 0, marginTop: 2 }}>Run the AI quiz again for updated recommendations.</p>
+                </div>
+                <motion.button
+                  whileHover={{ scale: 1.04 }}
+                  whileTap={{ scale: 0.96 }}
+                  onClick={handleGetStarted}
+                  style={{ background: 'linear-gradient(135deg, #10b981, #059669)', color: '#fff', fontFamily: 'Sora, sans-serif', fontWeight: 900, fontSize: 13, border: 'none', borderRadius: 14, padding: '10px 20px', cursor: 'pointer', flexShrink: 0 }}
+                >
+                  ✨ Re-run
+                </motion.button>
+              </motion.div>
+            </motion.div>
           )}
 
           {/* ── QUIZ ── */}
@@ -1221,7 +1686,7 @@ const AiRecommendationsPage = () => {
 
           {/* ── RESULTS ── */}
           {(phase === 'results' || phase === 'previous') && (
-            <motion.div key="results" variants={fadeUp} initial="hidden" animate="show" exit="exit">
+            <motion.div key={phase === 'previous' ? `prev-${selectedHistory?.savedAt}` : 'results'} variants={fadeUp} initial="hidden" animate="show" exit="exit">
               {/* Results header */}
               <div style={{
                 background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
@@ -1254,15 +1719,15 @@ const AiRecommendationsPage = () => {
                     </span>
                   </div>
                   <p style={{ color: 'rgba(255,255,255,0.75)', fontSize: 13, lineHeight: 1.6 }}>
-                    {phase === 'previous' && previousRecs?.savedAt
-                      ? `Saved on ${new Date(previousRecs.savedAt).toLocaleDateString('en-IN', { dateStyle: 'medium' })}`
+                    {phase === 'previous' && selectedHistory?.savedAt
+                      ? `Saved on ${new Date(selectedHistory.savedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} · ${results.length} tailors`
                       : `${results.length} tailors ranked by AI score — based on your style, budget & experience preferences.`}
                   </p>
 
                   {/* Prefs summary chips */}
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
-                    {(phase === 'previous' ? previousRecs?.prefs : prefs) && (() => {
-                      const p = phase === 'previous' ? previousRecs.prefs : prefs;
+                    {(phase === 'previous' ? selectedHistory?.prefs : prefs) && (() => {
+                      const p = phase === 'previous' ? selectedHistory.prefs : prefs;
                       const bp = p.bodyProfile || {};
                       return [
                         p.style && STYLE_CATEGORIES.find((s) => s.id === p.style)?.label,
@@ -1316,8 +1781,15 @@ const AiRecommendationsPage = () => {
               </div>
 
               {/* ── Gemini AI Style Advice ── */}
-              {phase === 'results' && (
-                <StyleAdvicePanel advice={styleAdvice} loading={adviceLoading} error={adviceError} />
+              {(phase === 'results' || phase === 'previous') && (
+                <StyleAdvicePanel
+                  advice={styleAdvice}
+                  loading={adviceLoading}
+                  error={adviceError}
+                  lang={adviceLang}
+                  prefs={phase === 'previous' ? selectedHistory?.prefs : prefs}
+                  onLangChange={(lang) => handleAdviceLangChange(lang, phase === 'previous' ? selectedHistory?.prefs : prefs)}
+                />
               )}
 
               {/* Recommended Tailors Heading */}
@@ -1374,6 +1846,7 @@ const AiRecommendationsPage = () => {
                   initial="hidden"
                   animate="show"
                   style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(420px, 1fr))', gap: 16 }}
+                  key={`cards-${phase}-${results.length}`}
                 >
                   {results.map((tailor, i) => (
                     <TailorResultCard

@@ -21,7 +21,6 @@ const nodemailer = require('nodemailer');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-const { GoogleGenAI } = require('@google/genai');
 
 const app = express();
 const httpServer = http.createServer(app);

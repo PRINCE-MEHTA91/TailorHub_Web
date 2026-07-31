@@ -6,21 +6,21 @@
 const { GoogleGenAI } = require('@google/genai');
 const { getOutfitPrompt, getSmartFallbackAdvice } = require('../prompts/outfitPrompt');
 
-async function generateStyleAdvice(style, bodyProfile = {}) {
+async function generateStyleAdvice(style, bodyProfile = {}, language = 'english') {
     const apiKey = process.env.GEMINI_API_KEY;
 
     // Check if API key is unconfigured or default placeholder
     if (!apiKey || apiKey === 'YOUR_GEMINI_API_KEY_HERE' || apiKey.trim() === '') {
         console.log('ℹ️ [Gemini Service] Using Smart Styling Engine (GEMINI_API_KEY unconfigured)');
         return {
-            advice: getSmartFallbackAdvice(style, bodyProfile),
+            advice: getSmartFallbackAdvice(style, bodyProfile, language),
             source: 'smart_engine'
         };
     }
 
     try {
         const ai = new GoogleGenAI({ apiKey });
-        const prompt = getOutfitPrompt(style, bodyProfile);
+        const prompt = getOutfitPrompt(style, bodyProfile, language);
 
         const response = await ai.models.generateContent({
             model: 'gemini-2.0-flash',
@@ -42,7 +42,7 @@ async function generateStyleAdvice(style, bodyProfile = {}) {
     } catch (err) {
         console.warn('⚠️ [Gemini Service] API error, falling back to Smart Styling Engine:', err.message);
         return {
-            advice: getSmartFallbackAdvice(style, bodyProfile),
+            advice: getSmartFallbackAdvice(style, bodyProfile, language),
             source: 'smart_engine_fallback'
         };
     }

@@ -7,7 +7,7 @@ const { generateStyleAdvice } = require('../services/gemini.service');
 
 async function getStyleAdvice(req, res) {
     try {
-        const { style, bodyProfile } = req.body;
+        const { style, bodyProfile, language } = req.body;
 
         if (!style) {
             return res.status(400).json({
@@ -16,7 +16,7 @@ async function getStyleAdvice(req, res) {
             });
         }
 
-        const result = await generateStyleAdvice(style, bodyProfile || {});
+        const result = await generateStyleAdvice(style, bodyProfile || {}, language || 'english');
 
         return res.status(200).json({
             success: true,
