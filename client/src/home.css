@@ -486,6 +486,13 @@
 }
 .qa-ai:hover { background: linear-gradient(135deg, #bae6fd, #7dd3fc, #a5b4fc); }
 
+.qa-teal {
+  background: linear-gradient(135deg, #ccfbf1, #99f6e4);
+  color: #134e4a;
+  box-shadow: 0 4px 14px rgba(0,128,128,0.2);
+}
+.qa-teal:hover { background: linear-gradient(135deg, #99f6e4, #5eead4); }
+
 .qa-badge {
   position: absolute;
   top: 6px;

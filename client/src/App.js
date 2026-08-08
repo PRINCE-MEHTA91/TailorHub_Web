@@ -27,6 +27,7 @@ import NotificationsPage from './pages/NotificationsPage';
 import ArrivalsAndTrendingPage from './pages/ArrivalsAndTrendingPage';
 import CategoriesPage from './pages/CategoriesPage';
 import AiRecommendationsPage from './pages/AiRecommendationsPage';
+import BodyMeasurementPage from './pages/BodyMeasurement';
 
 const SmartHomeRoute = () => {
   const { user, loading } = useAuth();
@@ -75,6 +76,7 @@ function App() {
           <Route path="/categories" element={<CategoriesPage />} />
           <Route path="/collections" element={<ArrivalsAndTrendingPage />} />
           <Route path="/ai-recommendations" element={<PrivateRoute role="customer"><AiRecommendationsPage /></PrivateRoute>} />
+          <Route path="/body-measurement" element={<PrivateRoute role="customer"><BodyMeasurementPage /></PrivateRoute>} />
           <Route path="/help/:section" element={<HelpPage />} />
           <Route path="/help" element={<HelpPage />} />
 

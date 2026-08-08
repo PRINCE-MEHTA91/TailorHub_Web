@@ -40,6 +40,14 @@ const actions = [
     badge: 'AI',
     path: '/ai-recommendations',
   },
+  {
+    icon: '📐',
+    label: 'Body Measure',
+    gradient: 'qa-teal',
+    desc: 'Get your size',
+    badge: 'NEW',
+    path: '/body-measurement',
+  },
 ];
 
 const containerVariants = {
