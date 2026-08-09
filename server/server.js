@@ -1962,6 +1962,79 @@ io.on('connection', (socket) => {
 const aiRoutes = require('./routes/ai.routes');
 app.use('/api', aiRoutes);
 
+// ── Body Measurement Proxy → Python MediaPipe Service ────────────────────────
+// Forwards multipart/form-data (frontPhoto + sidePhoto + heightCm) to the
+// Python Flask server running on port 5001 and returns the result JSON.
+const PYTHON_MEASURE_URL = process.env.PYTHON_MEASURE_URL || 'http://localhost:5001/measure';
+
+const measureUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 10 * 1024 * 1024 },   // 10 MB per photo
+    fileFilter: (_req, file, cb) => {
+        const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/bmp'];
+        cb(null, allowed.includes(file.mimetype));
+    },
+});
+
+app.post(
+    '/api/measurements/calculate',
+    measureUpload.fields([
+        { name: 'frontPhoto', maxCount: 1 },
+        { name: 'sidePhoto',  maxCount: 1 },
+    ]),
+    async (req, res) => {
+        try {
+            const { heightCm } = req.body;
+            const frontPhoto   = req.files?.frontPhoto?.[0];
+            const sidePhoto    = req.files?.sidePhoto?.[0];
+
+            if (!frontPhoto) return res.status(400).json({ error: 'frontPhoto is required' });
+            if (!sidePhoto)  return res.status(400).json({ error: 'sidePhoto is required' });
+            if (!heightCm)   return res.status(400).json({ error: 'heightCm is required' });
+
+            // node-fetch v2 is CommonJS — use require(), NOT import()
+            const fetch    = require('node-fetch');
+            const FormData = require('form-data');
+
+            const form = new FormData();
+            form.append('heightCm',   String(heightCm));
+            form.append('frontPhoto', frontPhoto.buffer, {
+                filename:    frontPhoto.originalname || 'front.jpg',
+                contentType: frontPhoto.mimetype,
+            });
+            form.append('sidePhoto',  sidePhoto.buffer, {
+                filename:    sidePhoto.originalname || 'side.jpg',
+                contentType: sidePhoto.mimetype,
+            });
+
+            const pyRes = await fetch(PYTHON_MEASURE_URL, {
+                method:  'POST',
+                body:    form,
+                headers: form.getHeaders(),
+            });
+
+            const data = await pyRes.json();
+
+            if (!pyRes.ok) {
+                return res.status(pyRes.status).json(data);
+            }
+
+            return res.json(data);
+
+        } catch (err) {
+            console.error('❌ Measurement proxy error:', err.message);
+
+            if (err.code === 'ECONNREFUSED') {
+                return res.status(503).json({
+                    error: 'Measurement service is offline. Please start the Python server.',
+                });
+            }
+
+            return res.status(500).json({ error: err.message || 'Failed to process measurement request' });
+        }
+    }
+);
+
 httpServer.listen(PORT, '0.0.0.0', () => {
     console.log(`✅ Server is running on port ${PORT} (HTTP + Socket.IO)`);
 });
