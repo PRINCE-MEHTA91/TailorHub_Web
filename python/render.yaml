@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: tailorhub-python
+    runtime: python
+    rootDir: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python measure_server.py
+    envVars:
+      - key: MEASURE_PORT
+        value: 10000
+    healthCheckPath: /health

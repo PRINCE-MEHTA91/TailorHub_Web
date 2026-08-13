@@ -1,4 +1,4 @@
-﻿"""
+"""
 measure_server.py
 =================
 Lightweight Flask API server that exposes one endpoint:
@@ -39,8 +39,12 @@ from flask_cors import CORS
 from body_measure import measure_body
 
 app = Flask(__name__)
-CORS(app, origins=["http://localhost:3000", "http://localhost:3001",
-                   "https://tailorhub-web.onrender.com"])
+CORS(app, origins=[
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "https://tailorhub-web.onrender.com",
+    "https://tailorhub-python.onrender.com",  # Python service itself
+])
 
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
 
@@ -113,7 +117,7 @@ def measure():
 
 
 if __name__ == "__main__":
-    port = int(os.environ.get("MEASURE_PORT", 5001))
+    port = int(os.environ.get("PORT", os.environ.get("MEASURE_PORT", 5001)))
     print(f"\n{'='*55}")
     print(f"  TailorHub Measurement Engine")
     print(f"  Listening on http://localhost:{port}")

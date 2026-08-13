@@ -1,5 +1,11 @@
 require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 
+// ── Startup secrets validation ────────────────────────────────────────────────
+if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
+    console.error('❌ FATAL: JWT_SECRET is missing or too short (minimum 32 characters). Set it in server/.env');
+    process.exit(1);
+}
+
 // ── Global crash guards — keep the server alive even on unhandled errors ──
 process.on('uncaughtException', (err) => {
     console.error('❌ Uncaught Exception (server kept alive):', err.message);
@@ -16,23 +22,36 @@ const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
-const crypto = require('crypto');
+const crypto = require('node:crypto'); // use Node built-in, not deprecated npm shim
 const nodemailer = require('nodemailer');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const rateLimit = require('express-rate-limit');
 
 const app = express();
 const httpServer = http.createServer(app);
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET;
 const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:3001';
-const IS_PROD = process.env.NODE_ENV === 'production' || !!process.env.CLIENT_URL?.startsWith('https');
+const IS_PROD = process.env.NODE_ENV === 'production';
+
+// Build allowed origins list from env or safe defaults
+const ALLOWED_ORIGINS_ENV = process.env.ALLOWED_ORIGINS || '';
+const EXTRA_ORIGINS = ALLOWED_ORIGINS_ENV.split(',').map(o => o.trim()).filter(Boolean);
+const BASE_ALLOWED_ORIGINS = new Set([
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'http://127.0.0.1:3000',
+    'http://127.0.0.1:3001',
+    CLIENT_URL,
+    ...EXTRA_ORIGINS,
+]);
 
 const isAllowedOrigin = (origin, callback) => {
-    if (!origin) return callback(null, true);
-    if (/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return callback(null, true);
-    if (origin.startsWith(CLIENT_URL) || origin.includes('vercel.app')) return callback(null, true);
+    if (!origin) return callback(null, true); // allow server-to-server
+    if (BASE_ALLOWED_ORIGINS.has(origin)) return callback(null, true);
+    console.warn(`⚠️  CORS blocked origin: ${origin}`);
     return callback(new Error('Not allowed by CORS'));
 };
 
@@ -49,9 +68,52 @@ app.use(cors({
     origin: isAllowedOrigin,
     credentials: true
 }));
-app.use(express.json({ limit: '10mb' }));
+
+// ── Security headers ─────────────────────────────────────────────────────────
+app.use((req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+    res.setHeader('X-XSS-Protection', '0'); // modern browsers use CSP; disable legacy broken filter
+    next();
+});
+
+app.use(express.json({ limit: '1mb' }));  // Reduced from 10mb — sufficient for all API payloads
 app.use(cookieParser());
-app.use(express.static(__dirname));
+// NOTE: express.static(__dirname) removed — it served entire server source code publicly.
+//       Only /uploads is served statically (see below, after multer setup).
+
+// ── Rate Limiters ───────────────────────────────────────────────────────────
+const loginLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 10,                   // 10 attempts per IP
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { message: 'Too many login attempts, please try again in 15 minutes.' },
+    skipSuccessfulRequests: true,
+});
+const signupLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000, // 1 hour
+    max: 5,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { message: 'Too many accounts created from this IP, please try again later.' },
+});
+const forgotPasswordLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000, // 1 hour
+    max: 5,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { message: 'Too many password reset attempts, please try again later.' },
+});
+const measurementLimiter = rateLimit({
+    windowMs: 5 * 60 * 1000, // 5 minutes
+    max: 10,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { message: 'Too many measurement requests, please try again shortly.' },
+});
 
 // ── PostgreSQL Pool (Neon) ──────────────────────────────────────────────────
 console.log('⏳ Attempting to connect to PostgreSQL database (Neon)...');
@@ -357,13 +419,13 @@ const setTokenCookie = (res, userId) => {
 // AUTH ENDPOINTS
 // ═══════════════════════════════════════════════════════════════
 
-app.post('/api/auth/signup', async (req, res) => {
+app.post('/api/auth/signup', signupLimiter, async (req, res) => {
     const { full_name, email, password, role } = req.body;
     if (!full_name || !email || !password) {
         return res.status(400).json({ message: 'All fields are required' });
     }
-    if (password.length < 6) {
-        return res.status(400).json({ message: 'Password must be at least 6 characters' });
+    if (password.length < 8) {
+        return res.status(400).json({ message: 'Password must be at least 8 characters' });
     }
     const validRoles = ['customer', 'tailor'];
     const userRole = validRoles.includes(role) ? role : 'customer';
@@ -383,13 +445,16 @@ app.post('/api/auth/signup', async (req, res) => {
     }
 });
 
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', loginLimiter, async (req, res) => {
     const { email, password } = req.body;
     if (!email || !password) {
         return res.status(400).json({ message: 'Email and password are required' });
     }
     try {
-        const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+        const result = await pool.query(
+            'SELECT id, full_name, email, role, password FROM users WHERE email = $1',
+            [email]
+        );
         if (result.rows.length === 0) {
             return res.status(401).json({ message: 'Invalid email or password' });
         }
@@ -422,11 +487,14 @@ app.post('/api/auth/logout', (req, res) => {
     res.json({ message: 'Logged out successfully' });
 });
 
-app.post('/api/auth/forgot-password', async (req, res) => {
+app.post('/api/auth/forgot-password', forgotPasswordLimiter, async (req, res) => {
     const { email } = req.body;
     if (!email) return res.status(400).json({ message: 'Email is required' });
     try {
-        const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+        const result = await pool.query(
+            'SELECT id, email FROM users WHERE email = $1',
+            [email]
+        );
         if (result.rows.length === 0) {
             return res.json({ message: 'If this email exists, a reset link has been sent' });
         }
@@ -440,7 +508,7 @@ app.post('/api/auth/forgot-password', async (req, res) => {
         );
         const resetLink = `${CLIENT_URL}/reset-password/${rawToken}`;
         console.log('📧 Attempting to send password reset email to:', email);
-        console.log('🔗 Reset link:', resetLink);
+        // NOTE: reset link NOT logged — it contains a secret token
         transporter.sendMail({
             from: `"TailorHub" <${process.env.EMAIL_USER}>`,
             to: email,
@@ -477,8 +545,8 @@ app.get('/reset-password/:token', (req, res) => {
 app.post('/api/auth/reset-password/:token', async (req, res) => {
     const { token } = req.params;
     const { password } = req.body;
-    if (!password || password.length < 6) {
-        return res.status(400).json({ message: 'Password must be at least 6 characters' });
+    if (!password || password.length < 8) {
+        return res.status(400).json({ message: 'Password must be at least 8 characters' });
     }
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
     try {
@@ -540,7 +608,7 @@ const chatFileStorage = multer.diskStorage({
     }
 });
 const ALLOWED_CHAT_TYPES = [
-    'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml',
+    'image/jpeg', 'image/png', 'image/gif', 'image/webp', // SVG removed — can contain embedded JS
     'application/pdf',
     'application/msword',
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -620,7 +688,7 @@ app.get('/api/products', async (req, res) => {
         const result = await pool.query('SELECT * FROM products');
         res.json(result.rows);
     } catch (err) {
-        return res.status(500).json(err);
+        return res.status(500).json({ message: 'Server error' });
     }
 });
 
@@ -1186,12 +1254,15 @@ app.get('/api/tailor/verify-customer', verifyToken, requireRole('tailor'), async
 // ── POST /api/orders — Create a new order (Tailor only) ──
 app.post('/api/orders', verifyToken, requireRole('tailor'), async (req, res) => {
     try {
-        console.log('📦 Create Order Request Body:', req.body);
+        // NOTE: order body NOT logged — contains sensitive customer/payment data
         const { customer_id, product_name, total_amount, advance_payment, delivery_date, notes, offer_id, discount_amount, final_amount } = req.body;
 
         if (!customer_id || !product_name || total_amount === undefined || advance_payment === undefined || !delivery_date) {
             return res.status(400).json({ message: 'All required fields must be provided' });
         }
+        // Validate input lengths
+        if (String(product_name).length > 200) return res.status(400).json({ message: 'Product name too long (max 200 chars)' });
+        if (notes && String(notes).length > 1000) return res.status(400).json({ message: 'Notes too long (max 1000 chars)' });
 
         // Ensure customerId exists
         const customerCheck = await pool.query('SELECT id FROM users WHERE id = $1', [customer_id]);
@@ -1242,8 +1313,8 @@ app.post('/api/orders', verifyToken, requireRole('tailor'), async (req, res) => 
 
         res.status(201).json({ message: 'Order created successfully', order_id: orderId });
     } catch (err) {
-        console.error('❌ Create order error:', err);
-        res.status(500).json({ message: err.message || 'Failed to create order' });
+        console.error('❌ Create order error:', err.message);
+        res.status(500).json({ message: 'Failed to create order' });
     }
 });
 
@@ -1565,20 +1636,34 @@ app.put('/api/orders/:id/payment', verifyToken, requireRole('tailor'), async (re
 // FEEDBACK ENDPOINTS
 // ═══════════════════════════════════════════════════════════════
 
-// ── POST /api/add-feedback ──
+// ── POST /api/add-feedback ── (IDOR-safe: customerId/tailorId come from DB, not client)
 app.post('/api/add-feedback', verifyToken, async (req, res) => {
-    const { orderId, customerId, tailorId, rating, message } = req.body;
+    const { orderId, rating, message } = req.body;
 
-    if (!orderId || !customerId || !tailorId || !rating) {
+    if (!orderId || !rating) {
         return res.status(400).json({ message: 'Missing required fields' });
+    }
+    if (!Number.isInteger(Number(rating)) || Number(rating) < 1 || Number(rating) > 5) {
+        return res.status(400).json({ message: 'Rating must be an integer between 1 and 5' });
     }
 
     try {
-        // Verify order status
-        const orderRes = await pool.query('SELECT current_status FROM orders WHERE id = $1', [orderId]);
+        // Fetch order from DB — do NOT trust client-supplied customerId or tailorId
+        const orderRes = await pool.query(
+            'SELECT customer_id, tailor_id, current_status FROM orders WHERE id = $1',
+            [orderId]
+        );
         if (orderRes.rows.length === 0) return res.status(404).json({ message: 'Order not found' });
 
-        const status = orderRes.rows[0].current_status;
+        const order = orderRes.rows[0];
+        // Ensure the authenticated user is actually the customer on this order
+        if (order.customer_id !== req.userId) {
+            return res.status(403).json({ message: 'Not authorized to submit feedback for this order' });
+        }
+        const resolvedCustomerId = order.customer_id;
+        const resolvedTailorId   = order.tailor_id;
+
+        const status = order.current_status;
         if (status !== 'Delivered' && status !== 'Completed') {
             return res.status(400).json({ message: 'Feedback allowed only for Delivered or Completed orders' });
         }
@@ -1587,7 +1672,7 @@ app.post('/api/add-feedback', verifyToken, async (req, res) => {
         try {
             await pool.query(
                 'INSERT INTO feedbacks (order_id, customer_id, tailor_id, rating, message) VALUES ($1, $2, $3, $4, $5)',
-                [orderId, customerId, tailorId, rating, message || '']
+                [orderId, resolvedCustomerId, resolvedTailorId, Number(rating), (message || '').slice(0, 500)]
             );
         } catch (err2) {
             if (err2.code === '23505') {
@@ -1606,7 +1691,7 @@ app.post('/api/add-feedback', verifyToken, async (req, res) => {
                 const { total_reviews, avg_rating } = ratingRes.rows[0];
                 await pool.query(
                     'UPDATE users SET avg_rating = $1, total_reviews = $2 WHERE id = $3',
-                    [avg_rating || 0, total_reviews || 0, tailorId]
+                    [avg_rating || 0, total_reviews || 0, resolvedTailorId]
                 );
             }
         } catch (ratingErr) { /* non-critical */ }
@@ -1695,6 +1780,8 @@ app.get('/api/chat/user/:userId', verifyToken, async (req, res) => {
 app.get('/api/chat/search-users', verifyToken, async (req, res) => {
     const { query } = req.query;
     if (!query) return res.json({ users: [] });
+    // Guard against very long search strings
+    if (query.length > 100) return res.status(400).json({ message: 'Search query too long' });
 
     const isTailor = req.userRole === 'tailor';
     const orderJoinCond = isTailor ? 'o.tailor_id = $1 AND o.customer_id = u.id' : 'o.customer_id = $1 AND o.tailor_id = u.id';
@@ -1721,7 +1808,8 @@ app.get('/api/chat/:userId', verifyToken, async (req, res) => {
     const { userId } = req.params;
     try {
         const result = await pool.query(`
-            SELECT * FROM messages
+            SELECT id, sender_id, receiver_id, message, is_read, is_edited, file_url, file_type, file_name, created_at
+            FROM messages
             WHERE (sender_id = $1 AND receiver_id = $2) OR (sender_id = $3 AND receiver_id = $4)
             ORDER BY created_at ASC
         `, [req.userId, userId, userId, req.userId]);
@@ -1752,6 +1840,7 @@ app.post('/api/chat/:userId', verifyToken, async (req, res) => {
     const { userId } = req.params;
     const { message } = req.body;
     if (!message || !message.trim()) return res.status(400).json({ message: 'Message is required' });
+    if (message.length > 2000) return res.status(400).json({ message: 'Message too long (max 2000 characters)' });
 
     try {
         const insertResult = await pool.query(
@@ -1789,13 +1878,17 @@ app.put('/api/chat/message/:id', verifyToken, async (req, res) => {
     const { id } = req.params;
     const { message } = req.body;
     if (!message || !message.trim()) return res.status(400).json({ message: 'Message is required' });
+    if (message.length > 2000) return res.status(400).json({ message: 'Message too long (max 2000 characters)' });
     try {
         const msgRes = await pool.query('SELECT sender_id, receiver_id FROM messages WHERE id = $1', [id]);
         if (msgRes.rows.length === 0) return res.status(404).json({ message: 'Message not found' });
         if (msgRes.rows[0].sender_id !== req.userId) return res.status(403).json({ message: 'Not allowed' });
         const receiverId = msgRes.rows[0].receiver_id;
         await pool.query('UPDATE messages SET message = $1, is_edited = TRUE WHERE id = $2', [message.trim(), id]);
-        const updatedRes = await pool.query('SELECT * FROM messages WHERE id = $1', [id]);
+        const updatedRes = await pool.query(
+            'SELECT id, sender_id, receiver_id, message, is_read, is_edited, file_url, file_type, file_name, created_at FROM messages WHERE id = $1',
+            [id]
+        );
         if (updatedRes.rows.length === 0) return res.status(500).json({ message: 'Server error' });
         const updated = updatedRes.rows[0];
         // Real-time: notify both parties
@@ -1978,6 +2071,8 @@ const measureUpload = multer({
 
 app.post(
     '/api/measurements/calculate',
+    verifyToken,         // must be logged in
+    measurementLimiter,  // rate limit expensive ML operation
     measureUpload.fields([
         { name: 'frontPhoto', maxCount: 1 },
         { name: 'sidePhoto',  maxCount: 1 },
