@@ -40,10 +40,15 @@ const IS_PROD = process.env.NODE_ENV === 'production';
 const ALLOWED_ORIGINS_ENV = process.env.ALLOWED_ORIGINS || '';
 const EXTRA_ORIGINS = ALLOWED_ORIGINS_ENV.split(',').map(o => o.trim()).filter(Boolean);
 const BASE_ALLOWED_ORIGINS = new Set([
+    // ── Local dev ──────────────────────────────────────────────────────────
     'http://localhost:3000',
     'http://localhost:3001',
     'http://127.0.0.1:3000',
     'http://127.0.0.1:3001',
+    // ── Production (hardcoded so CORS works even before env vars are set) ──
+    'https://tailor-hub-web-client.vercel.app',
+    'https://tailorhub-web.onrender.com',
+    // ── From env vars (CLIENT_URL and ALLOWED_ORIGINS) ─────────────────────
     CLIENT_URL,
     ...EXTRA_ORIGINS,
 ]);
@@ -54,6 +59,7 @@ const isAllowedOrigin = (origin, callback) => {
     console.warn(`⚠️  CORS blocked origin: ${origin}`);
     return callback(new Error('Not allowed by CORS'));
 };
+
 
 // ── Socket.IO real-time server ──────────────────────────────────────────────
 const io = new SocketIOServer(httpServer, {
