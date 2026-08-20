@@ -1,20 +1,25 @@
 /**
  * gemini.service.js
- * Handles communication with OpenRouter AI (nvidia/nemotron-3-ultra-550b-a55b)
- * and graceful smart fallback styling.
+ * Handles communication with Google Gemini AI (gemini-2.5-flash)
+ * using the official @google/genai SDK.
+ *
+ * Falls back to the built-in Smart Styling Engine if:
+ *   - GEMINI_API_KEY is not set
+ *   - The API call fails for any reason
  */
 
+const { GoogleGenAI } = require('@google/genai');
 const { getOutfitPrompt, getSmartFallbackAdvice } = require('../prompts/outfitPrompt');
 
-const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
+// Model to use — gemini-3.6-flash is fast, free-tier friendly, and available
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.6-flash';
 
 async function generateStyleAdvice(style, bodyProfile = {}, language = 'english') {
-    const apiKey = process.env.OPENROUTER_API_KEY;
-    const model  = process.env.OPENROUTER_MODEL || 'nvidia/nemotron-3-ultra-550b-a55b:free';
+    const apiKey = process.env.GEMINI_API_KEY;
 
-    // Check if API key is unconfigured or default placeholder
-    if (!apiKey || apiKey.trim() === '') {
-        console.log('ℹ️ [AI Service] Using Smart Styling Engine (OPENROUTER_API_KEY unconfigured)');
+    // Fall back to Smart Styling Engine if key is missing or is placeholder
+    if (!apiKey || apiKey.trim() === '' || apiKey === 'YOUR_GEMINI_API_KEY_HERE') {
+        console.log('ℹ️  [AI Service] Using Smart Styling Engine (GEMINI_API_KEY not configured)');
         return {
             advice: getSmartFallbackAdvice(style, bodyProfile, language),
             source: 'smart_engine'
@@ -24,40 +29,25 @@ async function generateStyleAdvice(style, bodyProfile = {}, language = 'english'
     const prompt = getOutfitPrompt(style, bodyProfile, language);
 
     try {
-        const response = await fetch(OPENROUTER_API_URL, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${apiKey}`,
-                'Content-Type': 'application/json',
-                'HTTP-Referer': process.env.CLIENT_URL || 'https://tailorhub.app',
-                'X-Title': 'TailorHub Style Advisor'
+        const genAI = new GoogleGenAI({ apiKey });
+
+        const response = await genAI.models.generateContent({
+            model: GEMINI_MODEL,
+            contents: prompt,
+            config: {
+                temperature:      0.7,
+                maxOutputTokens:  4096,
+                responseMimeType: 'application/json',  // forces valid complete JSON output
             },
-            body: JSON.stringify({
-                model,
-                messages: [
-                    {
-                        role: 'user',
-                        content: prompt
-                    }
-                ],
-                temperature: 0.7,
-                max_tokens: 1024
-            })
         });
 
-        if (!response.ok) {
-            const errBody = await response.text();
-            throw new Error(`OpenRouter HTTP ${response.status}: ${errBody}`);
-        }
-
-        const data = await response.json();
-        const rawText = data?.choices?.[0]?.message?.content?.trim();
+        const rawText = response?.text?.trim?.() ?? '';
 
         if (!rawText) {
-            throw new Error('Empty response from OpenRouter');
+            throw new Error('Empty response from Gemini');
         }
 
-        // Strip potential markdown code fences
+        // Strip potential markdown code fences Gemini sometimes adds
         const jsonText = rawText
             .replace(/^```(?:json)?\n?/, '')
             .replace(/\n?```$/, '')
@@ -67,11 +57,11 @@ async function generateStyleAdvice(style, bodyProfile = {}, language = 'english'
 
         return {
             advice,
-            source: 'openrouter_nemotron'
+            source: 'gemini'
         };
 
     } catch (err) {
-        console.warn('⚠️ [AI Service] OpenRouter error, falling back to Smart Styling Engine:', err.message);
+        console.warn('⚠️  [AI Service] Gemini error, falling back to Smart Styling Engine:', err.message);
         return {
             advice: getSmartFallbackAdvice(style, bodyProfile, language),
             source: 'smart_engine_fallback'
@@ -82,3 +72,4 @@ async function generateStyleAdvice(style, bodyProfile = {}, language = 'english'
 module.exports = {
     generateStyleAdvice
 };
+

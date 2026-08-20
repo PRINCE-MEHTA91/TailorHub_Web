@@ -371,6 +371,22 @@ function getSmartFallbackAdvice(style = 'formal', bodyProfile = {}, language = '
     const comboStyle = style.toLowerCase();
     const topBottomCombos = (topBottomCombosMap[comboGender][comboStyle]) || topBottomCombosMap[comboGender].default;
 
+    // ── Assemble final output from the maps above ────────────────────────────
+    const genderKey  = isFemale ? 'female' : 'male';
+    const textLang   = textByGender[lang]   || textByGender.english;
+    const textGroup  = textLang[genderKey]  || textLang.male;
+
+    const palette    = getIndividualPalette(skinTone, style, isFemale, lang);
+
+    const shapeFitLang = shapeFitMap[lang] || shapeFitMap.english;
+    const shapeKey     = (bodyShape || 'average').toLowerCase();
+    const fitTips      = shapeFitLang[shapeKey] || shapeFitLang.average;
+
+    const outfitLang   = styleOutfitMap[lang]   || styleOutfitMap.english;
+    const outfitGender = outfitLang[genderKey]  || outfitLang.male;
+    const outfitKey    = style.toLowerCase();
+    const outfitIdeas  = outfitGender[outfitKey] || outfitGender.formal;
+
     return {
         headline:       textGroup.headline,
         summary:        textGroup.summary,
@@ -384,6 +400,7 @@ function getSmartFallbackAdvice(style = 'formal', bodyProfile = {}, language = '
         accessoryTip:   textGroup.accessoryTip,
     };
 }
+
 
 
 module.exports = {

@@ -2108,7 +2108,19 @@ app.post(
                 headers: form.getHeaders(),
             });
 
-            const data = await pyRes.json();
+            // Read the raw text first so we can handle non-JSON responses
+            // (e.g. Render free tier returns plain "Not Found" when the service
+            // is sleeping or the route doesn't exist yet).
+            const rawText = await pyRes.text();
+            let data;
+            try {
+                data = JSON.parse(rawText);
+            } catch (_) {
+                console.error('❌ Python service returned non-JSON:', rawText.slice(0, 200));
+                return res.status(503).json({
+                    error: 'Body measurement service is temporarily unavailable. Please try again in a few seconds (the service may be waking up).',
+                });
+            }
 
             if (!pyRes.ok) {
                 return res.status(pyRes.status).json(data);

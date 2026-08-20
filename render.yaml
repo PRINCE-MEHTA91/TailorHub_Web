@@ -1,0 +1,51 @@
+services:
+  # ── Node.js Backend API ──────────────────────────────────────────────────
+  - type: web
+    name: tailorhub-web
+    runtime: node
+    rootDir: server
+    buildCommand: npm install
+    startCommand: node server.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      # JWT secret - set via Render dashboard (never commit real value)
+      - key: JWT_SECRET
+        sync: false
+      # Neon PostgreSQL
+      - key: DATABASE_URL
+        sync: false
+      # Gmail SMTP
+      - key: EMAIL_USER
+        sync: false
+      - key: EMAIL_PASS
+        sync: false
+      # Frontend URL
+      - key: CLIENT_URL
+        value: https://tailor-hub-web-client.vercel.app
+      # CORS extra origins
+      - key: ALLOWED_ORIGINS
+        value: https://tailor-hub-web-client.vercel.app
+      # Python measurement service
+      - key: PYTHON_MEASURE_URL
+        value: https://tailorhub-python.onrender.com/measure
+      # OpenRouter AI
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: OPENROUTER_MODEL
+        value: nvidia/nemotron-3-ultra-550b-a55b:free
+
+  # ── Python MediaPipe Measurement Engine ─────────────────────────────────
+  - type: web
+    name: tailorhub-python
+    runtime: python
+    rootDir: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python measure_server.py
+    healthCheckPath: /health
+    envVars:
+      - key: MEASURE_PORT
+        value: 10000
