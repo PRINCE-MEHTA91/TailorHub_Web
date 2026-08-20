@@ -73,7 +73,7 @@ def measure():
     side_path  = None
 
     try:
-        # ── Validate inputs ───────────────────────────────────────────────
+        # ── Validate inputs  as image front and side vies
         if "frontPhoto" not in request.files:
             return jsonify({"error": "frontPhoto is required"}), 400
         if "sidePhoto" not in request.files:
@@ -88,7 +88,7 @@ def measure():
         if not (100 <= height_cm <= 250):
             return jsonify({"error": "heightCm must be between 100 and 250"}), 400
 
-        # ── Save uploads to temp files ────────────────────────────────────
+        # ── Save uploads to temp files 
         front_path = _save_upload(request.files["frontPhoto"])
         side_path  = _save_upload(request.files["sidePhoto"])
 

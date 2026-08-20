@@ -32,11 +32,16 @@ services:
       # Python measurement service
       - key: PYTHON_MEASURE_URL
         value: https://tailorhub-python.onrender.com/measure
-      # OpenRouter AI
-      - key: OPENROUTER_API_KEY
-        sync: false
+      # OpenRouter AI (legacy - not required)
+      # - key: OPENROUTER_API_KEY
+      #   sync: false
       - key: OPENROUTER_MODEL
         value: nvidia/nemotron-3-ultra-550b-a55b:free
+      # Google Gemini AI (primary)
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-3.6-flash
 
   # ── Python MediaPipe Measurement Engine ─────────────────────────────────
   - type: web
