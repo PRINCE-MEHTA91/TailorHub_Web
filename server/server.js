@@ -141,7 +141,7 @@ async function initDB() {
                 id               SERIAL PRIMARY KEY,
                 full_name        VARCHAR(255) NOT NULL,
                 email            VARCHAR(255) NOT NULL UNIQUE,
-                password         VARCHAR(255) NOT NULL,
+                password         VARCHAR(255),
                 role             VARCHAR(20)  NOT NULL DEFAULT 'customer'
                                      CHECK (role IN ('customer', 'tailor')),
                 avg_rating       DECIMAL(3,2) DEFAULT 0.00,
@@ -151,6 +151,8 @@ async function initDB() {
                 created_at       TIMESTAMP    DEFAULT CURRENT_TIMESTAMP
             )
         `);
+        // Make password nullable for Google OAuth users (safe to run repeatedly)
+        await client.query(`ALTER TABLE users ALTER COLUMN password DROP NOT NULL`).catch(() => {});
         console.log('✅ users table ready');
 
         // ── tailor_profiles ────────────────────────────────────────────────
@@ -580,6 +582,88 @@ app.post('/api/auth/reset-password/:token', async (req, res) => {
         res.json({ message: 'Password reset successfully' });
     } catch (err) {
         return res.status(500).json({ message: 'Server error' });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// GOOGLE OAUTH
+// ═══════════════════════════════════════════════════════════════
+
+app.post('/api/auth/google', loginLimiter, async (req, res) => {
+    const { credential, role } = req.body;
+
+    if (!credential) {
+        return res.status(400).json({ message: 'Google credential token is required' });
+    }
+
+    const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+    if (!GOOGLE_CLIENT_ID) {
+        console.error('❌ GOOGLE_CLIENT_ID is not set in environment variables');
+        return res.status(500).json({ message: 'Google Sign-In is not configured on this server' });
+    }
+
+    try {
+        // Verify the Google ID token
+        const { OAuth2Client } = require('google-auth-library');
+        const client = new OAuth2Client(GOOGLE_CLIENT_ID);
+
+        const ticket = await client.verifyIdToken({
+            idToken:  credential,
+            audience: GOOGLE_CLIENT_ID,
+        });
+
+        const payload = ticket.getPayload();
+        const { email, name, sub: googleId } = payload;
+
+        if (!email) {
+            return res.status(400).json({ message: 'Could not retrieve email from Google account' });
+        }
+
+        // Check if user already exists
+        const existing = await pool.query(
+            'SELECT id, full_name, email, role FROM users WHERE email = $1',
+            [email]
+        );
+
+        let userId, userRole, fullName;
+
+        if (existing.rows.length > 0) {
+            // ── Returning user — log them in ──────────────────────────────
+            const user = existing.rows[0];
+            userId   = user.id;
+            userRole = user.role;
+            fullName = user.full_name;
+        } else {
+            // ── New user — create account ────────────────────────────────
+            const validRoles = ['customer', 'tailor'];
+            userRole = validRoles.includes(role) ? role : 'customer';
+            fullName = name || email.split('@')[0];
+
+            // password is NULL for Google users (ALTER TABLE runs in initDB)
+            const inserted = await pool.query(
+                `INSERT INTO users (full_name, email, password, role)
+                 VALUES ($1, $2, NULL, $3)
+                 ON CONFLICT (email) DO UPDATE SET full_name = EXCLUDED.full_name
+                 RETURNING id, role, full_name`,
+                [fullName, email, userRole]
+            );
+            userId   = inserted.rows[0].id;
+            userRole = inserted.rows[0].role;
+            fullName = inserted.rows[0].full_name;
+        }
+
+        setTokenCookie(res, userId);
+        return res.json({
+            message: 'Google sign-in successful',
+            user: { id: userId, full_name: fullName, email, role: userRole },
+        });
+
+    } catch (err) {
+        console.error('❌ Google auth error:', err.message);
+        if (err.message?.includes('Token used too late') || err.message?.includes('Invalid token')) {
+            return res.status(401).json({ message: 'Google token is invalid or expired. Please try again.' });
+        }
+        return res.status(500).json({ message: 'Google sign-in failed. Please try again.' });
     }
 });
 

@@ -1,6 +1,10 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { useAuth } from '../context/AuthContext';
+import { GoogleLogin } from '@react-oauth/google';
+
+const API_URL = process.env.REACT_APP_API_URL || 'https://tailorhub-web.onrender.com';
 
 const passwordRules = [
     { id: 'length', label: 'At least 6 characters', test: (p) => p.length >= 6 },
@@ -97,6 +101,24 @@ const SignupPage = () => {
         }
     };
 
+    // Google Sign-Up — auto-assigns 'customer' role
+    const handleGoogleSuccess = async (credentialResponse) => {
+        setError('');
+        try {
+            const res = await fetch(`${API_URL}/api/auth/google`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ credential: credentialResponse.credential, role: 'customer' }),
+            });
+            const data = await res.json();
+            if (!res.ok) return setError(data.message || 'Google sign-up failed');
+            navigate('/customer/dashboard');
+        } catch {
+            setError('Network error. Please try again.');
+        }
+    };
+
     return (
         <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4 py-8">
             <motion.div
@@ -105,10 +127,29 @@ const SignupPage = () => {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.4 }}
             >
-                <div className="text-center mb-8">
+                <div className="text-center mb-6">
                     <div className="text-4xl mb-3">✂️</div>
                     <h1 className="text-2xl font-bold text-gray-800">Create your account</h1>
                     <p className="text-gray-500 text-sm mt-1">Join TailorHub today</p>
+                </div>
+
+                {/* ── Google Sign-Up ── */}
+                <div id="google-signup-btn" style={{ width: '100%', marginBottom: '16px' }}>
+                    <GoogleLogin
+                        onSuccess={handleGoogleSuccess}
+                        onError={() => setError('Google sign-up was cancelled or failed.')}
+                        useOneTap={false}
+                        width="100%"
+                        text="continue_with"
+                        shape="rectangular"
+                        logo_alignment="left"
+                    />
+                </div>
+
+                <div className="flex items-center gap-3 mb-4">
+                    <div className="flex-1 h-px bg-gray-200" />
+                    <span className="text-xs text-gray-400 font-medium">or sign up with email</span>
+                    <div className="flex-1 h-px bg-gray-200" />
                 </div>
 
                 <div className="mb-5">
