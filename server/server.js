@@ -2072,7 +2072,30 @@ app.use('/api', aiRoutes);
 // ── Body Measurement Proxy → Python MediaPipe Service ────────────────────────
 // Forwards multipart/form-data (frontPhoto + sidePhoto + heightCm) to the
 // Python Flask server running on port 5001 and returns the result JSON.
-const PYTHON_MEASURE_URL = process.env.PYTHON_MEASURE_URL || 'http://localhost:5001/measure';
+const PYTHON_MEASURE_URL  = process.env.PYTHON_MEASURE_URL  || 'http://localhost:5001/measure';
+const PYTHON_BASE_URL     = PYTHON_MEASURE_URL.replace(/\/measure$/, '');
+const PYTHON_HEALTH_URL   = `${PYTHON_BASE_URL}/health`;
+
+/**
+ * Ping the Python service /health endpoint, retrying for up to `maxWaitMs`.
+ * This handles Render free-tier cold starts (service sleeps after ~15 min idle).
+ * Returns true when the service is ready, throws if it never responds in time.
+ */
+async function wakePythonService(maxWaitMs = 35_000) {
+    const fetch = require('node-fetch');
+    const start = Date.now();
+    let lastErr  = null;
+    while (Date.now() - start < maxWaitMs) {
+        try {
+            const r = await fetch(PYTHON_HEALTH_URL, { method: 'GET', timeout: 5000 });
+            if (r.ok) return true;
+        } catch (e) {
+            lastErr = e;
+        }
+        await new Promise(r => setTimeout(r, 3000)); // wait 3 s before retry
+    }
+    throw lastErr || new Error('Python service did not wake up in time');
+}
 
 const measureUpload = multer({
     storage: multer.memoryStorage(),
@@ -2104,6 +2127,18 @@ app.post(
             // node-fetch v2 is CommonJS — use require(), NOT import()
             const fetch    = require('node-fetch');
             const FormData = require('form-data');
+
+            // ── Wake the Python service if it's sleeping (Render free-tier cold start)
+            console.log('🔍 Waking Python service at:', PYTHON_HEALTH_URL);
+            try {
+                await wakePythonService(35_000);
+                console.log('✅ Python service is ready');
+            } catch (wakeErr) {
+                console.error('❌ Python service failed to wake up:', wakeErr.message);
+                return res.status(503).json({
+                    error: 'Measurement service is starting up — please try again in 30 seconds.',
+                });
+            }
 
             const form = new FormData();
             form.append('heightCm',   String(heightCm));
