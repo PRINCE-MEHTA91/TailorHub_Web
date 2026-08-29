@@ -48,9 +48,13 @@ services:
     name: tailorhub-python
     runtime: python
     rootDir: python
-    buildCommand: pip install -r requirements.txt
+    buildCommand: >
+      pip install -r requirements.txt &&
+      python -c "import urllib.request, os; url='https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_heavy/float16/latest/pose_landmarker_heavy.task'; path='pose_landmarker_heavy.task'; urllib.request.urlretrieve(url, path) if not os.path.exists(path) else print('Model already exists'); print('Model ready')"
     startCommand: python measure_server.py
     healthCheckPath: /health
     envVars:
+      - key: PORT
+        value: 10000
       - key: MEASURE_PORT
         value: 10000

@@ -35,7 +35,8 @@ def _ensure_model():
         urllib.request.urlretrieve(MODEL_URL, MODEL_PATH)
         print("Model downloaded.")
 
-_ensure_model()
+# Model is downloaded lazily on first request (see _get_landmarks)
+# This lets Flask start up immediately so Render health checks pass.
 
 # ── Pose landmarker options ───────────────────────────────────────────────────
 _options = PoseLandmarkerOptions(
@@ -63,6 +64,9 @@ def _get_landmarks(image_path: str):
     Uses OpenCV to load the image (more robust with temp paths), then converts
     the BGR numpy array to an RGB MediaPipe Image object.
     """
+    # Download the model on first use (not at import time so Flask starts fast)
+    _ensure_model()
+
     # Load with OpenCV (handles any path, format, and encoding)
     bgr = cv2.imread(image_path)
     if bgr is None:
