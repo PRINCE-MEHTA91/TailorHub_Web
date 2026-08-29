@@ -38,15 +38,8 @@ def _ensure_model():
 # Model is downloaded lazily on first request (see _get_landmarks)
 # This lets Flask start up immediately so Render health checks pass.
 
-# ── Pose landmarker options ───────────────────────────────────────────────────
-_options = PoseLandmarkerOptions(
-    base_options=mp_python.BaseOptions(model_asset_path=MODEL_PATH),
-    running_mode=RunningMode.IMAGE,
-    num_poses=1,
-    min_pose_detection_confidence=0.5,
-    min_pose_presence_confidence=0.5,
-    min_tracking_confidence=0.5,
-)
+# _options is created lazily inside _get_landmarks() after the model is confirmed ready.
+# Building it at module level crashes on Render if the model file doesn't exist yet.
 
 # ── Helper functions ─────────────────────────────────────────────────────────
 def _load_image_cv(path: str) -> np.ndarray:
@@ -66,6 +59,16 @@ def _get_landmarks(image_path: str):
     """
     # Download the model on first use (not at import time so Flask starts fast)
     _ensure_model()
+
+    # Build options here so MediaPipe only validates the model path after it exists
+    _options = PoseLandmarkerOptions(
+        base_options=mp_python.BaseOptions(model_asset_path=MODEL_PATH),
+        running_mode=RunningMode.IMAGE,
+        num_poses=1,
+        min_pose_detection_confidence=0.5,
+        min_pose_presence_confidence=0.5,
+        min_tracking_confidence=0.5,
+    )
 
     # Load with OpenCV (handles any path, format, and encoding)
     bgr = cv2.imread(image_path)
