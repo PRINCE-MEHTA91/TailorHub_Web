@@ -2116,21 +2116,32 @@ app.post(
                 contentType: sidePhoto.mimetype,
             });
 
-            const pyRes = await fetch(PYTHON_MEASURE_URL, {
-                method:  'POST',
-                body:    form,
-                headers: form.getHeaders(),
-            });
+            // 60-second timeout — MediaPipe can be slow on first inference
+            const controller = new AbortController();
+            const timeoutId  = setTimeout(() => controller.abort(), 60_000);
+
+            let pyRes;
+            try {
+                pyRes = await fetch(PYTHON_MEASURE_URL, {
+                    method:  'POST',
+                    body:    form,
+                    headers: form.getHeaders(),
+                    signal:  controller.signal,
+                });
+            } finally {
+                clearTimeout(timeoutId);
+            }
 
             // Read the raw text first so we can handle non-JSON responses
-            // (e.g. Render free tier returns plain "Not Found" when the service
-            // is sleeping or the route doesn't exist yet).
+            // (e.g. Render free tier returns plain "Not Found" when sleeping).
             const rawText = await pyRes.text();
             let data;
             try {
                 data = JSON.parse(rawText);
             } catch (_) {
-                console.error('❌ Python service returned non-JSON:', rawText.slice(0, 200));
+                console.error('❌ Python service returned non-JSON response.');
+                console.error('   Status:', pyRes.status, pyRes.statusText);
+                console.error('   Body  :', rawText.slice(0, 500));
                 return res.status(503).json({
                     error: 'Body measurement service is temporarily unavailable. Please try again in a few seconds (the service may be waking up).',
                 });
@@ -2143,11 +2154,17 @@ app.post(
             return res.json(data);
 
         } catch (err) {
-            console.error('❌ Measurement proxy error:', err.message);
+            console.error('❌ Measurement proxy error:', err.name, err.message);
 
             if (err.code === 'ECONNREFUSED') {
                 return res.status(503).json({
-                    error: 'Measurement service is offline. Please start the Python server.',
+                    error: 'Measurement service is offline. Make sure the Python server is running on port 5001.',
+                });
+            }
+
+            if (err.name === 'AbortError') {
+                return res.status(504).json({
+                    error: 'Measurement request timed out (60 s). The image may be too large or the service is overloaded.',
                 });
             }
 
