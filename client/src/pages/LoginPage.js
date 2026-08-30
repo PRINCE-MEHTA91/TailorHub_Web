@@ -13,6 +13,7 @@ const LoginPage = () => {
     const [form, setForm] = useState({ email: '', password: '' });
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+    const [googleLoading, setGoogleLoading] = useState(false);
 
     const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
@@ -48,6 +49,7 @@ const LoginPage = () => {
     // Google Sign-In using credential flow (ID token sent to our backend)
     const handleGoogleSuccess = async (credentialResponse) => {
         setError('');
+        setGoogleLoading(true);
         try {
             const res = await fetch(`${API_URL}/api/auth/google`, {
                 method: 'POST',
@@ -56,13 +58,26 @@ const LoginPage = () => {
                 body: JSON.stringify({ credential: credentialResponse.credential }),
             });
             const data = await res.json();
-            if (!res.ok) return setError(data.message || 'Google sign-in failed');
+            if (!res.ok) {
+                // Show the real server error message so user knows what went wrong
+                return setError(data.message || 'Google sign-in failed. Please try again.');
+            }
             login(data.user);
             const dest = data.user.role === 'tailor' ? '/tailor/dashboard' : '/customer/dashboard';
             navigate(dest);
-        } catch {
-            setError('Network error. Please try again.');
+        } catch (err) {
+            // Network-level failure (server unreachable, CORS preflight blocked, etc.)
+            setError('Could not reach the server. Check your connection and try again.');
+            console.error('[Google Auth] Network error:', err);
+        } finally {
+            setGoogleLoading(false);
         }
+    };
+
+    const handleGoogleError = () => {
+        // This fires when the Google popup is dismissed or blocked by the browser.
+        // Do NOT show an error here — user may have simply closed the popup.
+        console.warn('[Google Auth] Popup closed or sign-in cancelled.');
     };
 
     return (
@@ -80,16 +95,24 @@ const LoginPage = () => {
                 </div>
 
                 {/* ── Google Sign-In ── */}
-                <div id="google-signin-btn" style={{ width: '100%', marginBottom: '20px' }}>
-                    <GoogleLogin
-                        onSuccess={handleGoogleSuccess}
-                        onError={() => setError('Google sign-in was cancelled or failed.')}
-                        useOneTap={false}
-                        width="100%"
-                        text="continue_with"
-                        shape="rectangular"
-                        logo_alignment="left"
-                    />
+                <div id="google-signin-btn" style={{ width: '100%', marginBottom: '20px', opacity: googleLoading ? 0.6 : 1, pointerEvents: googleLoading ? 'none' : 'auto' }}>
+                    {googleLoading && (
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '10px', border: '1px solid #e5e7eb', borderRadius: '4px', marginBottom: '4px', fontSize: '14px', color: '#374151' }}>
+                            <span style={{ width: '16px', height: '16px', border: '2px solid #9ca3af', borderTopColor: '#374151', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.8s linear infinite' }} />
+                            Signing in with Google...
+                        </div>
+                    )}
+                    {!googleLoading && (
+                        <GoogleLogin
+                            onSuccess={handleGoogleSuccess}
+                            onError={handleGoogleError}
+                            useOneTap={false}
+                            width="100%"
+                            text="continue_with"
+                            shape="rectangular"
+                            logo_alignment="left"
+                        />
+                    )}
                 </div>
 
                 {/* ── Divider ── */}

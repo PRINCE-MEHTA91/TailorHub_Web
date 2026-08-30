@@ -28,6 +28,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const rateLimit = require('express-rate-limit');
+const { OAuth2Client } = require('google-auth-library');
 
 const app = express();
 const httpServer = http.createServer(app);
@@ -35,6 +36,15 @@ const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET;
 const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:3001';
 const IS_PROD = process.env.NODE_ENV === 'production';
+
+// ── Google OAuth2 client (created once at startup, not per-request) ──────────
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID?.trim() || '';
+if (!GOOGLE_CLIENT_ID) {
+    console.error('❌  GOOGLE_CLIENT_ID is not set — Google Sign-In will be disabled');
+} else {
+    console.log('✅  GOOGLE_CLIENT_ID loaded:', GOOGLE_CLIENT_ID.slice(0, 20) + '...');
+}
+const googleOAuthClient = GOOGLE_CLIENT_ID ? new OAuth2Client(GOOGLE_CLIENT_ID) : null;
 
 // Build allowed origins list from env or safe defaults
 const ALLOWED_ORIGINS_ENV = process.env.ALLOWED_ORIGINS || '';
@@ -589,6 +599,20 @@ app.post('/api/auth/reset-password/:token', async (req, res) => {
 // GOOGLE OAUTH
 // ═══════════════════════════════════════════════════════════════
 
+// Diagnostic endpoint — visit https://tailorhub-web.onrender.com/api/auth/google/debug
+// in a browser to confirm env vars are loaded correctly on Render.
+app.get('/api/auth/google/debug', (req, res) => {
+    res.json({
+        google_client_id_set: !!GOOGLE_CLIENT_ID,
+        google_client_id_prefix: GOOGLE_CLIENT_ID ? GOOGLE_CLIENT_ID.slice(0, 25) + '...' : null,
+        node_env: process.env.NODE_ENV || 'not set',
+        is_prod: IS_PROD,
+        client_url: CLIENT_URL,
+        google_oauth_client_ready: !!googleOAuthClient,
+    });
+});
+
+
 app.post('/api/auth/google', loginLimiter, async (req, res) => {
     const { credential, role } = req.body;
 
@@ -596,26 +620,14 @@ app.post('/api/auth/google', loginLimiter, async (req, res) => {
         return res.status(400).json({ message: 'Google credential token is required' });
     }
 
-    const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID?.trim();
-    if (!GOOGLE_CLIENT_ID) {
+    if (!googleOAuthClient) {
         console.error('❌ GOOGLE_CLIENT_ID is not set in environment variables');
-        return res.status(500).json({ message: 'Google Sign-In is not configured on this server' });
+        return res.status(500).json({ message: 'Google Sign-In is not configured on this server. Contact support.' });
     }
 
     try {
-        // Decode the JWT first just to see what's in it for debugging
-        const jwtContent = require('jsonwebtoken').decode(credential);
-        console.log('=== GOOGLE AUTH DEBUG ===');
-        console.log('Server expects:', GOOGLE_CLIENT_ID);
-        console.log('Token contains:', jwtContent?.aud);
-        console.log('Match?', GOOGLE_CLIENT_ID === jwtContent?.aud);
-        console.log('=========================');
-
-        // Verify the Google ID token
-        const { OAuth2Client } = require('google-auth-library');
-        const client = new OAuth2Client(GOOGLE_CLIENT_ID);
-
-        const ticket = await client.verifyIdToken({
+        // Verify the Google ID token using the module-level OAuth2Client
+        const ticket = await googleOAuthClient.verifyIdToken({
             idToken:  credential,
             audience: GOOGLE_CLIENT_ID,
         });
