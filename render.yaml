@@ -44,7 +44,7 @@ services:
         value: gemini-3.6-flash
       # Google OAuth
       - key: GOOGLE_CLIENT_ID
-        sync: false
+        value: 524676083717-kgl31la777nh5uqgbmip1upnra8e6pjq.apps.googleusercontent.com
 
   # ── Python MediaPipe Measurement Engine ─────────────────────────────────
   - type: web

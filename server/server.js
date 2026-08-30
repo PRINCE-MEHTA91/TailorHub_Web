@@ -668,10 +668,19 @@ app.post('/api/auth/google', loginLimiter, async (req, res) => {
 
     } catch (err) {
         console.error('❌ Google auth error:', err.message);
-        if (err.message?.includes('Token used too late') || err.message?.includes('Invalid token')) {
-            return res.status(401).json({ message: 'Google token is invalid or expired. Please try again.' });
+        // Token expired (common if user sits on login page too long)
+        if (err.message?.includes('Token used too late') || err.message?.includes('token_used_too_late')) {
+            return res.status(401).json({ message: 'Google session expired. Please click "Continue with Google" again.' });
         }
-        return res.status(500).json({ message: 'Google sign-in failed. Please try again.' });
+        // Wrong audience — Client ID mismatch between frontend and backend
+        if (err.message?.includes('Wrong recipient') || err.message?.includes('audience')) {
+            return res.status(401).json({ message: 'Google Client ID mismatch. Contact support.' });
+        }
+        // Invalid/malformed token
+        if (err.message?.includes('Invalid token') || err.message?.includes('invalid_token')) {
+            return res.status(401).json({ message: 'Invalid Google token. Please try again.' });
+        }
+        return res.status(500).json({ message: `Google sign-in failed: ${err.message}` });
     }
 });
 
