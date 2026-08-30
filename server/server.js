@@ -596,13 +596,21 @@ app.post('/api/auth/google', loginLimiter, async (req, res) => {
         return res.status(400).json({ message: 'Google credential token is required' });
     }
 
-    const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+    const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID?.trim();
     if (!GOOGLE_CLIENT_ID) {
         console.error('❌ GOOGLE_CLIENT_ID is not set in environment variables');
         return res.status(500).json({ message: 'Google Sign-In is not configured on this server' });
     }
 
     try {
+        // Decode the JWT first just to see what's in it for debugging
+        const jwtContent = require('jsonwebtoken').decode(credential);
+        console.log('=== GOOGLE AUTH DEBUG ===');
+        console.log('Server expects:', GOOGLE_CLIENT_ID);
+        console.log('Token contains:', jwtContent?.aud);
+        console.log('Match?', GOOGLE_CLIENT_ID === jwtContent?.aud);
+        console.log('=========================');
+
         // Verify the Google ID token
         const { OAuth2Client } = require('google-auth-library');
         const client = new OAuth2Client(GOOGLE_CLIENT_ID);
