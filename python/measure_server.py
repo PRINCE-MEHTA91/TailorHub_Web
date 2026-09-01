@@ -42,8 +42,8 @@ app = Flask(__name__)
 CORS(app, origins=[
     "http://localhost:3000",
     "http://localhost:3001",
-    "https://tailor-hub-web-client.vercel.app",  # Production frontend
-    "https://tailorhub-web.onrender.com",
+    "https://tailor-hub-web-client.vercel.app",  # Production frontend on vercel
+    "https://tailorhub-web.onrender.com",        # on render
     "https://tailorhub-python.onrender.com",     # Python service itself
 ])
 

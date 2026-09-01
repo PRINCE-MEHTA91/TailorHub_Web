@@ -11,7 +11,7 @@
 const { GoogleGenAI } = require('@google/genai');
 const { getOutfitPrompt, getSmartFallbackAdvice } = require('../prompts/outfitPrompt');
 
-// Model to use — gemini-3.6-flash is fast, free-tier friendly, and available
+// gemini-3.6-flash is fast, and available other wise you can use others
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.6-flash';
 
 async function generateStyleAdvice(style, bodyProfile = {}, language = 'english') {
@@ -35,8 +35,8 @@ async function generateStyleAdvice(style, bodyProfile = {}, language = 'english'
             model: GEMINI_MODEL,
             contents: prompt,
             config: {
-                temperature:      0.7,
-                maxOutputTokens:  4096,
+                temperature: 0.7,
+                maxOutputTokens: 4096,
                 responseMimeType: 'application/json',  // forces valid complete JSON output
             },
         });
