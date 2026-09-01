@@ -614,29 +614,55 @@ app.get('/api/auth/google/debug', (req, res) => {
 
 
 app.post('/api/auth/google', loginLimiter, async (req, res) => {
-    const { credential, role } = req.body;
+    const { credential, access_token, role } = req.body;
 
-    if (!credential) {
-        return res.status(400).json({ message: 'Google credential token is required' });
-    }
-
-    if (!googleOAuthClient) {
-        console.error('❌ GOOGLE_CLIENT_ID is not set in environment variables');
-        return res.status(500).json({ message: 'Google Sign-In is not configured on this server. Contact support.' });
+    if (!credential && !access_token) {
+        return res.status(400).json({ message: 'Google token is required' });
     }
 
     try {
-        // Verify the Google ID token using the module-level OAuth2Client
-        const ticket = await googleOAuthClient.verifyIdToken({
-            idToken:  credential,
-            audience: GOOGLE_CLIENT_ID,
-        });
+        let email, name;
 
-        const payload = ticket.getPayload();
-        const { email, name, sub: googleId } = payload;
+        if (access_token) {
+            // ── Implicit flow: verify access_token via Google userinfo endpoint ──
+            // This is the flow used by useGoogleLogin() — no Client Secret needed.
+            // Uses node-fetch (already a project dependency) for Node compatibility.
+            const nodeFetch = require('node-fetch');
+            const googleRes = await nodeFetch(
+                `https://www.googleapis.com/oauth2/v3/userinfo?access_token=${encodeURIComponent(access_token)}`
+            );
+            if (!googleRes.ok) {
+                const errBody = await googleRes.text();
+                console.error('❌ Google userinfo error:', googleRes.status, errBody);
+                return res.status(401).json({ message: 'Invalid or expired Google access token. Please try again.' });
+            }
+            const userInfo = await googleRes.json();
+            email = userInfo.email;
+            name  = userInfo.name;
 
-        if (!email) {
-            return res.status(400).json({ message: 'Could not retrieve email from Google account' });
+            if (!email) {
+                return res.status(400).json({ message: 'Could not retrieve email from Google account' });
+            }
+
+
+        } else {
+            // ── ID token flow: verify credential via google-auth-library ─────────
+            // Legacy path kept for backward compatibility.
+            if (!googleOAuthClient) {
+                console.error('❌ GOOGLE_CLIENT_ID is not set in environment variables');
+                return res.status(500).json({ message: 'Google Sign-In is not configured on this server. Contact support.' });
+            }
+            const ticket = await googleOAuthClient.verifyIdToken({
+                idToken:  credential,
+                audience: GOOGLE_CLIENT_ID,
+            });
+            const payload = ticket.getPayload();
+            email = payload.email;
+            name  = payload.name;
+
+            if (!email) {
+                return res.status(400).json({ message: 'Could not retrieve email from Google account' });
+            }
         }
 
         // Check if user already exists
@@ -695,6 +721,7 @@ app.post('/api/auth/google', loginLimiter, async (req, res) => {
         return res.status(500).json({ message: `Google sign-in failed: ${err.message}` });
     }
 });
+
 
 // ═══════════════════════════════════════════════════════════════
 // FILE UPLOAD (multer — unchanged)
