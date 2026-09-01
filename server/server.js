@@ -665,43 +665,31 @@ app.post('/api/auth/google', loginLimiter, async (req, res) => {
             }
         }
 
-        // Check if user already exists
+        // Normalise the verified email before DB lookup so casing/whitespace
+        // differences (e.g. Test@Gmail.com vs test@gmail.com) are not an issue.
+        const normalisedEmail = email.trim().toLowerCase();
+
+        // Check if user already exists — Google login is login-only, not signup.
         const existing = await pool.query(
-            'SELECT id, full_name, email, role FROM users WHERE email = $1',
-            [email]
+            'SELECT id, full_name, email, role FROM users WHERE LOWER(email) = $1',
+            [normalisedEmail]
         );
 
-        let userId, userRole, fullName;
-
-        if (existing.rows.length > 0) {
-            // ── Returning user — log them in ──────────────────────────────
-            const user = existing.rows[0];
-            userId   = user.id;
-            userRole = user.role;
-            fullName = user.full_name;
-        } else {
-            // ── New user — create account ────────────────────────────────
-            const validRoles = ['customer', 'tailor'];
-            userRole = validRoles.includes(role) ? role : 'customer';
-            fullName = name || email.split('@')[0];
-
-            // password is NULL for Google users (ALTER TABLE runs in initDB)
-            const inserted = await pool.query(
-                `INSERT INTO users (full_name, email, password, role)
-                 VALUES ($1, $2, NULL, $3)
-                 ON CONFLICT (email) DO UPDATE SET full_name = EXCLUDED.full_name
-                 RETURNING id, role, full_name`,
-                [fullName, email, userRole]
-            );
-            userId   = inserted.rows[0].id;
-            userRole = inserted.rows[0].role;
-            fullName = inserted.rows[0].full_name;
+        if (existing.rows.length === 0) {
+            // No account found — reject; user must sign up first.
+            return res.status(404).json({
+                message: 'Account not found. Please create an account first.',
+                code: 'GOOGLE_ACCOUNT_NOT_FOUND',
+            });
         }
 
-        setTokenCookie(res, userId);
+        // ── Existing user — log them in ───────────────────────────────────────
+        const user = existing.rows[0];
+
+        setTokenCookie(res, user.id);
         return res.json({
             message: 'Google sign-in successful',
-            user: { id: userId, full_name: fullName, email, role: userRole },
+            user: { id: user.id, full_name: user.full_name, email: user.email, role: user.role },
         });
 
     } catch (err) {

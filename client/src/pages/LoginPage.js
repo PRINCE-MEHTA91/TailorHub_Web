@@ -15,6 +15,8 @@ const LoginPage = () => {
     const [loading, setLoading] = useState(false);
     const [googleLoading, setGoogleLoading] = useState(false);
 
+    const [googleError, setGoogleError] = useState('');
+
     const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
     const handleChange = (e) => {
@@ -52,6 +54,7 @@ const LoginPage = () => {
     // The popup returns an access_token that we send to the backend for verification.
     const handleGoogleClick = useGoogleLogin({
         onSuccess: async (tokenResponse) => {
+            setGoogleError('');
             setError('');
             setGoogleLoading(true);
             try {
@@ -63,13 +66,18 @@ const LoginPage = () => {
                 });
                 const data = await res.json();
                 if (!res.ok) {
-                    return setError(data.message || 'Google sign-in failed. Please try again.');
+                    if (data.code === 'GOOGLE_ACCOUNT_NOT_FOUND') {
+                        setGoogleError('ACCOUNT_NOT_FOUND');
+                    } else {
+                        setGoogleError(data.message || 'Google sign-in failed. Please try again.');
+                    }
+                    return;
                 }
                 login(data.user);
                 const dest = data.user.role === 'tailor' ? '/tailor/dashboard' : '/customer/dashboard';
                 navigate(dest);
             } catch (err) {
-                setError('Could not reach the server. Check your connection and try again.');
+                setGoogleError('Could not reach the server. Check your connection and try again.');
                 console.error('[Google Auth] Network error:', err);
             } finally {
                 setGoogleLoading(false);
@@ -135,6 +143,21 @@ const LoginPage = () => {
                         {googleLoading ? 'Signing in with Google...' : 'Continue with Google'}
                     </button>
                 </div>
+
+                {/* ── Google error banner ── */}
+                {googleError && (
+                    <div style={{ marginBottom: '12px', padding: '10px 14px', borderRadius: '8px', backgroundColor: '#fef2f2', border: '1px solid #fecaca', fontSize: '13px', color: '#b91c1c', lineHeight: '1.5' }}>
+                        {googleError === 'ACCOUNT_NOT_FOUND' ? (
+                            <>
+                                No account found for this Google address.{' '}
+                                <Link to="/signup" style={{ color: '#1d4ed8', fontWeight: '600', textDecoration: 'underline' }}>
+                                    Create an account
+                                </Link>
+                                {' '}first, then sign in with Google.
+                            </>
+                        ) : googleError}
+                    </div>
+                )}
 
                 {/* ── Divider ── */}
                 <div className="flex items-center gap-3 mb-5">
