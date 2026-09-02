@@ -323,6 +323,20 @@ async function initDB() {
         `);
         console.log('✅ products table ready');
 
+        // ── images — persistent binary storage for profile/gallery/pricing images ──
+        // Replaces the Render local-filesystem /uploads folder so images survive
+        // restarts and redeploys. Served via GET /api/images/:id.
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS images (
+                id         SERIAL PRIMARY KEY,
+                user_id    INT          NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                data       BYTEA        NOT NULL,
+                mimetype   VARCHAR(100) NOT NULL DEFAULT 'image/jpeg',
+                created_at TIMESTAMP    DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+        console.log('✅ images table ready');
+
     } catch (err) {
         console.error('❌ DB initialisation error:', err.message);
     } finally {
@@ -360,11 +374,14 @@ const safeParseJSON = (val, fallback = []) => {
     try { return JSON.parse(val); } catch { return fallback; }
 };
 
-// Normalize profile_img: strip any http://.../ prefix, keep only /uploads/... or null
+// Normalize profile_img paths.
+// New images use /api/images/:id (PostgreSQL BYTEA).  Legacy paths that still
+// exist as /uploads/... are passed through unchanged for backward compatibility.
 const normalizeImgPath = (img) => {
     if (!img) return null;
+    if (img.startsWith('/api/images/')) return img;   // new DB-backed path
     const match = img.match(/(\/uploads\/[^?#]+)/);
-    if (match) return match[1];
+    if (match) return match[1];                        // legacy disk path
     if (img.startsWith('/uploads/')) return img;
     if (img.startsWith('http')) return img;
     return img;
@@ -715,19 +732,11 @@ app.post('/api/auth/google', loginLimiter, async (req, res) => {
 // FILE UPLOAD (multer — unchanged)
 // ═══════════════════════════════════════════════════════════════
 
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        const dir = path.join(__dirname, 'uploads');
-        if (!fs.existsSync(dir)) fs.mkdirSync(dir);
-        cb(null, dir);
-    },
-    filename: (req, file, cb) => {
-        const prefix = (req._uploadPrefix || 'tailor');
-        cb(null, prefix + '_' + req.userId + '_' + Date.now() + path.extname(file.originalname));
-    }
-});
+// ── Profile / gallery / pricing image upload — memory storage only ───────────
+// Images are stored in the PostgreSQL `images` table as BYTEA so they survive
+// Render restarts and redeploys.  No files are written to the local filesystem.
 const upload = multer({
-    storage,
+    storage: multer.memoryStorage(),
     limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB max
     fileFilter: (req, file, cb) => {
         if (!file.mimetype.startsWith('image/')) {
@@ -738,6 +747,8 @@ const upload = multer({
 });
 
 // ── Chat file upload multer (images + documents) ─────────────────────────────
+// Chat attachments remain on disk — they are ephemeral and not referenced
+// by profile data, so losing them on restart is acceptable.
 const chatFileStorage = multer.diskStorage({
     destination: (req, file, cb) => {
         const dir = path.join(__dirname, 'uploads', 'chat');
@@ -750,7 +761,7 @@ const chatFileStorage = multer.diskStorage({
     }
 });
 const ALLOWED_CHAT_TYPES = [
-    'image/jpeg', 'image/png', 'image/gif', 'image/webp', // SVG removed — can contain embedded JS
+    'image/jpeg', 'image/png', 'image/gif', 'image/webp',
     'application/pdf',
     'application/msword',
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -769,6 +780,8 @@ const chatUpload = multer({
     }
 });
 
+// Keep the static /uploads route so any legacy URLs stored in the DB before this
+// migration still resolve (prevents broken images for existing records).
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Handle multer errors (file too large, wrong type, etc.)
@@ -782,31 +795,101 @@ const handleUploadError = (err, req, res, next) => {
     next();
 };
 
-app.post('/api/upload/profile-image', verifyToken, requireRole('tailor'), (req, res, next) => { req._uploadPrefix = 'tailor'; next(); }, upload.single('profile_img'), (req, res) => {
-    if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
-    res.json({ message: 'Image uploaded successfully', imageUrl: `/uploads/${req.file.filename}` });
+// ── Image serve endpoint — reads BYTEA from PostgreSQL and returns binary ─────
+app.get('/api/images/:id', async (req, res) => {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) return res.status(400).json({ message: 'Invalid image id' });
+    try {
+        const result = await pool.query(
+            'SELECT data, mimetype FROM images WHERE id = $1',
+            [id]
+        );
+        if (result.rows.length === 0) return res.status(404).json({ message: 'Image not found' });
+        const { data, mimetype } = result.rows[0];
+        res.setHeader('Content-Type', mimetype || 'image/jpeg');
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        // `data` from pg is a Buffer when the column is BYTEA
+        res.end(data);
+    } catch (err) {
+        console.error('Image serve error:', err.message);
+        res.status(500).json({ message: 'Failed to load image' });
+    }
 });
 
-app.post('/api/upload/gallery-image', verifyToken, requireRole('tailor'), (req, res, next) => { req._uploadPrefix = 'tailor'; next(); }, upload.single('gallery_img'), (req, res) => {
-    if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
-    res.json({ message: 'Gallery image uploaded', imageUrl: `/uploads/${req.file.filename}` });
-});
+// ── Helper: insert image buffer into the images table, return imageUrl ────────
+const saveImageToDB = async (userId, buffer, mimetype) => {
+    const result = await pool.query(
+        'INSERT INTO images (user_id, data, mimetype) VALUES ($1, $2, $3) RETURNING id',
+        [userId, buffer, mimetype]
+    );
+    return `/api/images/${result.rows[0].id}`;
+};
 
-app.post('/api/upload/pricing-image', verifyToken, requireRole('tailor'), (req, res, next) => { req._uploadPrefix = 'tailor'; next(); }, upload.single('pricing_img'), (req, res) => {
-    if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
-    res.json({ message: 'Pricing image uploaded', imageUrl: `/uploads/${req.file.filename}` });
-});
-
-// ── Customer Profile Image: Upload & Save ────────────────────────────────────
-app.post('/api/customer/upload/profile-image',
+// ── Tailor: upload profile image ──────────────────────────────────────────────
+app.post('/api/upload/profile-image',
     verifyToken,
-    (req, res, next) => { req._uploadPrefix = 'customer'; next(); },
+    requireRole('tailor'),
     upload.single('profile_img'),
     handleUploadError,
     async (req, res) => {
         if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
-        const imageUrl = `/uploads/${req.file.filename}`;
         try {
+            const imageUrl = await saveImageToDB(req.userId, req.file.buffer, req.file.mimetype);
+            res.json({ message: 'Image uploaded successfully', imageUrl });
+        } catch (err) {
+            console.error('Profile image DB save error:', err.message);
+            res.status(500).json({ message: 'Failed to save image' });
+        }
+    }
+);
+
+// ── Tailor: upload gallery image ──────────────────────────────────────────────
+app.post('/api/upload/gallery-image',
+    verifyToken,
+    requireRole('tailor'),
+    upload.single('gallery_img'),
+    handleUploadError,
+    async (req, res) => {
+        if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
+        try {
+            const imageUrl = await saveImageToDB(req.userId, req.file.buffer, req.file.mimetype);
+            res.json({ message: 'Gallery image uploaded', imageUrl });
+        } catch (err) {
+            console.error('Gallery image DB save error:', err.message);
+            res.status(500).json({ message: 'Failed to save gallery image' });
+        }
+    }
+);
+
+// ── Tailor: upload pricing image ──────────────────────────────────────────────
+app.post('/api/upload/pricing-image',
+    verifyToken,
+    requireRole('tailor'),
+    upload.single('pricing_img'),
+    handleUploadError,
+    async (req, res) => {
+        if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
+        try {
+            const imageUrl = await saveImageToDB(req.userId, req.file.buffer, req.file.mimetype);
+            res.json({ message: 'Pricing image uploaded', imageUrl });
+        } catch (err) {
+            console.error('Pricing image DB save error:', err.message);
+            res.status(500).json({ message: 'Failed to save pricing image' });
+        }
+    }
+);
+
+// ── Customer Profile Image: Upload & Save ────────────────────────────────────
+app.post('/api/customer/upload/profile-image',
+    verifyToken,
+    upload.single('profile_img'),
+    handleUploadError,
+    async (req, res) => {
+        if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
+        try {
+            // 1. Store image binary in PostgreSQL
+            const imageUrl = await saveImageToDB(req.userId, req.file.buffer, req.file.mimetype);
+            // 2. Save the stable /api/images/:id URL to the customer_profiles row
             await pool.query(
                 `INSERT INTO customer_profiles (user_id, profile_img)
                  VALUES ($1, $2)

@@ -6,6 +6,15 @@ import { io } from 'socket.io-client';
 
 const API_URL = process.env.REACT_APP_API_URL || 'https://tailorhub-web.onrender.com';
 
+// Resolve a server-relative image path to a full URL.
+// Handles both legacy /uploads/... paths and new /api/images/:id paths.
+const resolveImg = (path, baseUrl) => {
+  if (!path) return null;
+  const base = baseUrl || API_URL;
+  if (path.startsWith('/uploads/') || path.startsWith('/api/images/')) return `${base}${path}`;
+  return path; // already absolute (http/https) or a blob URL
+};
+
 const DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
 const TIMING_PRESETS = ['06:00','07:00','08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00','21:00','22:00'];
 const EXPERIENCE_OPTS = ['Less than 1 year','1-2 years','3-5 years','6-10 years','11-15 years','16-20 years','20+ years'];
@@ -962,7 +971,7 @@ function ProfileTab({ user, onLogout, onSaved }) {
         setProfileStats({ orders: p.total_orders || 0, clients: p.total_clients || 0, rating: p.avg_rating || '0.0' });
 
         // Profile image
-        if (p.profile_img) setProfileImg(p.profile_img.startsWith('/uploads') ? `${API_URL}${p.profile_img}` : p.profile_img);
+        if (p.profile_img) setProfileImg(resolveImg(p.profile_img));
 
         // Contact & Address
         setAddress({street:p.street||'',city:p.city||'',state:p.state||'',pin:p.pin||''});
@@ -1003,9 +1012,9 @@ function ProfileTab({ user, onLogout, onSaved }) {
         // Gallery — {preview, file:null} since already on server
         if (p.gallery?.length) {
           setGallery(p.gallery.map(url => ({
-            preview: url.startsWith('/uploads') ? `${API_URL}${url}` : url,
+            preview: resolveImg(url) || url,
             file: null,
-            serverPath: url.startsWith('/uploads') ? url : null,
+            serverPath: (url.startsWith('/uploads/') || url.startsWith('/api/images/')) ? url : null,
           })));
         }
         // Deals
@@ -1159,15 +1168,15 @@ function ProfileTab({ user, onLogout, onSaved }) {
       // 4. Update local state to reflect what's now on server
       setSaved(true);
       setProfileImgFile(null);
-      const displayImg = finalImgUrl ? (finalImgUrl.startsWith('/uploads') ? `${API_URL}${finalImgUrl}` : finalImgUrl) : null;
+      const displayImg = resolveImg(finalImgUrl);
       if (displayImg) setProfileImg(displayImg);
       // Notify parent (sidebar) of new image + shop name
       if (onSaved) onSaved({ profileImg: finalImgUrl, shopName: about.shopName });
       // Replace gallery items with server-backed versions
-      setGallery(finalGallery.map(path => ({
-        preview: path.startsWith('/uploads') ? `${API_URL}${path}` : path,
+      setGallery(finalGallery.map(p => ({
+        preview: resolveImg(p) || p,
         file: null,
-        serverPath: path,
+        serverPath: p,
       })));
       setTimeout(() => setSaved(false), 2500);
     } catch(err) {
@@ -1944,7 +1953,7 @@ export default function TailorDashboardPage() {
       case 'offers':   return <OffersTab/>;
       case 'manage':   return <ManagementTab/>;
       case 'profile':  return <ProfileTab {...props} onSaved={({ profileImg: img, shopName }) => {
-        if (img) setSidebarProfileImg(img.startsWith('/uploads') ? `${API_URL_MAIN}${img}` : img);
+        if (img) setSidebarProfileImg(resolveImg(img, API_URL_MAIN) || img);
         if (shopName) setSidebarShopName(shopName);
       }} />;
       default:         return <HomeTab {...props}/>;
