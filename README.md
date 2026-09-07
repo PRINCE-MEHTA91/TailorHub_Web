@@ -1,135 +1,267 @@
 # TailorHub
 
-## Problem
-Finding a reliable tailor for clothing alterations or custom garments can be a frustrating and time-consuming process. Customers often rely on word-of-mouth or spend time searching for local shops with uncertain quality and availability. For tailors, managing appointments, orders, and customer communication can be inefficient, often relying on manual methods that limit their ability to grow their business.
+A comprehensive web-based platform that connects customers with a network of professional tailors in their local area, featuring AI-powered styling and automated body measurement extraction.
 
-## Target Users
-*   **Customers:** Anyone in need of tailoring services, from simple alterations to custom-made clothing, who is looking for a convenient way to find and connect with skilled tailors.
-*   **Tailors:** Professional tailors and tailoring businesses who want to reach a broader customer base, streamline their booking process, and manage their orders more effectively.
+## Overview
 
-## Core Idea
-TailorHub is a web-based platform that connects customers with a network of professional tailors in their local area. The application provides an end-to-end solution for all tailoring needs:
-*   **Tailor Discovery:** Customers can search for and browse profiles of nearby tailors, viewing their specialties, pricing, and customer reviews.
-*   **Online Booking:** Customers can easily book appointments for consultations or fittings directly through the platform based on the tailor's availability.
-*   **Order Placement & Management:** Customers can place orders for specific services, upload design ideas, and provide measurements.
-*   **Order Tracking:** Both customers and tailors can track the status of an order from initiation to completion.
+TailorHub simplifies the tailoring experience by providing an end-to-end solution for all tailoring needs.
+*   **What the project does**: Allows customers to find tailors, book appointments, place custom orders, communicate in real-time, get AI style advice, and extract body measurements automatically from photos.
+*   **The problem it solves**: Eliminates the hassle of searching for local tailors with uncertain quality, and digitizes appointment management, order tracking, and communication for tailoring businesses.
+*   **Who it is for**: Customers seeking custom clothing or alterations, and professional tailors wanting to streamline their workflow and reach more clients.
+*   **Main purpose**: To digitize the traditional tailoring industry, making it accessible, transparent, and highly efficient.
 
-## Why it is useful
-TailorHub simplifies the entire tailoring experience. 
-*   **For Customers:** It offers a convenient, one-stop solution to find, hire, and manage tailoring services, saving time and ensuring a transparent and reliable process.
-*   **For Tailors:** It provides a powerful tool to increase visibility, attract new clients, and streamline workflow, allowing them to focus on their craft and grow their business. By digitizing the process, TailorHub brings the traditional tailoring industry into the modern age.
+## Key Features
 
-## User Roles and Authentication
-
-TailorHub defines two primary user roles, each with a distinct set of permissions designed to create a secure and efficient experience. Authentication is designed to be seamless, encouraging user registration while providing clear pathways for both new and returning users.
-
-### Authentication: 
-
-To ensure a smooth user experience for first-time visitors, TailorHub employs a Flipkart-style authentication model:
-*   **Initial Visit:** When a user first arrives on the Home Page, the main content is visible, but a modal popup will appear, prompting them to either **Login** or **Sign-Up**. This encourages registration while still allowing users to browse the site's offerings by simply closing the modal.
-*   **Seamless Access:** The modal provides a single, centralized point for both new and existing users to access their accounts without navigating away from their current page.
-
-### User Roles
-
-#### 1. Customer
-The **Customer** role is for users who are seeking tailoring services. Their experience is focused on finding tailors, managing orders, and communicating their needs.
-
-**Permissions:**
-*   Create and manage their own profile (e.g., name, contact information, measurements).
-*   Search for tailors based on location, specialty, and ratings.
-*   View tailor profiles, including their portfolio, services, and reviews from other customers.
-*   Book appointments with tailors.
-*   Place orders for tailoring services and upload relevant files (e.g., design images).
-*   Track the status of their orders.
-*   Communicate with tailors through an integrated messaging system.
-*   Leave reviews and ratings for tailors after an order is completed.
-
-#### 2. Tailor
-The **Tailor** role is for professional tailors or tailoring businesses offering their services on the platform. Their permissions are centered on managing their business, showcasing their work, and interacting with customers.
-
-**Permissions:**
-*   Create and customize a public profile, including their business name, location, hours, and specialties.
-*   Upload a portfolio of their work to showcase their skills.
-*   Define the services they offer and set their own pricing.
-*   Manage their availability for appointments.
-*   Receive and accept/decline new order requests from customers.
-*   Update the status of orders (e.g., "In Progress," "Ready for Pickup").
-*   Communicate with customers regarding their orders.
-*   View their earnings and order history.
-
-### Role-Based Access Control (RBAC)
-
-TailorHub uses Role-Based Access Control to ensure that users can only access the features and data relevant to their role. This is critical for security and usability:
-*   **Segregation of Duties:** Customers cannot access the dashboards of tailors, and tailors cannot act as customers from their tailor account. This separation prevents unauthorized actions, such as a customer trying to update another user's order.
-*   **Data Privacy:** A customer's personal information (e.g., measurements, order history) is only visible to the tailors they have active orders with. Similarly, a tailor's private business metrics are not visible to customers.
-*   **Intuitive User Interface:** The user interface is tailored to the user's role. For example, a logged-in customer will see a dashboard focused on their orders and appointments, while a tailor will see tools for managing their business.
-
-This RBAC system ensures that the platform is not only functional but also secure and intuitive for all user types.
-
-## Live Deployment
-
-*   **Frontend (Vercel):** [https://tailor-hub-web-client.vercel.app](https://tailor-hub-web-client.vercel.app)
-*   **Backend (Render):** [https://tailorhub-web.onrender.com](https://tailorhub-web.onrender.com)
+*   **User Authentication & Roles** — React + Node.js + Express + PostgreSQL + JWT + Google OAuth
+*   **Tailor Discovery & Profiles** — React + Node.js + PostgreSQL
+*   **Order Management & Tracking** — React + Node.js + PostgreSQL
+*   **Real-time Chat & Notifications** — Node.js + Socket.io + React
+*   **AI Style Advice** — Node.js + Google Gemini API
+*   **Body Measurement Estimation** — Python + Flask + MediaPipe
+*   **Invoicing & Feedback** — React + Node.js + PostgreSQL
 
 ## Technology Stack
 
-*   **Frontend:** React, Tailwind CSS, Framer Motion
-*   **Backend:** Node.js, Express.js, Socket.IO
-*   **Database:** PostgreSQL (hosted on Neon)
-*   **Authentication:** JWT (JSON Web Tokens)
+| Part | Technology | Purpose |
+| :--- | :--- | :--- |
+| Frontend | React, Tailwind CSS, Framer Motion | User interface, styling, and animations |
+| Backend | Node.js, Express.js | Core API, business logic, file handling |
+| Database | PostgreSQL (Neon) | Persistent data storage |
+| ML/AI | Python, Flask, MediaPipe, `@google/genai` | Body measurement estimation and AI style advice |
+| Authentication | JWT, bcryptjs, `@react-oauth/google` | Secure access and session management |
+| API | REST API, Socket.io | Client-server communication and real-time events |
+| Deployment | Vercel, Render | Cloud hosting for frontend and backend/ML services |
+| Testing | Jest | Basic React unit testing |
 
-## How to run the project locally
+## Project Architecture
 
-### Prerequisites
+Frontend (React)
+↓
+Backend API (Node.js/Express)
+↓ 
+PostgreSQL Database
 
-*   [Node.js](https://nodejs.org/) installed on your machine.
-*   A [Neon](https://neon.tech/) account for the PostgreSQL database.
+**For Real-time features:**
+Frontend ↔ Socket.io ↔ Backend
 
-### Installation & Setup
+**For ML/AI Measurement:**
+Frontend
+↓
+Backend API
+↓
+Python Flask Service
+↓
+MediaPipe Model
+↓
+Measurement Result
+↓
+Backend API
+↓
+Frontend
 
-1.  **Clone the repository:**
+**For AI Style Advice:**
+Frontend
+↓
+Backend API
+↓
+Google Gemini API
+↓
+Style Result
+↓
+Frontend
+
+## Project Structure
+
+```text
+TailorHub_Web/
+├── client/          # React frontend application
+├── python/          # Python Flask ML/AI service for body measurements
+├── server/          # Node.js Express backend API
+├── package.json     # Monorepo configuration
+└── README.md        # Project documentation
+```
+
+*   `client/`: Contains all UI components, pages, routing, styling, and state management logic.
+*   `python/`: Contains the independent Python microservice using MediaPipe to process images and return body measurements.
+*   `server/`: Contains the REST API, database connection logic, authentication, sockets, and AI/ML proxy routes.
+
+## Frontend
+
+*   **Framework:** React (Create React App)
+*   **Language:** JavaScript (JSX)
+*   **UI/Component Structure:** Modular component-based architecture (`src/components`, `src/pages`)
+*   **State Management:** React Context (`AuthContext`), React Hooks (`useState`, `useEffect`)
+*   **API Integration:** Native `fetch` API for REST calls
+*   **Routing:** React Router DOM
+*   **Styling:** Tailwind CSS
+*   **Important Libraries:** Framer Motion (animations), Socket.io-client (real-time), `@react-oauth/google` (auth), `react-icons`
+
+## Backend
+
+*   **Runtime:** Node.js
+*   **Framework:** Express.js
+*   **Language:** JavaScript
+*   **API Architecture:** RESTful
+*   **Authentication:** JWT (JSON Web Tokens) stored in HTTP-only cookies, Google OAuth Library
+*   **Middleware:** `express-rate-limit`, `cors`, `cookie-parser`, `multer` (file uploads)
+*   **Business Logic:** Modularized into controllers and services (`server/controllers/ai.controller.js`, `server/services/gemini.service.js`)
+*   **Error Handling:** Try-catch blocks with standardized JSON error responses
+
+## Database
+
+*   **Technology:** PostgreSQL (Hosted on Neon)
+*   **Schema/Design:** Relational database with automatic table creation on startup.
+*   **Main Entities:** `users`, `tailor_profiles`, `customer_profiles`, `offers`, `orders`, `order_status_history`, `messages`, `notifications`, `feedbacks`, `products`, `images`
+*   **ORM/Query Tool:** Native `pg` driver (raw SQL queries)
+*   **Migrations/Seeding:** Handled dynamically via `CREATE TABLE IF NOT EXISTS` inside `server.js` on boot.
+
+## ML / AI
+
+*   **Programming Language:** Python (Body Measurement), JavaScript (Style Advice)
+*   **Libraries/Frameworks:** Flask, MediaPipe, OpenCV, Numpy, Pillow, `@google/genai`
+*   **Model/Algorithm:** MediaPipe Pose Landmarker (Heavy) for extracting key body points. Circumference formulas based on cross-section approximation. Google Gemini 2.5 Flash for text-based style recommendations.
+*   **Inference/Prediction:** Python service processes front/side images and height to estimate dimensions (Chest, Waist, Hip, Inseam, etc.).
+*   **How backend communicates:** Node.js backend proxies `multipart/form-data` requests via `fetch` to the Python Flask service running independently.
+
+## API
+
+| Method | Endpoint | Purpose | Authentication Required |
+| :--- | :--- | :--- | :--- |
+| POST | `/api/auth/signup` | Register a new user | No |
+| POST | `/api/auth/login` | User login | No |
+| GET | `/api/auth/me` | Fetch current user session | Yes |
+| POST | `/api/auth/google` | Google OAuth login/signup | No |
+| GET | `/api/tailors` | Fetch tailor directory | No |
+| POST | `/api/orders` | Create a new order | Yes (Tailor) |
+| GET | `/api/orders/customer` | Get customer orders | Yes (Customer) |
+| PUT | `/api/orders/:id/status` | Update order progress | Yes (Tailor) |
+| POST | `/api/measurements/calculate`| Extract body measurements | Yes |
+| POST | `/api/ai-style-advice` | Generate AI style recommendations | No |
+| POST | `/api/add-feedback` | Submit order review | Yes |
+| GET | `/api/chat/:userId` | Get chat history | Yes |
+
+*(Note: This is a subset of the primary endpoints)*
+
+## Authentication & Authorization
+
+*   **Login & Registration:** Custom Email/Password and Google OAuth.
+*   **Password Reset:** Secure token-based reset via Nodemailer.
+*   **Session Management:** JWT stored securely in cookies.
+*   **Role-Based Access Control (RBAC):** Users are restricted based on their role (`customer` vs `tailor`) using custom middleware.
+*   **Password Hashing:** `bcryptjs`
+
+## Environment Variables
+
+**Backend (`server/.env`):**
+```env
+PORT=3000
+NODE_ENV=development
+PYTHON_MEASURE_URL=http://localhost:5001/measure
+JWT_SECRET=your_jwt_secret
+DATABASE_URL=postgresql://user:pass@host/db?sslmode=require
+EMAIL_USER=your_email@gmail.com
+EMAIL_PASS=your_gmail_app_password
+CLIENT_URL=http://localhost:3001
+ALLOWED_ORIGINS=
+GEMINI_API_KEY=your_gemini_api_key
+GEMINI_MODEL=gemini-2.5-flash
+```
+
+**Frontend (`client/.env`):**
+```env
+PORT=3001
+REACT_APP_API_URL=http://localhost:3000
+CLIENT_URL=http://localhost:3001
+REACT_APP_GOOGLE_CLIENT_ID=your_google_client_id
+```
+
+## Installation
+
+1.  **Clone repository**
     ```bash
     git clone https://github.com/PRINCE-MEHTA91/TailorHub_web.git
     cd TailorHub_web
     ```
 
-2.  **Install dependencies:**
-    This project is structured as a monorepo. Install dependencies for both client and server:
+2.  **Install Node dependencies**
     ```bash
     npm run install:client
     npm run install:server
     ```
 
-3.  **Environment Variables:**
-    
-    **Backend (`server/.env`):**
-    Create a `.env` file in the `server` directory and add your Neon connection string and Gmail SMTP details:
-    ```env
-    PORT=3000
-    JWT_SECRET=your_super_secret_jwt_key
-    DATABASE_URL=postgresql://your_user:your_password@ep-your-endpoint.aws.neon.tech/neondb?sslmode=require
-    EMAIL_USER=your_gmail@gmail.com
-    EMAIL_PASS=your_gmail_app_password
-    CLIENT_URL=http://localhost:3001
+3.  **Setup ML environment (Python)**
+    ```bash
+    cd python
+    pip install -r requirements.txt
+    cd ..
     ```
 
-    **Frontend (`client/.env`):**
-    Create a `.env` file in the `client` directory:
-    ```env
-    PORT=3001
-    REACT_APP_API_URL=http://localhost:3000
-    ```
+4.  **Configure environment variables**
+    Create and populate `.env` files in `client` and `server` folders based on the templates above.
 
-### Running the Application
+5.  **Setup database**
+    Start the server with a valid Neon `DATABASE_URL`. Tables are created automatically on the first run.
 
-You can start both the frontend and backend servers simultaneously from the root directory:
+## Running the Project
 
+**1. Start the ML Service (Python)**
+```bash
+cd python
+python measure_server.py
+```
+*(Runs on port 5001 by default)*
+
+**2. Start Frontend and Backend (Node)**
+Open a new terminal at the project root:
 ```bash
 npm run dev
 ```
+*(Starts React on port 3001 and Express on port 3000)*
 
-*   The frontend will be available at `http://localhost:3001`
-*   The backend will be available at `http://localhost:3000`
+## Development Workflow
 
-### Database Initialization
-The backend server is designed to automatically create the necessary PostgreSQL tables (`users`, `tailor_profiles`, `orders`, etc.) when it connects to your Neon database for the first time. Simply ensure your `DATABASE_URL` is correct before starting the server.
+User
+→ Frontend
+→ Backend API
+→ PostgreSQL Database / Python ML Service / Google Gemini API
+→ Backend API
+→ Frontend
+→ User
+
+## Testing
+
+*   **Testing Framework:** Jest / React Testing Library (bundled with Create React App).
+*   **Unit Tests:** Basic frontend rendering tests via `react-scripts test`.
+
+## Deployment
+
+*   **Frontend Platform:** Vercel
+*   **Backend API Platform:** Render
+*   **ML Service Platform:** Render (Independent web service deployed via `python/render.yaml`)
+*   **Database Deployment:** Neon (Serverless Postgres)
+
+## Future Improvements
+
+*   Implement online payment gateways for processing order advances directly.
+*   Enhance ML models for higher accuracy in non-standard body poses.
+*   Add SMS notifications alongside emails.
+
+## Contributors
+
+Keep existing contributor information if present.
+
+## License
+
+ISC License
+
+---
+
+### Technology Summary
+
+Frontend → React, Tailwind CSS, Framer Motion, Socket.io-client
+Backend → Node.js, Express.js, Socket.io, Multer
+Database → PostgreSQL (Neon, `pg` driver)
+ML/AI → Python, Flask, MediaPipe, OpenCV, Google Gemini (`@google/genai`)
+Authentication → JWT, bcryptjs, Google OAuth
+Testing → Jest
+Deployment → Vercel (Client), Render (API & Python Service)
