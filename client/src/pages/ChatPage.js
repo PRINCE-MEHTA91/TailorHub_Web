@@ -268,7 +268,6 @@ const ChatPage = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [users, urlCustomerId, loadingUsers, fetchUserById]);
 
-
   /* ── Load message history from DB ── */
   const fetchMessages = useCallback(async (userId) => {
     setLoadingMessages(true);

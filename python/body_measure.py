@@ -48,7 +48,6 @@ def _load_image_cv(path: str) -> np.ndarray:
         raise ValueError(f"Cannot load image: {path}")
     return img
 
-
 def _get_landmarks(image_path: str):
     """
     Run PoseLandmarker on image and return list of NormalizedLandmark objects.
@@ -93,22 +92,17 @@ def _get_landmarks(image_path: str):
         )
     return result.pose_landmarks[0]  # first person
 
-
 def _px(lm, idx: int, w: int, h: int) -> tuple:
     return (int(lm[idx].x * w), int(lm[idx].y * h))
-
 
 def _dist(p1: tuple, p2: tuple) -> float:
     return math.hypot(p2[0] - p1[0], p2[1] - p1[1])
 
-
 def _midpoint(p1: tuple, p2: tuple) -> tuple:
     return ((p1[0] + p2[0]) // 2, (p1[1] + p2[1]) // 2)
 
-
 def _chain_dist(*points) -> float:
     return sum(_dist(points[i], points[i + 1]) for i in range(len(points) - 1))
-
 
 # ── Circumference correction factors ─────────────────────────────────────────
 # Body cross-sections are approximately elliptical.
@@ -117,7 +111,6 @@ CHEST_FACTOR = 2.73   # depth ≈ 0.65 × width
 WAIST_FACTOR = 2.65
 HIP_FACTOR   = 2.80   # depth ≈ 0.70 × width
 NECK_FACTOR  = 2.95   # depth ≈ 0.85 × width
-
 
 def measure_from_front(image_path: str, height_cm: float) -> dict:
     img        = _load_image_cv(image_path)
@@ -194,7 +187,6 @@ def measure_from_front(image_path: str, height_cm: float) -> dict:
         "inseam":   inseam_cm,
         "neck":     neck_cm,
     }
-
 
 def measure_body(front_path: str, side_path: str, height_cm: float) -> dict:
     """Main entry — uses front photo for all measurements."""

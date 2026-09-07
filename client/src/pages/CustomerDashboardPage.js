@@ -11,7 +11,7 @@ import { io } from 'socket.io-client';
 
 const API_URL = process.env.REACT_APP_API_URL || 'https://tailorhub-web.onrender.com';
 
-// ── Professional Invoice Modal ──────────────────────────────────────────────
+// Professional Invoice Modal
 const InvoiceModal = ({ order, onClose }) => {
     const printRef = useRef(null);
     if (!order) return null;
@@ -1123,7 +1123,7 @@ const CategoryResults = ({ category, onBack }) => {
     );
 };
 
-// ── Helpers shared inside TailorsTab ────────────────────────────────────────
+// Helpers shared inside TailorsTab
 const resolveImgUrl = (imgPath) => {
     if (!imgPath) return null;
     if (imgPath.startsWith('http')) return imgPath;
@@ -1661,7 +1661,7 @@ const CustomerDashboardPage = () => {
         navigate('/');
     };
 
-    // ── Footer ──────────────────────────────────────────────────────────────
+// Footer
     const DashboardFooter = () => {
         const footerNav = navigate; // reuse the existing navigate from parent scope
 

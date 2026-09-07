@@ -10,7 +10,7 @@ function resolveImg(path) {
   return `${API_URL}${path}`;
 }
 
-// ── AI Pick unique section ───────────────────────────────────────────────────
+// AI Pick unique section
 const aiStyles = [
   { icon: '👔', label: 'Formal Wear', desc: 'Suits, Blazers, Sherwanis', color: 'from-slate-800 to-slate-600', badge: 'Top Pick' },
   { icon: '👗', label: 'Ethnic Wear', desc: 'Sarees, Salwar, Lehenga', color: 'from-rose-700 to-pink-500', badge: 'Trending' },
@@ -124,7 +124,7 @@ const AiPickSection = ({ navigate }) => (
   </motion.div>
 );
 
-// ── Main page ────────────────────────────────────────────────────────────────
+// Main page
 const ArrivalsAndTrendingPage = () => {
   const navigate = useNavigate();
   const location = useLocation();

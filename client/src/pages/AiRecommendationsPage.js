@@ -11,8 +11,7 @@ function resolveImg(path) {
   return `${API_URL}${path}`;
 }
 
-// ── Data ─────────────────────────────────────────────────────────────────────
-
+// Data
 const STYLE_CATEGORIES = [
   { id: 'formal', icon: '👔', label: 'Formal Wear', desc: 'Suits, Blazers, Trousers & Dresses', color: '#1e293b', badge: 'Classic' },
   { id: 'ethnic', icon: '👗', label: 'Ethnic Wear', desc: 'Kurtas, Sherwanis, Sarees, Lehengas', color: '#9f1239', badge: 'Trending' },
@@ -245,7 +244,6 @@ function getOutfitExampleImage(style = 'formal', gender = 'female', idx = 0) {
   return list[idx % list.length];
 }
 
-
 function scoreAndRankTailors(tailors, prefs) {
   return tailors
     .map((t) => {
@@ -300,8 +298,7 @@ function scoreAndRankTailors(tailors, prefs) {
     .sort((a, b) => b._aiScore - a._aiScore);
 }
 
-// ── Sub-components ────────────────────────────────────────────────────────────
-
+// Sub-components
 const fadeUp = {
   hidden: { opacity: 0, y: 30 },
   show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' } },
@@ -313,8 +310,7 @@ const stagger = {
   show: { transition: { staggerChildren: 0.08 } },
 };
 
-// ── Step 3: Body Profile ──────────────────────────────────────────────────────
-
+// Step 3: Body Profile
 const BodyProfileStep = ({ prefs, setPrefs }) => {
   const bp = prefs.bodyProfile || {};
   const updateBP = (field, value) =>
@@ -461,8 +457,7 @@ const BodyProfileStep = ({ prefs, setPrefs }) => {
   );
 };
 
-// ── Step 1: Hero ──────────────────────────────────────────────────────────────
-
+// Step 1: Hero
 const HeroSection = ({ onGetStarted, onViewPrevious, hasPrevious }) => (
   <motion.div
     key="hero"
@@ -643,8 +638,7 @@ const HeroSection = ({ onGetStarted, onViewPrevious, hasPrevious }) => (
   </motion.div>
 );
 
-// ── Step 2: Style Quiz ────────────────────────────────────────────────────────
-
+// Step 2: Style Quiz
 const QuizStep = ({ step, total, title, subtitle, children }) => (
   <motion.div key={`quiz-${step}`} variants={fadeUp} initial="hidden" animate="show" exit="exit">
     {/* Progress */}
@@ -673,8 +667,7 @@ const QuizStep = ({ step, total, title, subtitle, children }) => (
   </motion.div>
 );
 
-// ── Step 3: Results ───────────────────────────────────────────────────────────
-
+// Step 3: Results
 const MatchScore = ({ score }) => {
   const percent = Math.min(100, Math.max(0, Math.round((score / 100) * 100)));
   const color = percent >= 80 ? '#10b981' : percent >= 60 ? '#6366f1' : '#f59e0b';
@@ -850,9 +843,7 @@ const TailorResultCard = ({ tailor, rank, navigate }) => {
   );
 };
 
-// ── AI Style Advice Panel ─────────────────────────────────────────────────────
-
-
+// AI Style Advice Panel
 const LANG_OPTIONS = [
   { id: 'english',  label: 'English',  flag: '🇬🇧' },
   { id: 'hinglish', label: 'Hinglish', flag: '🇮🇳' },
@@ -1128,8 +1119,7 @@ const StyleAdvicePanel = ({ advice, loading, error, lang = 'english', onLangChan
   );
 };
 
-// ── Main Component ────────────────────────────────────────────────────────────
-
+// Main Component
 const QUIZ_TOTAL_STEPS = 3;
 
 const AiRecommendationsPage = () => {
@@ -1361,7 +1351,6 @@ const AiRecommendationsPage = () => {
         : 'Complete the look with a contrasting silk pocket square, classic cufflinks, or handcrafted leather footwear.'
     };
   };
-
 
   const fetchStyleAdvice = async (currentPrefs, lang = adviceLang) => {
     setAdviceLoading(true);

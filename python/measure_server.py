@@ -49,7 +49,6 @@ CORS(app, origins=[
 
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
 
-
 def _save_upload(file_storage) -> str:
     """Save a werkzeug FileStorage to a temp file and return its path."""
     _, ext = os.path.splitext(file_storage.filename.lower())
@@ -60,12 +59,10 @@ def _save_upload(file_storage) -> str:
     tmp.close()
     return tmp.name
 
-
 @app.route("/health", methods=["GET"])
 def health():
     """Simple health-check endpoint."""
     return jsonify({"status": "ok", "service": "TailorHub Measurement Engine"})
-
 
 @app.route("/measure", methods=["POST"])
 def measure():
@@ -115,7 +112,6 @@ def measure():
                     os.unlink(path)
                 except OSError:
                     pass
-
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", os.environ.get("MEASURE_PORT", 5001)))

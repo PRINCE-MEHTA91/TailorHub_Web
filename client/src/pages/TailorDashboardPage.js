@@ -1909,7 +1909,7 @@ export default function TailorDashboardPage() {
 
   const handleLogout = async () => { await logout(); navigate('/'); };
 
-  // ── Notification count ──────────────────────────────────────────
+// Notification count
   const [unreadCount, setUnreadCount] = useState(0);
 
   const refreshNotifCount = useCallback(() => {

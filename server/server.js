@@ -1,12 +1,12 @@
 require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 
-// ── Startup secrets validation ────────────────────────────────────────────────
+// Startup secrets validation
 if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
     console.error('❌ FATAL: JWT_SECRET is missing or too short (minimum 32 characters). Set it in server/.env');
     process.exit(1);
 }
 
-// ── Global crash guards — keep the server alive even on unhandled errors ──
+// Global crash guards — keep the server alive even on unhandled errors
 process.on('uncaughtException', (err) => {
     console.error('❌ Uncaught Exception (server kept alive):', err.message);
 });
@@ -37,7 +37,7 @@ const JWT_SECRET = process.env.JWT_SECRET;
 const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:3001';
 const IS_PROD = process.env.NODE_ENV === 'production';
 
-// ── Google OAuth2 client (created once at startup, not per-request) ──────────
+// Google OAuth2 client (created once at startup, not per-request)
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID?.trim() || '';
 if (!GOOGLE_CLIENT_ID) {
     console.error('❌  GOOGLE_CLIENT_ID is not set — Google Sign-In will be disabled');
@@ -50,15 +50,15 @@ const googleOAuthClient = GOOGLE_CLIENT_ID ? new OAuth2Client(GOOGLE_CLIENT_ID) 
 const ALLOWED_ORIGINS_ENV = process.env.ALLOWED_ORIGINS || '';
 const EXTRA_ORIGINS = ALLOWED_ORIGINS_ENV.split(',').map(o => o.trim()).filter(Boolean);
 const BASE_ALLOWED_ORIGINS = new Set([
-    // ── Local dev ──────────────────────────────────────────────────────────
+// Local dev
     'http://localhost:3000',
     'http://localhost:3001',
     'http://127.0.0.1:3000',
     'http://127.0.0.1:3001',
-    // ── Production (hardcoded so CORS works even before env vars are set) ──
+// Production (hardcoded so CORS works even before env vars are set)
     'https://tailor-hub-web-client.vercel.app',
     'https://tailorhub-web.onrender.com',
-    // ── From env vars (CLIENT_URL and ALLOWED_ORIGINS) ─────────────────────
+// From env vars (CLIENT_URL and ALLOWED_ORIGINS)
     CLIENT_URL,
     ...EXTRA_ORIGINS,
 ]);
@@ -70,8 +70,7 @@ const isAllowedOrigin = (origin, callback) => {
     return callback(new Error('Not allowed by CORS'));
 };
 
-
-// ── Socket.IO real-time server ──────────────────────────────────────────────
+// Socket.IO real-time server
 const io = new SocketIOServer(httpServer, {
     cors: {
         origin: isAllowedOrigin,
@@ -85,7 +84,7 @@ app.use(cors({
     credentials: true
 }));
 
-// ── Security headers ─────────────────────────────────────────────────────────
+// Security headers
 app.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'SAMEORIGIN');
@@ -100,7 +99,7 @@ app.use(cookieParser());
 // NOTE: express.static(__dirname) removed — it served entire server source code publicly.
 //       Only /uploads is served statically (see below, after multer setup).
 
-// ── Rate Limiters ───────────────────────────────────────────────────────────
+// Rate Limiters
 const loginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: 10,                   // 10 attempts per IP
@@ -131,7 +130,7 @@ const measurementLimiter = rateLimit({
     message: { message: 'Too many measurement requests, please try again shortly.' },
 });
 
-// ── PostgreSQL Pool (Neon) ──────────────────────────────────────────────────
+// PostgreSQL Pool (Neon)
 console.log('⏳ Attempting to connect to PostgreSQL database (Neon)...');
 
 const pool = new Pool({
@@ -139,13 +138,13 @@ const pool = new Pool({
     ssl: { rejectUnauthorized: false },
 });
 
-// ── Auto-create tables on startup ──────────────────────────────────────────
+// Auto-create tables on startup
 async function initDB() {
     const client = await pool.connect();
     try {
         console.log('✅ Connected successfully to PostgreSQL database (Neon)');
 
-        // ── users ──────────────────────────────────────────────────────────
+// users
         await client.query(`
             CREATE TABLE IF NOT EXISTS users (
                 id               SERIAL PRIMARY KEY,
@@ -165,7 +164,7 @@ async function initDB() {
         await client.query(`ALTER TABLE users ALTER COLUMN password DROP NOT NULL`).catch(() => {});
         console.log('✅ users table ready');
 
-        // ── tailor_profiles ────────────────────────────────────────────────
+// tailor_profiles
         await client.query(`
             CREATE TABLE IF NOT EXISTS tailor_profiles (
                 id             SERIAL PRIMARY KEY,
@@ -195,7 +194,7 @@ async function initDB() {
         `);
         console.log('✅ tailor_profiles table ready');
 
-        // ── customer_profiles ──────────────────────────────────────────────
+// customer_profiles
         await client.query(`
             CREATE TABLE IF NOT EXISTS customer_profiles (
                 id          SERIAL PRIMARY KEY,
@@ -212,7 +211,7 @@ async function initDB() {
         `);
         console.log('✅ customer_profiles table ready');
 
-        // ── offers ─────────────────────────────────────────────────────────
+// offers
         await client.query(`
             CREATE TABLE IF NOT EXISTS offers (
                 id            SERIAL PRIMARY KEY,
@@ -229,7 +228,7 @@ async function initDB() {
         `);
         console.log('✅ offers table ready');
 
-        // ── orders ─────────────────────────────────────────────────────────
+// orders
         await client.query(`
             CREATE TABLE IF NOT EXISTS orders (
                 id               SERIAL PRIMARY KEY,
@@ -252,7 +251,7 @@ async function initDB() {
         `);
         console.log('✅ orders table ready');
 
-        // ── order_status_history ───────────────────────────────────────────
+// order_status_history
         await client.query(`
             CREATE TABLE IF NOT EXISTS order_status_history (
                 id         SERIAL PRIMARY KEY,
@@ -264,7 +263,7 @@ async function initDB() {
         `);
         console.log('✅ order_status_history table ready');
 
-        // ── messages ───────────────────────────────────────────────────────
+// messages
         await client.query(`
             CREATE TABLE IF NOT EXISTS messages (
                 id          SERIAL PRIMARY KEY,
@@ -281,7 +280,7 @@ async function initDB() {
         `);
         console.log('✅ messages table ready');
 
-        // ── notifications ──────────────────────────────────────────────────
+// notifications
         await client.query(`
             CREATE TABLE IF NOT EXISTS notifications (
                 id           SERIAL PRIMARY KEY,
@@ -297,7 +296,7 @@ async function initDB() {
         `);
         console.log('✅ notifications table ready');
 
-        // ── feedbacks ──────────────────────────────────────────────────────
+// feedbacks
         await client.query(`
             CREATE TABLE IF NOT EXISTS feedbacks (
                 id          SERIAL PRIMARY KEY,
@@ -311,7 +310,7 @@ async function initDB() {
         `);
         console.log('✅ feedbacks table ready');
 
-        // ── products ───────────────────────────────────────────────────────
+// products
         await client.query(`
             CREATE TABLE IF NOT EXISTS products (
                 id          SERIAL PRIMARY KEY,
@@ -323,7 +322,7 @@ async function initDB() {
         `);
         console.log('✅ products table ready');
 
-        // ── images — persistent binary storage for profile/gallery/pricing images ──
+// images — persistent binary storage for profile/gallery/pricing images
         // Replaces the Render local-filesystem /uploads folder so images survive
         // restarts and redeploys. Served via GET /api/images/:id.
         await client.query(`
@@ -346,7 +345,7 @@ async function initDB() {
 
 initDB();
 
-// ── Nodemailer ──────────────────────────────────────────────────────────────
+// Nodemailer
 const transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
@@ -365,8 +364,7 @@ transporter.verify((err) => {
     }
 });
 
-// ── Helpers ─────────────────────────────────────────────────────────────────
-
+// Helpers
 // Safely parse a PostgreSQL JSONB field which may already be a parsed object
 const safeParseJSON = (val, fallback = []) => {
     if (val === null || val === undefined) return fallback;
@@ -387,8 +385,7 @@ const normalizeImgPath = (img) => {
     return img;
 };
 
-// ── Middleware ───────────────────────────────────────────────────────────────
-
+// Middleware
 const verifyToken = async (req, res, next) => {
     const token = req.cookies.token;
     if (!token) {
@@ -450,18 +447,12 @@ const setTokenCookie = (res, userId) => {
     });
 };
 
-// ═══════════════════════════════════════════════════════════════
 // HEALTH CHECK
-// ═══════════════════════════════════════════════════════════════
-
 app.get('/health', (req, res) => {
     res.json({ status: 'ok', service: 'TailorHub API', timestamp: new Date().toISOString() });
 });
 
-// ═══════════════════════════════════════════════════════════════
 // AUTH ENDPOINTS
-// ═══════════════════════════════════════════════════════════════
-
 app.post('/api/auth/signup', signupLimiter, async (req, res) => {
     const { full_name, email, password, role } = req.body;
     if (!full_name || !email || !password) {
@@ -580,7 +571,7 @@ app.post('/api/auth/forgot-password', forgotPasswordLimiter, async (req, res) =>
     }
 });
 
-// ── Redirect browser from backend URL to React frontend for password reset ──
+// Redirect browser from backend URL to React frontend for password reset
 app.get('/reset-password/:token', (req, res) => {
     res.redirect(`${CLIENT_URL}/reset-password/${req.params.token}`);
 });
@@ -612,10 +603,7 @@ app.post('/api/auth/reset-password/:token', async (req, res) => {
     }
 });
 
-// ═══════════════════════════════════════════════════════════════
 // GOOGLE OAUTH
-// ═══════════════════════════════════════════════════════════════
-
 // Diagnostic endpoint — visit https://tailorhub-web.onrender.com/api/auth/google/debug
 // in a browser to confirm env vars are loaded correctly on Render.
 app.get('/api/auth/google/debug', (req, res) => {
@@ -629,7 +617,6 @@ app.get('/api/auth/google/debug', (req, res) => {
     });
 });
 
-
 app.post('/api/auth/google', loginLimiter, async (req, res) => {
     const { credential, access_token, role } = req.body;
 
@@ -641,7 +628,7 @@ app.post('/api/auth/google', loginLimiter, async (req, res) => {
         let email, name;
 
         if (access_token) {
-            // ── Implicit flow: verify access_token via Google userinfo endpoint ──
+// Implicit flow: verify access_token via Google userinfo endpoint
             // This is the flow used by useGoogleLogin() — no Client Secret needed.
             // Uses node-fetch (already a project dependency) for Node compatibility.
             const nodeFetch = require('node-fetch');
@@ -661,9 +648,8 @@ app.post('/api/auth/google', loginLimiter, async (req, res) => {
                 return res.status(400).json({ message: 'Could not retrieve email from Google account' });
             }
 
-
         } else {
-            // ── ID token flow: verify credential via google-auth-library ─────────
+// ID token flow: verify credential via google-auth-library
             // Legacy path kept for backward compatibility.
             if (!googleOAuthClient) {
                 console.error('❌ GOOGLE_CLIENT_ID is not set in environment variables');
@@ -700,7 +686,7 @@ app.post('/api/auth/google', loginLimiter, async (req, res) => {
             });
         }
 
-        // ── Existing user — log them in ───────────────────────────────────────
+// Existing user — log them in
         const user = existing.rows[0];
 
         setTokenCookie(res, user.id);
@@ -727,12 +713,8 @@ app.post('/api/auth/google', loginLimiter, async (req, res) => {
     }
 });
 
-
-// ═══════════════════════════════════════════════════════════════
 // FILE UPLOAD (multer — unchanged)
-// ═══════════════════════════════════════════════════════════════
-
-// ── Profile / gallery / pricing image upload — memory storage only ───────────
+// Profile / gallery / pricing image upload — memory storage only
 // Images are stored in the PostgreSQL `images` table as BYTEA so they survive
 // Render restarts and redeploys.  No files are written to the local filesystem.
 const upload = multer({
@@ -746,7 +728,7 @@ const upload = multer({
     }
 });
 
-// ── Chat file upload multer (images + documents) ─────────────────────────────
+// Chat file upload multer (images + documents)
 // Chat attachments remain on disk — they are ephemeral and not referenced
 // by profile data, so losing them on restart is acceptable.
 const chatFileStorage = multer.diskStorage({
@@ -795,7 +777,7 @@ const handleUploadError = (err, req, res, next) => {
     next();
 };
 
-// ── Image serve endpoint — reads BYTEA from PostgreSQL and returns binary ─────
+// Image serve endpoint — reads BYTEA from PostgreSQL and returns binary
 app.get('/api/images/:id', async (req, res) => {
     const id = parseInt(req.params.id, 10);
     if (isNaN(id)) return res.status(400).json({ message: 'Invalid image id' });
@@ -816,7 +798,7 @@ app.get('/api/images/:id', async (req, res) => {
     }
 });
 
-// ── Helper: insert image buffer into the images table, return imageUrl ────────
+// Helper: insert image buffer into the images table, return imageUrl
 const saveImageToDB = async (userId, buffer, mimetype) => {
     const result = await pool.query(
         'INSERT INTO images (user_id, data, mimetype) VALUES ($1, $2, $3) RETURNING id',
@@ -825,7 +807,7 @@ const saveImageToDB = async (userId, buffer, mimetype) => {
     return `/api/images/${result.rows[0].id}`;
 };
 
-// ── Tailor: upload profile image ──────────────────────────────────────────────
+// Tailor: upload profile image
 app.post('/api/upload/profile-image',
     verifyToken,
     requireRole('tailor'),
@@ -843,7 +825,7 @@ app.post('/api/upload/profile-image',
     }
 );
 
-// ── Tailor: upload gallery image ──────────────────────────────────────────────
+// Tailor: upload gallery image
 app.post('/api/upload/gallery-image',
     verifyToken,
     requireRole('tailor'),
@@ -861,7 +843,7 @@ app.post('/api/upload/gallery-image',
     }
 );
 
-// ── Tailor: upload pricing image ──────────────────────────────────────────────
+// Tailor: upload pricing image
 app.post('/api/upload/pricing-image',
     verifyToken,
     requireRole('tailor'),
@@ -879,7 +861,7 @@ app.post('/api/upload/pricing-image',
     }
 );
 
-// ── Customer Profile Image: Upload & Save ────────────────────────────────────
+// Customer Profile Image: Upload & Save
 app.post('/api/customer/upload/profile-image',
     verifyToken,
     upload.single('profile_img'),
@@ -904,10 +886,7 @@ app.post('/api/customer/upload/profile-image',
     }
 );
 
-// ═══════════════════════════════════════════════════════════════
 // PRODUCTS ENDPOINT
-// ═══════════════════════════════════════════════════════════════
-
 app.get('/api/products', async (req, res) => {
     try {
         const result = await pool.query('SELECT * FROM products');
@@ -917,11 +896,8 @@ app.get('/api/products', async (req, res) => {
     }
 });
 
-// ═══════════════════════════════════════════════════════════════
 // TAILOR PROFILE ENDPOINTS
-// ═══════════════════════════════════════════════════════════════
-
-// ── Tailor Profile: Save (upsert) ──────────────────────────────────────────
+// Tailor Profile: Save (upsert)
 app.post('/api/tailor/profile', verifyToken, async (req, res) => {
     const {
         phone, whatsapp, instagram, street, city, state, pin,
@@ -975,7 +951,7 @@ app.post('/api/tailor/profile', verifyToken, async (req, res) => {
     }
 });
 
-// ── Tailor Profile: Get own profile ────────────────────────────────────────
+// Tailor Profile: Get own profile
 app.get('/api/tailor/profile', verifyToken, async (req, res) => {
     try {
         const result = await pool.query(`
@@ -1014,7 +990,7 @@ app.get('/api/tailor/profile', verifyToken, async (req, res) => {
     }
 });
 
-// ── Tailor Deals: Save deals separately ────────────────────────────────────
+// Tailor Deals: Save deals separately
 app.post('/api/tailor/deals', verifyToken, async (req, res) => {
     const { deals } = req.body;
     try {
@@ -1032,7 +1008,7 @@ app.post('/api/tailor/deals', verifyToken, async (req, res) => {
     }
 });
 
-// ── Tailor Deals: Get own deals ─────────────────────────────────────────────
+// Tailor Deals: Get own deals
 app.get('/api/tailor/deals', verifyToken, async (req, res) => {
     try {
         const result = await pool.query('SELECT deals FROM tailor_profiles WHERE user_id = $1', [req.userId]);
@@ -1043,7 +1019,7 @@ app.get('/api/tailor/deals', verifyToken, async (req, res) => {
     }
 });
 
-// ── Tailor Deals: Get by tailor ID (public for customers) ──────────────────
+// Tailor Deals: Get by tailor ID (public for customers)
 app.get('/api/tailors/:id/deals', async (req, res) => {
     const { id } = req.params;
     try {
@@ -1059,7 +1035,7 @@ app.get('/api/tailors/:id/deals', async (req, res) => {
     }
 });
 
-// ── Price Listings: Save (tailor only, dedicated endpoint) ─────────────────
+// Price Listings: Save (tailor only, dedicated endpoint)
 app.post('/api/tailor/price-listings', verifyToken, async (req, res) => {
     const { price_listings } = req.body;
     try {
@@ -1078,7 +1054,7 @@ app.post('/api/tailor/price-listings', verifyToken, async (req, res) => {
     }
 });
 
-// ── Tailor Profiles: Fetch all (for customer dashboard) ────────────────────
+// Tailor Profiles: Fetch all (for customer dashboard)
 app.get('/api/tailors', async (req, res) => {
     try {
         const result = await pool.query(`
@@ -1111,7 +1087,7 @@ app.get('/api/tailors', async (req, res) => {
     }
 });
 
-// ── Tailor Profiles: Get by ID ─────────────────────────────────────────────
+// Tailor Profiles: Get by ID
 app.get('/api/tailors/:id', async (req, res) => {
     const { id } = req.params;
     try {
@@ -1147,11 +1123,8 @@ app.get('/api/tailors/:id', async (req, res) => {
     }
 });
 
-// ═══════════════════════════════════════════════════════════════
 // CUSTOMER PROFILE ENDPOINTS
-// ═══════════════════════════════════════════════════════════════
-
-// ── Customer Profile: Save (upsert) ──────────────────────────────────────────
+// Customer Profile: Save (upsert)
 app.post('/api/customer/profile', verifyToken, async (req, res) => {
     const { phone, whatsapp, street, city, state, pin } = req.body;
     try {
@@ -1174,7 +1147,7 @@ app.post('/api/customer/profile', verifyToken, async (req, res) => {
     }
 });
 
-// ── Customer Profile: Get own profile ────────────────────────────────────────
+// Customer Profile: Get own profile
 app.get('/api/customer/profile', verifyToken, async (req, res) => {
     try {
         const result = await pool.query(
@@ -1189,11 +1162,8 @@ app.get('/api/customer/profile', verifyToken, async (req, res) => {
     }
 });
 
-// ═══════════════════════════════════════════════════════════════
 // BOOKINGS ENDPOINT
-// ═══════════════════════════════════════════════════════════════
-
-// ── Bookings: Submit & Send Email Notification ─────────────────────────────
+// Bookings: Submit & Send Email Notification
 app.post('/api/bookings', verifyToken, async (req, res) => {
     const { tailor_id, service, date, time, notes, tailor_name } = req.body;
 
@@ -1294,7 +1264,7 @@ app.post('/api/bookings', verifyToken, async (req, res) => {
     }
 });
 
-// ── Button click endpoints ──────────────────────────────────────────────────
+// Button click endpoints
 const buttons = [
     'categories-btn', 'deals-btn', 'new-arrivals-btn', 'trending-btn',
     'shirts-service-btn', 'pants-service-btn', 'kurtas-service-btn',
@@ -1308,11 +1278,8 @@ buttons.forEach((buttonId) => {
     });
 });
 
-// ═══════════════════════════════════════════════════════════════
 // OFFERS ENDPOINTS
-// ═══════════════════════════════════════════════════════════════
-
-// ── POST /api/tailor/offers — Create a new offer ───────────────
+// POST /api/tailor/offers — Create a new offer
 app.post('/api/tailor/offers', verifyToken, async (req, res) => {
     const { title, description, discount, discount_type, start_date, end_date } = req.body;
 
@@ -1339,7 +1306,7 @@ app.post('/api/tailor/offers', verifyToken, async (req, res) => {
     }
 });
 
-// ── GET /api/tailor/offers — Own offers with active status ─────
+// GET /api/tailor/offers — Own offers with active status
 app.get('/api/tailor/offers', verifyToken, async (req, res) => {
     try {
         const result = await pool.query(`
@@ -1367,7 +1334,7 @@ app.get('/api/tailor/offers', verifyToken, async (req, res) => {
     }
 });
 
-// ── DELETE /api/tailor/offers/:id — Delete own offer ──────────
+// DELETE /api/tailor/offers/:id — Delete own offer
 app.delete('/api/tailor/offers/:id', verifyToken, async (req, res) => {
     const { id } = req.params;
     try {
@@ -1381,7 +1348,7 @@ app.delete('/api/tailor/offers/:id', verifyToken, async (req, res) => {
     }
 });
 
-// ── GET /api/offers/active — Public: all active offers with tailor info ──
+// GET /api/offers/active — Public: all active offers with tailor info
 app.get('/api/offers/active', async (req, res) => {
     try {
         const result = await pool.query(`
@@ -1427,7 +1394,7 @@ app.get('/api/offers/active', async (req, res) => {
     }
 });
 
-// ── GET /api/tailor/offers/active-for-order — Active offers for logged-in tailor (for order creation)
+// GET /api/tailor/offers/active-for-order — Active offers for logged-in tailor (for order creation)
 app.get('/api/tailor/offers/active-for-order', verifyToken, requireRole('tailor'), async (req, res) => {
     try {
         const result = await pool.query(`
@@ -1453,11 +1420,8 @@ app.get('/api/tailor/offers/active-for-order', verifyToken, requireRole('tailor'
     }
 });
 
-// ═══════════════════════════════════════════════════════════════
 // ORDERS ENDPOINTS
-// ═══════════════════════════════════════════════════════════════
-
-// ── GET /api/tailor/verify-customer — Find customer by email or phone ──
+// GET /api/tailor/verify-customer — Find customer by email or phone
 app.get('/api/tailor/verify-customer', verifyToken, requireRole('tailor'), async (req, res) => {
     const { query } = req.query;
     if (!query) return res.status(400).json({ message: 'Please provide email or phone to search' });
@@ -1476,7 +1440,7 @@ app.get('/api/tailor/verify-customer', verifyToken, requireRole('tailor'), async
     }
 });
 
-// ── POST /api/orders — Create a new order (Tailor only) ──
+// POST /api/orders — Create a new order (Tailor only)
 app.post('/api/orders', verifyToken, requireRole('tailor'), async (req, res) => {
     try {
         // NOTE: order body NOT logged — contains sensitive customer/payment data
@@ -1543,7 +1507,7 @@ app.post('/api/orders', verifyToken, requireRole('tailor'), async (req, res) => 
     }
 });
 
-// ── GET /api/tailor/dashboard-stats — Real-time home tab stats for a tailor ──
+// GET /api/tailor/dashboard-stats — Real-time home tab stats for a tailor
 app.get('/api/tailor/dashboard-stats', verifyToken, requireRole('tailor'), async (req, res) => {
     try {
         const uid = req.userId;
@@ -1608,7 +1572,7 @@ app.get('/api/tailor/dashboard-stats', verifyToken, requireRole('tailor'), async
     }
 });
 
-// ── GET /api/orders/tailor — Get all orders for the logged in tailor ──
+// GET /api/orders/tailor — Get all orders for the logged in tailor
 app.get('/api/orders/tailor', verifyToken, requireRole('tailor'), async (req, res) => {
     try {
         const result = await pool.query(`
@@ -1633,7 +1597,7 @@ app.get('/api/orders/tailor', verifyToken, requireRole('tailor'), async (req, re
     }
 });
 
-// ── GET /api/orders/customer — Get all orders for logged in customer ──
+// GET /api/orders/customer — Get all orders for logged in customer
 app.get('/api/orders/customer', verifyToken, requireRole('customer'), async (req, res) => {
     try {
         const result = await pool.query(`
@@ -1660,7 +1624,7 @@ app.get('/api/orders/customer', verifyToken, requireRole('customer'), async (req
     }
 });
 
-// ── GET /api/orders/:id/history — Get status history for an order ──
+// GET /api/orders/:id/history — Get status history for an order
 app.get('/api/orders/:id/history', verifyToken, async (req, res) => {
     const orderId = req.params.id;
     console.log(`[GET History] Request for orderId: ${orderId}, userRole: ${req.userRole}, userId: ${req.userId}`);
@@ -1683,7 +1647,7 @@ app.get('/api/orders/:id/history', verifyToken, async (req, res) => {
     }
 });
 
-// ── PUT /api/orders/:id — Edit order details (Tailor only) ──
+// PUT /api/orders/:id — Edit order details (Tailor only)
 app.put('/api/orders/:id', verifyToken, requireRole('tailor'), async (req, res) => {
     try {
         const orderId = req.params.id;
@@ -1739,7 +1703,7 @@ app.put('/api/orders/:id', verifyToken, requireRole('tailor'), async (req, res) 
     }
 });
 
-// ── PUT /api/orders/:id/status — Update order status and add history (Tailor only) ──
+// PUT /api/orders/:id/status — Update order status and add history (Tailor only)
 app.put('/api/orders/:id/status', verifyToken, requireRole('tailor'), async (req, res) => {
     const orderId = req.params.id;
     const { status, note, delivery_date } = req.body;
@@ -1784,7 +1748,7 @@ app.put('/api/orders/:id/status', verifyToken, requireRole('tailor'), async (req
             [orderId, status, note || null]
         );
 
-        // ── Insert in-app notification for the customer ──
+// Insert in-app notification for the customer
         const notifType = status === 'Completed' ? 'order_completed'
                         : status === 'Delivered' ? 'order_delivered'
                         : 'order_update';
@@ -1836,7 +1800,7 @@ app.put('/api/orders/:id/status', verifyToken, requireRole('tailor'), async (req
     }
 });
 
-// ── PUT /api/orders/:id/payment — Update payment details (Tailor only) ──
+// PUT /api/orders/:id/payment — Update payment details (Tailor only)
 app.put('/api/orders/:id/payment', verifyToken, requireRole('tailor'), async (req, res) => {
     const orderId = req.params.id;
     const { total_amount, advance_payment } = req.body;
@@ -1857,11 +1821,8 @@ app.put('/api/orders/:id/payment', verifyToken, requireRole('tailor'), async (re
     }
 });
 
-// ═══════════════════════════════════════════════════════════════
 // FEEDBACK ENDPOINTS
-// ═══════════════════════════════════════════════════════════════
-
-// ── POST /api/add-feedback ── (IDOR-safe: customerId/tailorId come from DB, not client)
+// POST /api/add-feedback ── (IDOR-safe: customerId/tailorId come from DB, not client)
 app.post('/api/add-feedback', verifyToken, async (req, res) => {
     const { orderId, rating, message } = req.body;
 
@@ -1927,7 +1888,7 @@ app.post('/api/add-feedback', verifyToken, async (req, res) => {
     }
 });
 
-// ── GET /api/tailor-feedback/:tailorId ──
+// GET /api/tailor-feedback/:tailorId
 app.get('/api/tailor-feedback/:tailorId', async (req, res) => {
     const { tailorId } = req.params;
     try {
@@ -1947,10 +1908,7 @@ app.get('/api/tailor-feedback/:tailorId', async (req, res) => {
     }
 });
 
-// ═══════════════════════════════════════════════════════════════
 // CHAT ENDPOINTS
-// ═══════════════════════════════════════════════════════════════
-
 app.get('/api/chat/users', verifyToken, async (req, res) => {
     const isTailor = req.userRole === 'tailor';
     const orderJoinCond = isTailor ? 'o.tailor_id = $1 AND o.customer_id = u.id' : 'o.customer_id = $1 AND o.tailor_id = u.id';
@@ -1975,7 +1933,7 @@ app.get('/api/chat/users', verifyToken, async (req, res) => {
     }
 });
 
-// ── GET /api/chat/user/:userId — Look up a single user's info ──
+// GET /api/chat/user/:userId — Look up a single user's info
 app.get('/api/chat/user/:userId', verifyToken, async (req, res) => {
     const { userId } = req.params;
     const isTailor = req.userRole === 'tailor';
@@ -2051,7 +2009,7 @@ app.get('/api/chat/:userId', verifyToken, async (req, res) => {
     }
 });
 
-// ── POST /api/chat/upload — Upload a file attachment for chat ─────────────────
+// POST /api/chat/upload — Upload a file attachment for chat
 // MUST be defined BEFORE the wildcard POST /api/chat/:userId to avoid route collision
 app.post('/api/chat/upload', verifyToken, chatUpload.single('file'), handleUploadError, (req, res) => {
     if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
@@ -2080,7 +2038,7 @@ app.post('/api/chat/:userId', verifyToken, async (req, res) => {
     }
 });
 
-// ── DELETE /api/chat/message/:id — Delete own message ──────────────────────
+// DELETE /api/chat/message/:id — Delete own message
 app.delete('/api/chat/message/:id', verifyToken, async (req, res) => {
     const { id } = req.params;
     try {
@@ -2098,7 +2056,7 @@ app.delete('/api/chat/message/:id', verifyToken, async (req, res) => {
     }
 });
 
-// ── PUT /api/chat/message/:id — Edit own message ────────────────────────────
+// PUT /api/chat/message/:id — Edit own message
 app.put('/api/chat/message/:id', verifyToken, async (req, res) => {
     const { id } = req.params;
     const { message } = req.body;
@@ -2125,10 +2083,7 @@ app.put('/api/chat/message/:id', verifyToken, async (req, res) => {
     }
 });
 
-// ═══════════════════════════════════════════════════════════════
 // NOTIFICATIONS ENDPOINTS
-// ═══════════════════════════════════════════════════════════════
-
 app.get('/api/notifications', verifyToken, async (req, res) => {
     try {
         const result = await pool.query(
@@ -2165,10 +2120,7 @@ app.post('/api/notifications/:id/read', verifyToken, async (req, res) => {
     }
 });
 
-// ═══════════════════════════════════════════════════════════════
 // SOCKET.IO — REAL-TIME CHAT
-// ═══════════════════════════════════════════════════════════════
-
 // Track online users: userId → Set of socketIds
 const onlineUsers = new Map();
 
@@ -2206,7 +2158,7 @@ io.on('connection', (socket) => {
     onlineUsers.get(userId).add(socket.id);
     io.emit('online_users', [...onlineUsers.keys()]);
 
-    // ── Send a message in real-time + persist to PostgreSQL ──────────
+// Send a message in real-time + persist to PostgreSQL
     socket.on('send_message', async ({ receiverId, message, fileUrl, fileType, fileName }) => {
         const hasText  = message && message.trim();
         const hasFile  = fileUrl && fileType;
@@ -2232,7 +2184,7 @@ io.on('connection', (socket) => {
 
             console.log(`💬 Message ${savedMsg.id}: user ${userId} → user ${receiverId}${hasFile ? ' [file: ' + fileName + ']' : ''}`);
 
-            // ── Create in-app notification for the receiver ──────────────
+// Create in-app notification for the receiver
             const notifTitle = `New message from ${socket.userName}`;
             const rawBody = hasFile
                 ? (hasText ? text : `📎 ${fileName || 'File attachment'}`)
@@ -2256,7 +2208,7 @@ io.on('connection', (socket) => {
         }
     });
 
-    // ── Typing indicators ────────────────────────────────────────
+// Typing indicators
     socket.on('typing_start', ({ receiverId }) => {
         socket.to(`user_${receiverId}`).emit('typing_start', { senderId: userId });
     });
@@ -2264,7 +2216,7 @@ io.on('connection', (socket) => {
         socket.to(`user_${receiverId}`).emit('typing_stop', { senderId: userId });
     });
 
-    // ── Disconnect ───────────────────────────────────────────────
+// Disconnect
     socket.on('disconnect', () => {
         const set = onlineUsers.get(userId);
         if (set) {
@@ -2276,11 +2228,11 @@ io.on('connection', (socket) => {
     });
 });
 
-// ── AI Style Advice Routes (MVC) ─────────────────────────────────────────────
+// AI Style Advice Routes (MVC)
 const aiRoutes = require('./routes/ai.routes');
 app.use('/api', aiRoutes);
 
-// ── Body Measurement Proxy → Python MediaPipe Service ────────────────────────
+// Body Measurement Proxy → Python MediaPipe Service
 // Forwards multipart/form-data (frontPhoto + sidePhoto + heightCm) to the
 // Python Flask server running on port 5001 and returns the result JSON.
 const PYTHON_MEASURE_URL  = process.env.PYTHON_MEASURE_URL  || 'http://localhost:5001/measure';
@@ -2339,7 +2291,7 @@ app.post(
             const fetch    = require('node-fetch');
             const FormData = require('form-data');
 
-            // ── Wake the Python service if it's sleeping (Render free-tier cold start)
+// Wake the Python service if it's sleeping (Render free-tier cold start)
             console.log('🔍 Waking Python service at:', PYTHON_HEALTH_URL);
             try {
                 await wakePythonService(35_000);

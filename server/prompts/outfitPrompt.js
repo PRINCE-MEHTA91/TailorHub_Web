@@ -74,7 +74,7 @@ function getSmartFallbackAdvice(style = 'formal', bodyProfile = {}, language = '
     const isFemale = gender && ['female', 'woman', 'women', 'f', 'girl'].includes(String(gender).toLowerCase());
     const isMale = gender && ['male', 'man', 'men', 'm', 'boy'].includes(String(gender).toLowerCase());
 
-    // ── Individualized Color Palette by Skin Tone, Gender & Style ──
+// Individualized Color Palette by Skin Tone, Gender & Style
     const getIndividualPalette = (st, sty, fem, l) => {
         const tone = (st || 'medium').toLowerCase();
         const s = (sty || 'formal').toLowerCase();
@@ -172,7 +172,7 @@ function getSmartFallbackAdvice(style = 'formal', bodyProfile = {}, language = '
         return selected;
     };
 
-    // ── Fit tips by body shape ──
+// Fit tips by body shape
     const shapeFitMap = {
         english: {
             slim:     ['Opt for layered outfits and structured fabrics to add subtle dimension.', 'Choose tailored fits that follow the silhouette without clinging too tightly.', 'Lightweight shoulder padding or structured collars enhance upper torso proportion.'],
@@ -194,7 +194,7 @@ function getSmartFallbackAdvice(style = 'formal', bodyProfile = {}, language = '
         },
     };
 
-    // ── Individualized Outfit Ideas by style & gender ──
+// Individualized Outfit Ideas by style & gender
     const styleOutfitMap = {
         english: {
             female: {
@@ -309,7 +309,7 @@ function getSmartFallbackAdvice(style = 'formal', bodyProfile = {}, language = '
         }
     };
 
-    // ── 2025 Trending Top+Bottom Color Combos ──
+// 2025 Trending Top+Bottom Color Combos
     const topBottomCombosMap = {
         male: {
             formal: [
@@ -371,7 +371,7 @@ function getSmartFallbackAdvice(style = 'formal', bodyProfile = {}, language = '
     const comboStyle = style.toLowerCase();
     const topBottomCombos = (topBottomCombosMap[comboGender][comboStyle]) || topBottomCombosMap[comboGender].default;
 
-    // ── Assemble final output from the maps above ────────────────────────────
+// Assemble final output from the maps above
     const genderKey  = isFemale ? 'female' : 'male';
     const textLang   = textByGender[lang]   || textByGender.english;
     const textGroup  = textLang[genderKey]  || textLang.male;
@@ -400,8 +400,6 @@ function getSmartFallbackAdvice(style = 'formal', bodyProfile = {}, language = '
         accessoryTip:   textGroup.accessoryTip,
     };
 }
-
-
 
 module.exports = {
     getOutfitPrompt,

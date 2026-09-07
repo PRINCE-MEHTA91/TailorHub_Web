@@ -1,9 +1,8 @@
 ﻿// src/services/measurementApi.js
-// ─────────────────────────────────────────────────────────────────────────────
+// 
 // Sends height + front/side photos to the Node.js server which proxies the
 // request to the Python MediaPipe measurement engine.
-// ─────────────────────────────────────────────────────────────────────────────
-
+// 
 const API_URL = process.env.REACT_APP_API_URL || 'https://tailorhub-web.onrender.com';
 
 /**

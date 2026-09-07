@@ -4,7 +4,6 @@ import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { useGoogleLogin } from '@react-oauth/google';
 
-
 const API_URL = process.env.REACT_APP_API_URL || 'https://tailorhub-web.onrender.com';
 
 const LoginPage = () => {
